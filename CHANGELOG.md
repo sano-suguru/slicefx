@@ -6,12 +6,13 @@ This project follows semantic versioning once stable packages are published. Bef
 
 ## Unreleased
 
+- No unreleased changes yet.
+
+## 0.1.0-preview.1
+
 ### Added
 
 - OSS release documents: license, contribution guide, security policy, code of conduct, and changelog.
 - GitHub Pages landing page under `docs/`.
 - NuGet package metadata for the framework, source generator, adapters, and CLI.
-
-## 0.1.0-preview.1
-
-Initial OSS preparation version.
+- Initial experimental framework, source generator, adapters, Workers runtime, and CLI surface.

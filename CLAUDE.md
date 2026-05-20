@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Slice is an experimental .NET web framework built on ASP.NET Core Minimal API that makes Vertical Slice Architecture the primary unit: **1 file = 1 feature = 1 deploy unit**. The runtime framework lives in `src/Slice.Core/`; the optional Roslyn source generator lives in `src/Slice.SourceGenerator/`. `samples/Slice.Sample/` is the reference for how user code should look.
 
-This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI runs the solution build and formatter checks.
+This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI (`.github/workflows/ci.yml`) runs the solution build, a `dotnet format --verify-no-changes --severity info` gate, and a guard that fails if `Slice.Core` gains a `<PackageReference>`. A second workflow (`pages.yml`) publishes `docs/` to GitHub Pages. Targets **.NET 10** (`Directory.Build.props` pins `<TargetFramework>net10.0</TargetFramework>` with `LangVersion=latest`; the source generator stays on `netstandard2.0` as Roslyn requires). SDK pinned via `global.json` to `10.0.201` (`rollForward: latestFeature`).
 
 ## Commands
 
@@ -30,11 +30,12 @@ curl -X DELETE http://localhost:5099/users/{id} -H "X-API-Key: secret"
 
 ## Hard constraints
 
-- **Slice.Core stays zero-dependency.** `Slice.Core.csproj` must never gain a `<PackageReference>`. This is a code-level rule, not a NuGet.config enforcement — there is no root `NuGet.config`. Satellite projects (`src/Slice.SourceGenerator`, `src/Slice.Lambda`, `src/Slice.TestHost`, `tools/Slice.Cli`, and their samples) restore packages from nuget.org normally.
+- **Slice.Core stays zero-dependency.** `src/Slice.Core/Slice.Core.csproj` must never gain a `<PackageReference>`. Enforced in two places: an MSBuild target `ValidateSliceCorePackageReferences` in `Directory.Build.targets` that fails the build locally, and a PowerShell step in `.github/workflows/ci.yml` that fails CI. The only allowed reference is `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Satellite projects (`src/Slice.SourceGenerator`, `src/Slice.Lambda`, `src/Slice.TestHost`, `src/Slice.Workers`, `tools/Slice.Cli`, and their samples) restore from nuget.org normally.
 - **No new framework abstractions.** Slice intentionally avoids `IPipelineBehavior`, `IMediator`, etc. Cross-cutting concerns reuse ASP.NET Core's `IEndpointFilter`.
 - **No per-request reflection.** Anything that runs per-request must avoid reflection. `MapSlices` is the runtime fallback and builds a strongly-typed delegate once at startup; `MapSlicesGenerated` is the AOT-friendly generated path.
 - **`WebApplication.CreateSlimBuilder` is intentional** (trimming-friendly host). Do not switch to `CreateBuilder` without reason.
 - **Experimental satellite scope.** Source generator, AWS Lambda adapter, TestHost, fluent validator (`ISliceValidator<T>`), CLI scaffolding, and Cloudflare Workers adapter (`Slice.Workers`) are all implemented experimentally. `Slice.Workers` provides in-process dispatch, stdin/stdout IPC, and a componentize-dotnet WASI publish path for Cloudflare Workers. Do not use the `wasi-experimental` Mono workload for this codebase.
+- **Style is CI-enforced.** `.editorconfig` mandates file-scoped namespaces, `var` usage, 4-space indent (2 for JSON/YAML), final newline, LF line endings. Several IDE diagnostics (IDE0005, IDE0055, IDE0060, IDE0161, IDE0300/0301/0305/0306) are elevated to warning. CI's `dotnet format --severity info` will fail on any violation.
 
 ## Authoring a feature (the pattern all samples follow)
 
@@ -160,6 +161,16 @@ var resp = await host.Client.PostAsJsonAsync("/users", new { name = "Alice", ema
 provided by `Slice.Testing.ServiceCollectionExtensions`. See
 `samples/Slice.TestHostSample/` for a runnable demo.
 
+### Slice.Cli (`tools/Slice.Cli/`)
+
+Local .NET tool (`dotnet-tools.json` at the repo root) exposing the `slice` command. Built on `System.CommandLine`. Verbs:
+
+- `slice new feature <Name>` / `slice new filter <Name>` — scaffolds a feature class or `IEndpointFilter` from `Templates/`.
+- `slice routes [--format table|json]` — lists every feature in the project plus its **portability classification** (`portable` / `partial` / `aspnet-only`). Reads the generated `GetSliceRoutesGenerated()` manifest.
+- `slice client csharp --output <path>` — generates a typed C# client from the same manifest.
+
+Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and excluded from Workers routes (matches diagnostic SLICE008).
+
 ## Startup pipeline
 
 `src/Slice.Core/SliceExtensions.cs` is the runtime fallback and generated-registration bridge. `src/Slice.SourceGenerator/Emit/RegistrationEmitter.cs` emits the AOT-friendly registration path. Read both before changing registration behavior.
@@ -170,11 +181,16 @@ provided by `Slice.Testing.ServiceCollectionExtensions`. See
 
 The generated path should mirror the runtime fallback's validation/filter/metadata ordering. Keep generator diagnostics aligned with runtime exceptions where possible.
 
+The source generator emits up to three files per assembly: `{AsmName}_SliceRegistrations.g.cs` (ASP.NET registrations, when `Microsoft.AspNetCore.Http.IResult` is referenced), `{AsmName}_SliceWorkersRegistrations.g.cs` (Workers registrations, only when `Slice.Workers.Routing.WorkerRouteTable` is referenced), and `{AsmName}_SliceRouteManifest.g.cs` — a `SliceRouteDescriptor` record plus `GetSliceRoutesGenerated()` consumed by the `slice` CLI's `routes` and `client csharp` commands. The manifest is emitted regardless of which hosting path is referenced. Emitter source: `src/Slice.SourceGenerator/Emit/`.
+
 ## Repo layout
 
 ```
 Slice.slnx
-NuGet.config              # packageSources cleared — see constraints above
+global.json               # SDK pin 10.0.201 (rollForward: latestFeature)
+Directory.Build.props     # net10.0 TFM, LangVersion=latest, TreatWarningsAsErrors, EnforceCodeStyleInBuild
+Directory.Build.targets   # ValidateSliceCorePackageReferences guard (zero-dep enforcement)
+.editorconfig             # file-scoped namespaces; CI enforces via dotnet format
 src/Slice.Core/           # the framework: FeatureAttribute, FilterAttribute,
                           # DataAnnotationsValidationFilter, SliceExtensions
 src/Slice.SourceGenerator/# Roslyn generator for AddSliceGenerated/MapSlicesGenerated
@@ -182,7 +198,9 @@ src/Slice.Lambda/         # AWS Lambda hosting adapter over Amazon.Lambda.AspNet
 src/Slice.TestHost/       # in-process test host wrapper over Microsoft.AspNetCore.Mvc.Testing
 src/Slice.Workers/        # Cloudflare Workers / WASI adapter (ASP.NET-independent)
                           # WorkerHost, WorkerApp, WorkerRouteTable, SliceResult
-tools/Slice.Cli/          # .NET tool command: slice new feature/filter scaffolding
+tools/Slice.Cli/          # .NET tool: slice new feature|filter, slice routes, slice client csharp
+docs/                     # published to GitHub Pages via .github/workflows/pages.yml
+README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, LICENSE
 samples/Slice.Sample/
   Program.cs              # bootstrap: AddSliceGenerated → MapSlicesGenerated → Run
   appsettings.json        # port 5099
