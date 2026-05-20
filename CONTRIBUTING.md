@@ -15,11 +15,12 @@ Thanks for your interest in Slice. This project is experimental, so the best con
 A change is done when:
 
 1. `dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true` passes.
-2. Formatting and style analyzers are clean with `dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591`, or formatting was intentionally applied.
-3. `src\Slice.Core\Slice.Core.csproj` still has no `<PackageReference>` items.
-4. Runtime fallback and source-generated registration behavior stay aligned when feature registration, validation, filters, or metadata change.
-5. Samples and README/docs are updated when public behavior changes.
-6. Any breaking change is documented in the PR description.
+2. `dotnet test Slice.slnx --configuration Release --no-build --no-restore` passes.
+3. Formatting and style analyzers are clean with `dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591`, or formatting was intentionally applied.
+4. `src\Slice.Core\Slice.Core.csproj` still has no `<PackageReference>` items.
+5. Runtime fallback and source-generated registration behavior stay aligned when feature registration, validation, filters, or metadata change.
+6. Samples and README/docs are updated when public behavior changes.
+7. Any breaking change is documented in the PR description.
 
 ## Invariants to protect
 
@@ -34,6 +35,7 @@ A change is done when:
 ```pwsh
 dotnet restore Slice.slnx
 dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+dotnet test Slice.slnx --configuration Release --no-build --no-restore
 dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
 ```
 

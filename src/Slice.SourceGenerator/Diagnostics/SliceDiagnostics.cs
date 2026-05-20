@@ -51,6 +51,17 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Diagnostic reported when a feature type defines multiple Handle methods.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AmbiguousHandleMethod = new(
+        "SLICE005",
+        "Ambiguous Handle method",
+        "Feature '{0}' must define exactly one 'public static Handle' method",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// Diagnostic reported when tag inference cannot find a .Features. namespace segment.
     /// </summary>
     public static readonly DiagnosticDescriptor TagInferenceFallback = new(
@@ -68,6 +79,17 @@ internal static class SliceDiagnostics
         "SLICE008",
         "Return type not supported in Workers path",
         "Feature '{0}': return type '{1}' is ASP.NET-specific and will be excluded from the Workers route table. Use 'WorkerResponse' or a POCO return type.",
+        Category,
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when Workers body binding falls back to reflection-based JSON.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingWorkersJsonContext = new(
+        "SLICE009",
+        "Workers JSON source-generation context not found",
+        "Feature '{0}' has a request body but no WorkerJsonContext was found, so Workers body binding will use reflection-based JSON deserialization",
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);

@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Slice is an experimental .NET web framework built on ASP.NET Core Minimal API that makes Vertical Slice Architecture the primary unit: **1 file = 1 feature = 1 deploy unit**. The runtime framework lives in `src/Slice.Core/`; the optional Roslyn source generator lives in `src/Slice.SourceGenerator/`. `samples/Slice.Sample/` is the reference for how user code should look.
 
-This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI (`.github/workflows/ci.yml`) runs the solution build, a `dotnet format --verify-no-changes --severity info` gate, and a guard that fails if `Slice.Core` gains a `<PackageReference>`. A second workflow (`pages.yml`) publishes `docs/` to GitHub Pages. Targets **.NET 10** (`Directory.Build.props` pins `<TargetFramework>net10.0</TargetFramework>` with `LangVersion=latest`; the source generator stays on `netstandard2.0` as Roslyn requires). SDK pinned via `global.json` to `10.0.201` (`rollForward: latestFeature`).
+This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI (`.github/workflows/ci.yml`) runs restore, Release build, tests, package verification, a `dotnet format --verify-no-changes --severity info` gate, and a guard that fails if `Slice.Core` gains a `<PackageReference>`. A second workflow (`pages.yml`) publishes `docs/` to GitHub Pages. Targets **.NET 10** (`Directory.Build.props` pins `<TargetFramework>net10.0</TargetFramework>` with `LangVersion=latest`; the source generator stays on `netstandard2.0` as Roslyn requires). SDK pinned via `global.json` to `10.0.201` (`rollForward: latestFeature`).
 
 ## Commands
 
 ```bash
 dotnet build
+dotnet test Slice.slnx --configuration Release --no-build --no-restore
 dotnet run --project samples/Slice.Sample        # listens on http://localhost:5099
 dotnet run --project samples/Slice.LambdaSample  # listens on http://localhost:5100 (Lambda-ready)
 dotnet run --project samples/Slice.TestHostSample # in-process HTTP demo (no server port)
@@ -19,7 +20,7 @@ dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release  # produces .
 dotnet format                                     # canonical formatter (no config file)
 ```
 
-There is no xunit test project. `dotnet test` is a no-op. Smoke-test the main sample (app must be running):
+There is a focused xUnit project under `tests/Slice.Core.Tests`. Also smoke-test the main sample when behavior changes (app must be running):
 
 ```bash
 curl http://localhost:5099/health
@@ -181,7 +182,7 @@ Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and ex
 
 The generated path should mirror the runtime fallback's validation/filter/metadata ordering. Keep generator diagnostics aligned with runtime exceptions where possible.
 
-The source generator emits up to three files per assembly: `{AsmName}_SliceRegistrations.g.cs` (ASP.NET registrations, when `Microsoft.AspNetCore.Http.IResult` is referenced), `{AsmName}_SliceWorkersRegistrations.g.cs` (Workers registrations, only when `Slice.Workers.Routing.WorkerRouteTable` is referenced), and `{AsmName}_SliceRouteManifest.g.cs` — a `SliceRouteDescriptor` record plus `GetSliceRoutesGenerated()` consumed by the `slice` CLI's `routes` and `client csharp` commands. The manifest is emitted regardless of which hosting path is referenced. Emitter source: `src/Slice.SourceGenerator/Emit/`.
+The source generator emits up to three files per assembly: `{AsmName}_SliceRegistrations.g.cs` (ASP.NET registrations, when `Microsoft.AspNetCore.Http.IResult` is referenced), `{AsmName}_SliceWorkersRegistrations.g.cs` (Workers registrations, only when `Slice.Workers.Routing.WorkerRouteTable` is referenced), and `{AsmName}_SliceRouteManifest.g.cs` — a `SliceRouteDescriptor` record plus `GetSliceRoutesGenerated()` consumed by tooling. The manifest includes the shared portability vocabulary (`portable`, `partial`, `aspnet-only`) and is emitted regardless of which hosting path is referenced. Emitter source: `src/Slice.SourceGenerator/Emit/`.
 
 ## Repo layout
 

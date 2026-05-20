@@ -80,7 +80,7 @@ internal static partial class RouteCatalog
 
     private static SliceRouteParameter[] ReadParameters(string parameters)
     {
-        return [.. parameters.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return [.. SplitParameterList(parameters)
             .Select(ReadParameter)
             .Where(static parameter => parameter is not null)
             .Cast<SliceRouteParameter>()];
@@ -89,8 +89,49 @@ internal static partial class RouteCatalog
     private static SliceRouteParameter? ReadParameter(string parameter)
     {
         var normalized = NormalizeWhitespace(parameter);
-        var parts = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return parts.Length < 2 ? null : new SliceRouteParameter(parts[^2], parts[^1]);
+        if (normalized.StartsWith("this ", StringComparison.Ordinal))
+        {
+            normalized = normalized["this ".Length..];
+        }
+
+        var separator = normalized.LastIndexOf(' ');
+        return separator < 0
+            ? null
+            : new SliceRouteParameter(normalized[..separator], normalized[(separator + 1)..]);
+    }
+
+    private static IEnumerable<string> SplitParameterList(string parameters)
+    {
+        var start = 0;
+        var genericDepth = 0;
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var ch = parameters[i];
+            if (ch == '<')
+            {
+                genericDepth++;
+            }
+            else if (ch == '>' && genericDepth > 0)
+            {
+                genericDepth--;
+            }
+            else if (ch == ',' && genericDepth == 0)
+            {
+                var segment = parameters[start..i].Trim();
+                if (segment.Length > 0)
+                {
+                    yield return segment;
+                }
+
+                start = i + 1;
+            }
+        }
+
+        var last = parameters[start..].Trim();
+        if (last.Length > 0)
+        {
+            yield return last;
+        }
     }
 
     private static string? FindRequestType(SliceRouteParameter[] parameters)
@@ -160,7 +201,7 @@ internal static partial class RouteCatalog
     [GeneratedRegex(@"\[Feature\(\s*""(?<route>(?:\\.|[^""\\])*)""(?<args>(?:[^\)""]|""(?:\\.|[^""\\])*"")*)\)\]")]
     private static partial Regex FeatureAttributeRegex();
 
-    [GeneratedRegex(@"\bpublic\s+static\s+class\s+(?<class>[A-Za-z_][A-Za-z0-9_]*)\b")]
+    [GeneratedRegex(@"\bpublic\s+(?=[A-Za-z0-9_\s]*\bstatic\b)(?:(?:static|partial|unsafe)\s+)+class\s+(?<class>[A-Za-z_][A-Za-z0-9_]*)\b")]
     private static partial Regex ClassRegex();
 
     [GeneratedRegex(@"\bnamespace\s+(?<namespace>[A-Za-z_][A-Za-z0-9_.]*)\s*;")]
@@ -169,7 +210,7 @@ internal static partial class RouteCatalog
     [GeneratedRegex(@"\[Filter<(?<filter>[^\]]+)>\]")]
     private static partial Regex FilterRegex();
 
-    [GeneratedRegex(@"\bpublic\s+static\s+(?:async\s+)?(?<return>[A-Za-z0-9_<>,\.\?\s]+?)\s+Handle\s*\((?<params>[^)]*)\)")]
+    [GeneratedRegex(@"\bpublic\s+static\s+(?:async\s+)?(?<return>[A-Za-z0-9_<>,\.\?\s:\[\]]+?)\s+Handle\s*\((?<params>[^)]*)\)")]
     private static partial Regex HandleRegex();
 }
 

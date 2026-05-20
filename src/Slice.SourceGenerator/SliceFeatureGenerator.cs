@@ -159,13 +159,17 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         var endpointName = $"{tag}.{featureType.Name}";
 
         // Find Handle method.
-        IMethodSymbol? handle = null;
+        var handleBuilder = ImmutableArray.CreateBuilder<IMethodSymbol>();
         foreach (var member in featureType.GetMembers("Handle"))
         {
-            if (member is IMethodSymbol m) { handle = m; break; }
+            if (member is IMethodSymbol m)
+            {
+                handleBuilder.Add(m);
+            }
         }
 
-        if (handle is null)
+        var handles = handleBuilder.ToImmutable();
+        if (handles.IsEmpty)
         {
             return FeatureResult.Error(Diagnostic.Create(
                 SliceDiagnostics.MissingHandleMethod,
@@ -173,6 +177,15 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 featureType.Name));
         }
 
+        if (handles.Length > 1)
+        {
+            return FeatureResult.Error(Diagnostic.Create(
+                SliceDiagnostics.AmbiguousHandleMethod,
+                featureType.Locations.Length > 0 ? featureType.Locations[0] : null,
+                featureType.Name));
+        }
+
+        var handle = handles[0];
         if (!handle.IsStatic || handle.DeclaredAccessibility != Accessibility.Public)
         {
             return FeatureResult.Error(Diagnostic.Create(
@@ -415,6 +428,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
     private static string? FindWorkersJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
     {
+        var jsonContextType = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
         foreach (var model in models)
         {
             var typeName = model.FullyQualifiedTypeName;
@@ -431,13 +445,60 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
             var rootNamespace = typeName.Substring(0, featuresIndex);
             var candidate = rootNamespace + ".WorkerJsonContext";
-            if (compilation.GetTypeByMetadataName(candidate) is not null)
+            var candidateType = compilation.GetTypeByMetadataName(candidate);
+            if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
             {
                 return "global::" + candidate;
             }
         }
 
+        var discovered = FindWorkersJsonContext(compilation.GlobalNamespace, jsonContextType);
+        if (discovered is not null)
+        {
+            return discovered.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+
         return null;
+    }
+
+    private static INamedTypeSymbol? FindWorkersJsonContext(INamespaceSymbol @namespace, INamedTypeSymbol? jsonContextType)
+    {
+        foreach (var type in @namespace.GetTypeMembers())
+        {
+            if (type.Name == "WorkerJsonContext" && InheritsFrom(type, jsonContextType))
+            {
+                return type;
+            }
+        }
+
+        foreach (var childNamespace in @namespace.GetNamespaceMembers())
+        {
+            var found = FindWorkersJsonContext(childNamespace, jsonContextType);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol? baseType)
+    {
+        if (baseType is null)
+        {
+            return false;
+        }
+
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, baseType))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Mirrors SliceExtensions.InferTag: same IndexOf(".Features.") string logic.

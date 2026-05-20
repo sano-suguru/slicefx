@@ -99,4 +99,32 @@ internal static class NameUtilities
         }
         return sb.ToString();
     }
+
+    internal static string ToNamespaceSegment(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "App";
+        }
+
+        var sb = new StringBuilder(value.Length + 1);
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (i == 0 && !IsIdentifierStart(ch))
+            {
+                sb.Append('_');
+            }
+
+            sb.Append(IsIdentifierPart(ch) ? ch : '_');
+        }
+
+        return sb.Length == 0 ? "App" : sb.ToString();
+    }
+
+    private static bool IsIdentifierStart(char value)
+        => value == '_' || char.IsLetter(value);
+
+    private static bool IsIdentifierPart(char value)
+        => value == '_' || char.IsLetterOrDigit(value);
 }

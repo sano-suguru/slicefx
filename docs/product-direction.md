@@ -55,7 +55,7 @@ The generated route manifest is the shared metadata seam for Hono/Vercel-inspire
 - Feature type, inferred tag, endpoint name, and summary.
 - Request type and return type names.
 - Referenced filter type names.
-- A Workers compatibility flag based on whether the return type is ASP.NET-specific.
+- A Workers compatibility flag and portability status using `portable`, `partial`, or `aspnet-only`.
 
 The manifest is deliberately string-based. Deployment tools, docs, and CLI commands can read route shape and compatibility without adding runtime dependencies to `Slice.Core`. The CLI route catalog should continue converging with the generated manifest so route listing, compatibility reporting, typed client generation, OpenAPI, and future deployment checks share one contract.
 
@@ -123,7 +123,7 @@ For Workers-specific responses, use `SliceResult` or `WorkerResponse`. The gener
 
 ## Workers/fetch-style direction
 
-`Slice.Workers` is the stable experiment for a Hono-like fetch runtime. Its minimal dispatch surface is `WorkerRequest` in and `WorkerResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; non-validator ASP.NET endpoint filters should not be assumed to run in Workers.
+`Slice.Workers` is the active experiment for a Hono-like fetch runtime. Its minimal dispatch surface is `WorkerRequest` in and `WorkerResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; non-validator ASP.NET endpoint filters should not be assumed to run in Workers.
 
 Near-term Workers work should focus on better manifest-driven compatibility reporting and source-generated JSON/validation coverage before introducing another public routing API.
 
@@ -135,7 +135,7 @@ This keeps today's ASP.NET and Lambda behavior intact while creating a path for 
 
 ## Next implementation direction
 
-1. Make the source-generated route manifest and CLI route catalog share the same compatibility vocabulary.
+1. Continue converging CLI route discovery on the source-generated route manifest.
 2. Extend typed client generation from C# first to TypeScript once the route metadata is rich enough.
 3. Add manifest-driven deployment checks where they provide clear feedback.
 4. Keep Workers/fetch-style dispatch focused on `WorkerRequest` -> `WorkerResponse`.

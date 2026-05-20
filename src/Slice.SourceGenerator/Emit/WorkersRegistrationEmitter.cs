@@ -33,7 +33,7 @@ internal static class WorkersRegistrationEmitter
         string assemblyName,
         string? workersJsonContextFqn)
     {
-        var className = assemblyName.Replace('.', '_') + "_SliceWorkersRegistrations";
+        var className = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceWorkersRegistrations");
         var sb = new StringBuilder();
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
@@ -96,6 +96,14 @@ internal static class WorkersRegistrationEmitter
                 continue;
             }
 
+            if (workersJsonContextFqn is null && FindBodyParam(f, f.GetParams()) is not null)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    SliceDiagnostics.MissingWorkersJsonContext,
+                    location: null,
+                    f.TypeName));
+            }
+
             sb.AppendLine($"        // {ToSingleLineComment(f.EndpointName)}");
             EmitTableAdd(sb, f, workersJsonContextFqn);
             sb.AppendLine();
@@ -137,15 +145,23 @@ internal static class WorkersRegistrationEmitter
         // 1. Body binding + null check + DataAnnotations
         if (bodyParam is not null)
         {
-            sb.AppendLine($"                    var {bodyParam.Name} = await global::Slice.Workers.Binding.JsonBodyReader");
+            sb.AppendLine($"                    {bodyParam.TypeFqn}? {bodyParam.Name};");
+            sb.AppendLine("                    try");
+            sb.AppendLine("                    {");
+            sb.AppendLine($"                        {bodyParam.Name} = await global::Slice.Workers.Binding.JsonBodyReader");
             if (workersJsonContextFqn is not null)
             {
-                sb.AppendLine($"                        .ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>());");
+                sb.AppendLine($"                            .ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>());");
             }
             else
             {
-                sb.AppendLine($"                        .ReadAsync<{bodyParam.TypeFqn}>(ctx);");
+                sb.AppendLine($"                            .ReadAsync<{bodyParam.TypeFqn}>(ctx);");
             }
+            sb.AppendLine("                    }");
+            sb.AppendLine("                    catch (global::System.Text.Json.JsonException)");
+            sb.AppendLine("                    {");
+            sb.AppendLine("                        return global::Slice.Workers.SliceResult.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
+            sb.AppendLine("                    }");
             sb.AppendLine($"                    if ({bodyParam.Name} is null) return global::Slice.Workers.SliceResult.Problem(400, \"Bad Request\", \"Request body is required.\");");
 
             if (ShouldUseGeneratedValidation(f))

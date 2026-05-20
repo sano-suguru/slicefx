@@ -44,6 +44,7 @@ Get-ChildItem -Path . -Recurse -Filter *.nupkg |
 
 dotnet restore Slice.slnx
 dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+dotnet test Slice.slnx --configuration Release --no-build --no-restore
 dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
 
 dotnet pack src\Slice.Core\Slice.Core.csproj --configuration Release --no-build

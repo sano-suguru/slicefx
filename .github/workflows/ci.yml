@@ -29,6 +29,18 @@ jobs:
       - name: Build
         run: dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
 
+      - name: Test
+        run: dotnet test Slice.slnx --configuration Release --no-build --no-restore
+
+      - name: Pack
+        run: |
+          dotnet pack src/Slice.Core/Slice.Core.csproj --configuration Release --no-build
+          dotnet pack src/Slice.SourceGenerator/Slice.SourceGenerator.csproj --configuration Release --no-build
+          dotnet pack src/Slice.Lambda/Slice.Lambda.csproj --configuration Release --no-build
+          dotnet pack src/Slice.TestHost/Slice.TestHost.csproj --configuration Release --no-build
+          dotnet pack src/Slice.Workers/Slice.Workers.csproj --configuration Release --no-build
+          dotnet pack tools/Slice.Cli/Slice.Cli.csproj --configuration Release --no-build
+
       - name: Verify formatting
         run: dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
 

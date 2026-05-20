@@ -35,6 +35,17 @@ static void RunProbe(WorkerApp app, string route)
         new Dictionary<string, string> { ["Content-Type"] = "application/json" }, null, body)).GetAwaiter().GetResult();
     Console.WriteLine($"[probe] status={echoResp.Status} body={System.Text.Encoding.UTF8.GetString(echoResp.Body)}");
 
+    Console.WriteLine("[probe] dispatching POST /echo malformed JSON (should fail bad request)");
+    var malformedBody = System.Text.Encoding.UTF8.GetBytes("{");
+    var malformedResp = app.DispatchAsync(new WorkerRequest("POST", "/echo",
+        new Dictionary<string, string> { ["Content-Type"] = "application/json" }, null, malformedBody)).GetAwaiter().GetResult();
+    var malformedResponseBody = System.Text.Encoding.UTF8.GetString(malformedResp.Body);
+    Console.WriteLine($"[probe] status={malformedResp.Status} body={malformedResponseBody}");
+    if (malformedResp.Status != 400 || !malformedResponseBody.Contains("malformed JSON", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Malformed JSON probe failed.");
+    }
+
     Console.WriteLine("[probe] dispatching POST /echo {} (should fail validation)");
     var badBody = System.Text.Encoding.UTF8.GetBytes(/*lang=json,strict*/ """{"message":""}""");
     var badResp = app.DispatchAsync(new WorkerRequest("POST", "/echo",

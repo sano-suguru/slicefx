@@ -73,7 +73,7 @@ public static class SliceExtensions
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var toScan = ResolveAssemblies(assemblies);
-        var endpointNames = new Dictionary<string, Type>(StringComparer.Ordinal);
+        var endpointNames = CollectExistingEndpointNames(endpoints);
 
         foreach (var assembly in toScan)
         {
@@ -102,19 +102,18 @@ public static class SliceExtensions
         IEndpointRouteBuilder endpoints,
         Type featureType,
         FeatureAttribute attr,
-        Dictionary<string, Type> endpointNames)
+        Dictionary<string, Type?> endpointNames)
     {
-        var handle = featureType.GetMethod("Handle", BindingFlags.Public | BindingFlags.Static)
-            ?? throw new InvalidOperationException(
-                $"Feature '{featureType.FullName}' must define a public static 'Handle' method.");
+        var handle = FindHandleMethod(featureType);
 
         var tag = attr.Tag ?? InferTag(featureType);
         var endpointName = $"{tag}.{featureType.Name}";
         if (endpointNames.TryGetValue(endpointName, out var existingFeatureType))
         {
+            var existingName = existingFeatureType?.FullName ?? "an already mapped endpoint";
             throw new InvalidOperationException(
                 $"Duplicate Slice endpoint name '{endpointName}' for features " +
-                $"'{existingFeatureType.FullName}' and '{featureType.FullName}'. " +
+                $"'{existingName}' and '{featureType.FullName}'. " +
                 "Use distinct feature class names or set FeatureAttribute.Tag to disambiguate.");
         }
         endpointNames.Add(endpointName, featureType);
@@ -160,9 +159,65 @@ public static class SliceExtensions
     // Returns the type if found, null otherwise.
     private static Type? FindGeneratedRegistrationsType(Assembly assembly)
     {
-        var sanitized = (assembly.GetName().Name ?? "Unknown").Replace('.', '_');
+        var sanitized = ToGeneratedIdentifier(assembly.GetName().Name ?? "Unknown");
         return assembly.GetType($"Slice.Generated.{sanitized}_SliceRegistrations");
     }
+
+    private static MethodInfo FindHandleMethod(Type featureType)
+    {
+        var handles = featureType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(static method => method.Name == "Handle")
+            .ToArray();
+
+        return handles.Length switch
+        {
+            1 => handles[0],
+            0 => throw new InvalidOperationException(
+                $"Feature '{featureType.FullName}' must define exactly one public static 'Handle' method."),
+            _ => throw new InvalidOperationException(
+                $"Feature '{featureType.FullName}' defines multiple public static 'Handle' methods. " +
+                "Slice features must expose exactly one handler method.")
+        };
+    }
+
+    private static Dictionary<string, Type?> CollectExistingEndpointNames(IEndpointRouteBuilder endpoints)
+    {
+        var endpointNames = new Dictionary<string, Type?>(StringComparer.Ordinal);
+        foreach (var endpoint in endpoints.DataSources.SelectMany(static source => source.Endpoints))
+        {
+            var endpointName = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
+            if (!string.IsNullOrWhiteSpace(endpointName))
+            {
+                endpointNames.TryAdd(endpointName, null);
+            }
+        }
+
+        return endpointNames;
+    }
+
+    private static string ToGeneratedIdentifier(string value)
+    {
+        var chars = value.Length == 0 ? "Unknown" : value;
+        var sb = new System.Text.StringBuilder(chars.Length + 1);
+        for (var i = 0; i < chars.Length; i++)
+        {
+            var ch = chars[i];
+            if (i == 0 && !IsIdentifierStart(ch))
+            {
+                sb.Append('_');
+            }
+
+            sb.Append(IsIdentifierPart(ch) ? ch : '_');
+        }
+
+        return sb.Length == 0 ? "Unknown" : sb.ToString();
+    }
+
+    private static bool IsIdentifierStart(char value)
+        => value == '_' || char.IsLetter(value);
+
+    private static bool IsIdentifierPart(char value)
+        => value == '_' || char.IsLetterOrDigit(value);
 
     private static bool TryInvokeAddGenerated(Assembly assembly, IServiceCollection services)
     {

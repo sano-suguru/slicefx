@@ -19,6 +19,9 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Slice.Core.Tests/Slice.Core.Tests.csproj" />
+    <Project Path="tests/Slice.Cli.Tests/Slice.Cli.Tests.csproj" />
+    <Project Path="tests/Slice.SourceGenerator.Tests/Slice.SourceGenerator.Tests.csproj" />
+    <Project Path="tests/Slice.Workers.Tests/Slice.Workers.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Slice.Cli/Slice.Cli.csproj" />

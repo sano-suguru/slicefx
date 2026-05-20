@@ -257,7 +257,20 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("            var __query = new List<string>();");
         foreach (var parameter in queryParameters)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"            __query.Add(\"{parameter.Name}=\" + {outerClassName}.FormatRouteValue({parameter.Name}));");
+            if (NormalizeParameterType(parameter.Type).EndsWith("[]", StringComparison.Ordinal))
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            if ({parameter.Name} is not null)");
+                sb.AppendLine("            {");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"                foreach (var __value in {parameter.Name})");
+                sb.AppendLine("                {");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"                    __query.Add(\"{parameter.Name}=\" + {outerClassName}.FormatRouteValue(__value));");
+                sb.AppendLine("                }");
+                sb.AppendLine("            }");
+            }
+            else
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            __query.Add(\"{parameter.Name}=\" + {outerClassName}.FormatRouteValue({parameter.Name}));");
+            }
         }
 
         sb.AppendLine("            __url += \"?\" + string.Join(\"&\", __query);");
@@ -323,8 +336,41 @@ internal static partial class GenerateCSharpClientCommand
             .Where(parameter => !routeParameterNames.Contains(parameter.Name))
             .Where(parameter => bodyParameter is null || parameter.Name != bodyParameter.Name)
             .Where(static parameter => parameter.Type is not ("CancellationToken" or "System.Threading.CancellationToken"))
-            .Where(static parameter => SimpleParameterTypes.Contains(parameter.Type))
+            .Where(static parameter => IsSupportedQueryParameterType(parameter.Type))
         ];
+    }
+
+    private static bool IsSupportedQueryParameterType(string type)
+    {
+        var normalized = NormalizeParameterType(type);
+        if (normalized.EndsWith("[]", StringComparison.Ordinal))
+        {
+            normalized = normalized[..^2];
+        }
+
+        return SimpleParameterTypes.Contains(normalized);
+    }
+
+    private static string NormalizeParameterType(string type)
+    {
+        var normalized = RouteCatalog.NormalizeWhitespace(type);
+        if (normalized.StartsWith("global::", StringComparison.Ordinal))
+        {
+            normalized = normalized["global::".Length..];
+        }
+
+        if (normalized.EndsWith('?'))
+        {
+            normalized = normalized[..^1];
+        }
+
+        const string nullablePrefix = "System.Nullable<";
+        if (normalized.StartsWith(nullablePrefix, StringComparison.Ordinal) && normalized.EndsWith('>'))
+        {
+            normalized = normalized[nullablePrefix.Length..^1];
+        }
+
+        return normalized;
     }
 
     private static string UnwrapReturnType(string returnType)

@@ -38,11 +38,14 @@ internal static class ProjectContextDiscovery
             projectFile = new FileInfo(found[0]);
         }
 
-        var rootNamespace = CliValidation.RequireNamespace(ReadRootNamespace(projectFile), "RootNamespace");
+        var rawRootNamespace = ReadRootNamespace(projectFile, out var isExplicit);
+        var rootNamespace = isExplicit
+            ? CliValidation.RequireNamespace(rawRootNamespace, "RootNamespace")
+            : CliValidation.RequireNamespace(NameUtilities.ToNamespaceSegment(rawRootNamespace), "RootNamespace");
         return new ProjectContext(projectFile, rootNamespace, projectFile.Directory!);
     }
 
-    private static string ReadRootNamespace(FileInfo projectFile)
+    private static string ReadRootNamespace(FileInfo projectFile, out bool isExplicit)
     {
         try
         {
@@ -50,6 +53,7 @@ internal static class ProjectContextDiscovery
             var value = doc.Descendants("RootNamespace").FirstOrDefault()?.Value;
             if (!string.IsNullOrWhiteSpace(value))
             {
+                isExplicit = true;
                 return value;
             }
         }
@@ -58,6 +62,7 @@ internal static class ProjectContextDiscovery
             // Fall through to filename-based default
         }
 
+        isExplicit = false;
         return Path.GetFileNameWithoutExtension(projectFile.Name);
     }
 }

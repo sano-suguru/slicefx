@@ -7,12 +7,13 @@ This repo targets .NET 10 via `global.json` (`10.0.201`, roll forward to latest 
 ```pwsh
 dotnet restore Slice.slnx
 dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+dotnet test Slice.slnx --configuration Release --no-build --no-restore
 dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
 ```
 
 Use `dotnet format` to apply formatting when intentional. The repo treats warnings and code-analysis diagnostics as errors through `Directory.Build.props`.
 
-There is currently no dedicated xUnit/NUnit/MSTest project. For single-behavior checks, run the affected sample and hit one route:
+There is a focused xUnit project under `tests\Slice.Core.Tests`. For single-behavior smoke checks, run the affected sample and hit one route:
 
 ```pwsh
 dotnet run --project samples\Slice.Sample

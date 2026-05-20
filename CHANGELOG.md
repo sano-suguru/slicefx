@@ -6,7 +6,9 @@ This project follows semantic versioning once stable packages are published. Bef
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Added CI test and package verification gates for preview readiness.
+- Hardened runtime fallback handler discovery, duplicate endpoint detection, generated identifier sanitization, and Workers malformed JSON handling.
+- Added route manifest portability vocabulary and improved CLI handling for hyphenated project names, partial feature classes, generic handler parameters, nullable query parameters, and array query parameters.
 
 ## 0.1.0-preview.1
 
