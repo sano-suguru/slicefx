@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slice - Vertical-Slice-first .NET Web Framework</title>
-    <meta name="description" content="Slice is a Vertical-Slice-first experimental .NET web framework built on ASP.NET Core Minimal APIs.">
+    <title>Slice - Minimal API with Feature Files and Generated Contracts</title>
+    <meta name="description" content="Slice keeps ASP.NET Core Minimal API close while generating route metadata, compatibility reports, and typed clients from feature files.">
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -132,22 +132,22 @@
     <main class="relative z-10 flex-grow">
         <section class="max-w-7xl mx-auto px-6 pt-24 pb-20 lg:pt-32 lg:pb-28">
             <div class="text-center max-w-4xl mx-auto opacity-0 animate-fade-in-up">
-                <p class="mb-5 text-sm font-mono text-brand-400">ASP.NET Core Minimal APIs + Vertical Slice Architecture + AOT</p>
+                <p class="mb-5 text-sm font-mono text-brand-400">Feature-first .NET APIs with generated contracts.</p>
                 <h1 class="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
                     <span class="lang-ja">
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-cyan-300">1ファイル</span> =
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300">1機能</span> =
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-brand-400">1デプロイ単位</span>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-cyan-300">1ファイル</span>。
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300">1機能</span>。
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-brand-400">API契約を生成</span>。
                     </span>
                     <span class="lang-en">
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-cyan-300">1 file</span> =
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300">1 feature</span> =
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-brand-400">1 deploy unit</span>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-cyan-300">One file</span>.
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300">One feature</span>.
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-brand-400">Generated API contracts</span>.
                     </span>
                 </h1>
                 <p class="text-xl md:text-2xl text-slate-400 mb-10 font-medium">
-                    <span class="lang-ja">垂直スライス・ファーストの実験的 .NET Webフレームワーク。</span>
-                    <span class="lang-en">A Vertical-Slice-first experimental .NET web framework.</span>
+                    <span class="lang-ja">標準のASP.NET Coreに近いまま、小さな.NET APIを1機能ずつ明示的に書き、routes・互換性・clientをあとから手で同期しないためのフレームワークです。</span>
+                    <span class="lang-en">Build small .NET APIs explicitly, close to standard ASP.NET Core, without hand-syncing routes, compatibility notes, and clients later.</span>
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
                     <a href="#code" class="px-8 py-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-brand-600/20 flex items-center gap-2 w-full sm:w-auto justify-center">
@@ -168,25 +168,46 @@
         <section class="bg-slate-900/50 border-y border-white/5 py-16" id="features">
             <div class="max-w-7xl mx-auto px-6">
                 <div class="text-center mb-12">
-                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">3つの思想の交差点</span><span class="lang-en">Intersection of three ideas</span></h2>
-                    <p class="text-slate-400"><span class="lang-ja">Sliceは既存の優れたアイデアをASP.NET Core上に統合します。</span><span class="lang-en">Slice combines proven ideas on top of ASP.NET Core.</span></p>
+                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">3つに絞った価値</span><span class="lang-en">Three focused ideas</span></h2>
+                    <p class="text-slate-400"><span class="lang-ja">標準のASP.NET Coreに近いまま、feature fileと生成される契約をシンプルにつなぎます。</span><span class="lang-en">Keep ASP.NET Core Minimal API close while connecting feature files with generated contracts.</span></p>
                 </div>
                 <div class="grid md:grid-cols-3 gap-8">
                     <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.1s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-brand-400 border border-slate-700"><i data-lucide="file-code-2"></i></div>
-                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">FastEndpointsの構造</span><span class="lang-en">FastEndpoints' shape</span></h3>
-                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">1つの静的クラスが1つのエンドポイントに対応。リクエスト、レスポンス、ハンドラー、バリデーションを近くに置けます。</span><span class="lang-en">One static class maps to one endpoint, keeping request, response, handler, and validation close together.</span></p>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">Feature単位</span><span class="lang-en">Feature-shaped APIs</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">1つの静的クラスが1つのエンドポイント。リクエスト、レスポンス、ハンドラー、バリデーションを近くに置けます。</span><span class="lang-en">One static class maps to one endpoint, keeping request, response, handler, and validation close together.</span></p>
                     </article>
                     <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.2s;">
-                        <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-purple-400 border border-slate-700"><i data-lucide="sparkles"></i></div>
-                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">FastAPIのDX</span><span class="lang-en">FastAPI's DX</span></h3>
-                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">宣言的な属性、型駆動のバリデーション、パラメータベースのDI。Minimal APIのバインディングとOpenAPIをそのまま活かします。</span><span class="lang-en">Declarative attributes, type-driven validation, parameter-based DI, and Minimal API binding/OpenAPI without hiding ASP.NET Core.</span></p>
+                        <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-cyan-400 border border-slate-700"><i data-lucide="route"></i></div>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">生成されるAPI契約</span><span class="lang-en">Generated API contracts</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">route metadata、互換性診断、typed clientを同じfeatureファイルから生成します。</span><span class="lang-en">Generate route metadata, compatibility reports, and typed clients from the same feature files.</span></p>
                     </article>
                     <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.3s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-emerald-400 border border-slate-700"><i data-lucide="zap"></i></div>
-                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">axumの規律</span><span class="lang-en">axum's discipline</span></h3>
-                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">静的ハンドラー、生成コードによる登録、ホットパスのリフレクションゼロ。AOTとサーバーレスを第一級に扱います。</span><span class="lang-en">Static handlers, generated registrations, and no hot-path reflection. AOT and serverless are first-class design targets.</span></p>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">標準に沿う</span><span class="lang-en">Standard by default</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">Minimal API binding、DI、endpoint filters、DataAnnotationsをそのまま使い、必要な時だけASP.NET固有の<code>IResult</code>に寄せられます。</span><span class="lang-en">Keep Minimal API binding, DI, endpoint filters, and DataAnnotations; use ASP.NET-specific <code>IResult</code> only when a slice needs it.</span></p>
                     </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="max-w-7xl mx-auto px-6 py-20">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">誰が嬉しい？</span><span class="lang-en">Who is Slice for?</span></h2>
+                <p class="text-slate-400"><span class="lang-ja">「軽く作りたい。でもrouteやclientや将来の実行環境を散らかしたくない」チーム向けです。</span><span class="lang-en">For teams that want a light API layer without letting routes, clients, and future runtime choices drift apart.</span></p>
+            </div>
+            <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
+                <div class="grid md:grid-cols-[220px_1fr] gap-0 border-b border-slate-700">
+                    <div class="p-6 font-bold text-white bg-slate-900/50"><span class="lang-ja">小さなAPIチーム</span><span class="lang-en">Small API teams</span></div>
+                    <div class="p-6 text-slate-400"><span class="lang-ja">1 endpoint = 1 file。リクエスト、レスポンス、バリデーション、ハンドラーを近くに置けるので、機能の持ち主が見えます。</span><span class="lang-en">One endpoint is one file. Request, response, validation, and handler stay together, so feature ownership stays visible.</span></div>
+                </div>
+                <div class="grid md:grid-cols-[220px_1fr] gap-0 border-b border-slate-700">
+                    <div class="p-6 font-bold text-white bg-slate-900/50"><span class="lang-ja">Blazor/.NET client</span><span class="lang-en">Blazor/.NET clients</span></div>
+                    <div class="p-6 text-slate-400"><span class="lang-ja">server featureから型付きHttpClientを生成し、route文字列やDTOの手作業同期を減らします。</span><span class="lang-en">Generate typed HttpClient wrappers from server features and avoid hand-maintained route strings and DTO wiring.</span></div>
+                </div>
+                <div class="grid md:grid-cols-[220px_1fr] gap-0">
+                    <div class="p-6 font-bold text-white bg-slate-900/50"><span class="lang-ja">Serverless/AOT志向</span><span class="lang-en">Serverless/AOT-minded teams</span></div>
+                    <div class="p-6 text-slate-400"><span class="lang-ja"><code>slice routes</code> でportable性を早めに見える化しつつ、ASP.NET Coreを主な実行環境として使い続けられます。</span><span class="lang-en"><code>slice routes</code> surfaces portability early while ASP.NET Core remains the primary runtime.</span></div>
                 </div>
             </div>
         </section>
@@ -216,6 +237,13 @@
                             <p class="text-slate-400"><span class="lang-ja">AWS Lambda、Cloudflare Workers/WASI、TestHost、CLIスキャフォールディングを実験的に提供しています。</span><span class="lang-en">Experimental adapters exist for AWS Lambda, Cloudflare Workers/WASI, TestHost, and CLI scaffolding.</span></p>
                         </div>
                     </div>
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">sliceから生成されるツール</span><span class="lang-en">Tooling generated from slices</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja"><code>slice routes</code> で互換性を検査し、<code>slice client csharp</code> でBlazor/.NET向けの型付きHttpClientを生成します。</span><span class="lang-en"><code>slice routes</code> reports compatibility, and <code>slice client csharp</code> generates typed HttpClient wrappers for Blazor/.NET clients.</span></p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="glass-panel p-8 rounded-2xl border border-slate-700">
@@ -227,6 +255,8 @@
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><code>[Filter&lt;T&gt;]</code> endpoint filters</span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>DataAnnotations and <code>ISliceValidator&lt;T&gt;</code></span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>OpenAPI tags inferred from namespaces</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>Route metadata export and portability reporting</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>C# typed client generation for Blazor/.NET</span></li>
                     </ul>
                 </div>
             </div>
@@ -257,12 +287,11 @@ public static class CreateUser
 
     public record Response(Guid Id, string Name, string Email, DateTime CreatedAt);
 
-    public static async Task&lt;IResult&gt; Handle(Request req, IUserStore store, CancellationToken ct)
+    public static async Task&lt;Response&gt; Handle(Request req, IUserStore store, CancellationToken ct)
     {
         var user = await store.AddAsync(req.Name, req.Email, ct);
 
-        return Results.Created($"/users/{user.Id}",
-            new Response(user.Id, user.Name, user.Email, user.CreatedAt));
+        return new Response(user.Id, user.Name, user.Email, user.CreatedAt);
     }
 }</code></pre>
                 </div>
@@ -288,6 +317,18 @@ app.MapSlicesGenerated();
 app.Run();</code></pre>
                 </div>
             </div>
+
+            <div class="rounded-xl overflow-hidden glass-panel border border-slate-700 shadow-2xl shadow-black/50 lg:w-3/4 mt-8">
+                <div class="code-window-header px-4 py-3 flex items-center gap-2">
+                    <div class="flex gap-2"><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div></div>
+                    <div class="text-xs font-mono text-slate-400 ml-4">Slice CLI</div>
+                </div>
+                <div class="p-6 overflow-x-auto bg-[#282c34]">
+<pre><code class="language-bash">slice routes
+slice routes --format json
+slice client csharp --output SliceApiClient.g.cs</code></pre>
+                </div>
+            </div>
         </section>
 
         <section class="bg-slate-900/80 border-t border-white/5 py-24 mt-12" id="packages">
@@ -302,7 +343,7 @@ app.Run();</code></pre>
                     <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Lambda</h3><p class="text-sm text-slate-400">AWS Lambda hosting integration over ASP.NET Core.</p></div>
                     <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Workers</h3><p class="text-sm text-slate-400">ASP.NET-independent dispatch for Workers and WASI experiments.</p></div>
                     <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.TestHost</h3><p class="text-sm text-slate-400">In-process HTTP testing helpers for Slice apps.</p></div>
-                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400">Feature and filter scaffolding through the <code>slice</code> command.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400">Scaffolding, route inspection, compatibility reports, and typed client generation through the <code>slice</code> command.</p></div>
                 </div>
             </div>
         </section>

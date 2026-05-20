@@ -10,6 +10,25 @@ Thanks for your interest in Slice. This project is experimental, so the best con
 4. Keep runtime fallback and generated registration behavior aligned when changing routing, validation, filters, or metadata.
 5. Update samples and docs when public behavior changes.
 
+## Definition of Done
+
+A change is done when:
+
+1. `dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true` passes.
+2. Formatting and style analyzers are clean with `dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591`, or formatting was intentionally applied.
+3. `src\Slice.Core\Slice.Core.csproj` still has no `<PackageReference>` items.
+4. Runtime fallback and source-generated registration behavior stay aligned when feature registration, validation, filters, or metadata change.
+5. Samples and README/docs are updated when public behavior changes.
+6. Any breaking change is documented in the PR description.
+
+## Invariants to protect
+
+- `Slice.Core` stays dependency-free except for `Microsoft.AspNetCore.App`.
+- Per-request code must not use reflection.
+- Feature handlers remain `public static` and receive dependencies as parameters.
+- Cross-cutting behavior uses ASP.NET Core endpoint filters, not new mediator-style abstractions.
+- Generated registrations should mirror the runtime fallback's validation, filter, and metadata order.
+
 ## Local verification
 
 ```pwsh

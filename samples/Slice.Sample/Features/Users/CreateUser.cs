@@ -28,16 +28,15 @@ public static class CreateUser
     public record Response(Guid Id, string Name, string Email, DateTime CreatedAt);
 
     /// <summary>
-    /// Persists the user and returns a <c>201 Created</c> response.
+    /// Persists the user and returns the created user payload.
     /// </summary>
     /// <param name="req">Validated request body.</param>
     /// <param name="store">User store resolved from dependency injection.</param>
     /// <param name="ct">Request cancellation token.</param>
-    /// <returns>An HTTP result with the created user payload.</returns>
-    public static async Task<IResult> Handle(Request req, IUserStore store, CancellationToken ct)
+    /// <returns>The created user payload.</returns>
+    public static async Task<Response> Handle(Request req, IUserStore store, CancellationToken ct)
     {
         var user = await store.AddAsync(req.Name, req.Email, ct).ConfigureAwait(false);
-        return Results.Created($"/users/{user.Id}",
-            new Response(user.Id, user.Name, user.Email, user.CreatedAt));
+        return new Response(user.Id, user.Name, user.Email, user.CreatedAt);
     }
 }

@@ -38,7 +38,7 @@ curl -X DELETE http://localhost:5099/users/{id} -H "X-API-Key: secret"
 
 ## Authoring a feature (the pattern all samples follow)
 
-A feature is one `public static class` per file under `<App>.Features.<Group>.<FeatureName>`, with nested `Request`/`Response` records and a `public static [async] Task<IResult> Handle(...)` method.
+A feature is one `public static class` per file under `<App>.Features.<Group>.<FeatureName>`, with nested `Request`/`Response` records and a `public static [async] Task<Response> Handle(...)` method by default. Return `IResult` only when the feature intentionally needs ASP.NET-specific response helpers.
 
 ```csharp
 // samples/Slice.Sample/Features/Users/CreateUser.cs
@@ -54,11 +54,10 @@ public static class CreateUser
 
     public record Response(Guid Id, string Name, string Email, DateTime CreatedAt);
 
-    public static async Task<IResult> Handle(Request req, IUserStore store, CancellationToken ct)
+    public static async Task<Response> Handle(Request req, IUserStore store, CancellationToken ct)
     {
         var user = await store.AddAsync(req.Name, req.Email, ct);
-        return Results.Created($"/users/{user.Id}",
-            new Response(user.Id, user.Name, user.Email, user.CreatedAt));
+        return new Response(user.Id, user.Name, user.Email, user.CreatedAt);
     }
 }
 ```

@@ -1,16 +1,34 @@
 # Slice
 
-> A Vertical-Slice-first .NET web framework. **1 file = 1 feature = 1 deploy unit.**
+> Minimal API with feature files and generated contracts — not a replacement framework.
 
 Website: <https://sugu-sano.github.io/Slice/>
 
-Slice is an experimental .NET web framework built on top of ASP.NET Core. It sits at the intersection of five ideas:
+Slice is an experimental .NET web framework built on ASP.NET Core Minimal APIs. Author each endpoint as one explicit feature file, keep the standard ASP.NET Core programming model, and let Slice generate registrations, route metadata, compatibility reports, and typed clients around that shape.
 
-- **FastEndpoints' shape** — 1 class = 1 endpoint, built on ASP.NET Core Minimal API.
-- **FastAPI's DX** — declarative attributes, type-driven validation, parameter-based DI, OpenAPI for free.
-- **axum's discipline** — static handlers, zero runtime reflection, AOT and serverless as first-class targets.
-- **Hono's small surface** — keep routing, validation, and cross-cutting behavior thin enough to reason about at the feature boundary.
-- **Vercel's convention-first deployment model** — make route and runtime metadata easy to generate so one slice can later become one deployable unit.
+```bash
+dotnet run --project samples/Slice.Sample
+slice routes --project samples/Slice.Sample/Slice.Sample.csproj
+```
+
+The goal is not to be a bigger FastEndpoints or a parallel web stack. Slice is a small, generated, vertical-slice API layer for teams that want Minimal API behavior, typed clients, and portability checks without hand-maintained endpoint strings.
+
+It focuses on three product ideas:
+
+- **Feature-shaped APIs** — one static class per endpoint, with request, response, validation, and handler kept together.
+- **Generated API contracts** — route metadata, compatibility reports, and typed clients come from the same feature files.
+- **Standard by default** — keep Minimal API binding, DI, endpoint filters, DataAnnotations, and `IResult` when you need ASP.NET-specific responses.
+
+## Who is it for?
+
+Slice is strongest when you want a small .NET API to stay understandable as it grows:
+
+| Team | Why Slice helps |
+| --- | --- |
+| Small API and product teams | Each endpoint is owned as one file, so request, response, validation, filters, and handler do not drift across folders. |
+| Blazor and .NET client teams | `slice client csharp` can generate typed `HttpClient` wrappers from server features instead of hand-maintaining route strings and DTO wiring. |
+| AOT, serverless, and Workers-minded teams | `slice routes` makes portability visible early, while ASP.NET Core remains the primary runtime. |
+| Framework-light .NET teams | Slice keeps ASP.NET Core Minimal API binding and endpoint filters instead of introducing a mediator pipeline or required validation stack. |
 
 `Slice.Core` has zero NuGet package dependencies; the optional source generator lives in a separate project and uses Roslyn packages.
 
@@ -27,26 +45,28 @@ Packages are split so optional dependencies stay out of `Slice.Core`:
 | `Slice.Lambda` | AWS Lambda hosting adapter. |
 | `Slice.TestHost` | In-process test host helpers. |
 | `Slice.Workers` | ASP.NET-independent Workers/WASI adapter. |
-| `Slice.Cli` | Local scaffolding tool for features and filters. |
+| `Slice.Cli` | Local scaffolding, route inspection, compatibility reporting, and typed client generation. |
 
 ## Design principles
 
 - **Vertical Slice first.** Each HTTP endpoint is one self-contained file. Request, response, handler, validator, filters — all together.
+- **Explicit over magic.** Routes are declared in `[Feature("METHOD /path")]`; file and namespace conventions help tooling, but they do not hide the HTTP contract.
 - **Static handlers.** Every `Handle` method is `static`. Dependencies come in as parameters. No instance state, no DI on the type itself, no reflection on the hot path after startup.
 - **Zero new abstractions.** Slice doesn't invent `IPipelineBehavior<TReq, TRes>` or `IMediator` — it leans on ASP.NET Core's existing `IEndpointFilter`. Less to learn, less to maintain.
 - **Declarative everything.** `[Feature]`, `[Filter<T>]`. The source generator or runtime fallback reads these and registers Minimal API endpoints, validation, and filter chains automatically.
 - **AOT-ready structure.** Handlers are static and receive a strongly-typed delegate. The generated path avoids startup reflection; the runtime fallback keeps the same API shape for non-AOT scenarios.
 - **Zero runtime framework dependencies.** Slice.Core has only one reference: `Microsoft.AspNetCore.App`. No FluentValidation, no MediatR, no AutoMapper. Roslyn dependencies are isolated to `Slice.SourceGenerator`.
 - **Convention-first, not convention-only.** Feature files live naturally under `Features/<Group>`, and generated metadata should support tooling and deployment, but the public authoring model stays explicit and .NET-native.
-- **Portable where practical.** ASP.NET Minimal API remains the main runtime. Workers/serverless paths should reuse the same feature shape when the return type and dependencies are portable.
+- **Portable where practical.** ASP.NET Minimal API remains the main runtime. Workers/serverless paths reuse the same feature shape when the return type and dependencies are portable.
+- **Tooling from slices.** Route inspection, compatibility checks, metadata export, and typed clients should be generated from the slice shape instead of hand-maintained API contracts.
 
 ## Development discipline
 
-Changes are guarded by CI, a PR checklist, and a small set of project invariants. See [docs/development-discipline.md](docs/development-discipline.md) for the Definition of Done and local verification commands.
+Changes are guarded by CI, a PR checklist, and a small set of project invariants. See [CONTRIBUTING.md](CONTRIBUTING.md) for the Definition of Done and local verification commands.
 
 For release preparation, see [docs/oss-release-checklist.md](docs/oss-release-checklist.md).
 
-For the current Hono/Vercel-inspired direction, see [docs/hono-vercel-direction.md](docs/hono-vercel-direction.md).
+For the current product direction, see [docs/product-direction.md](docs/product-direction.md).
 
 ## Hello, Slice
 
@@ -73,11 +93,10 @@ public static class CreateUser
 
     public record Response(Guid Id, string Name, string Email, DateTime CreatedAt);
 
-    public static async Task<IResult> Handle(Request req, IUserStore store, CancellationToken ct)
+    public static async Task<Response> Handle(Request req, IUserStore store, CancellationToken ct)
     {
         var user = await store.AddAsync(req.Name, req.Email, ct);
-        return Results.Created($"/users/{user.Id}",
-            new Response(user.Id, user.Name, user.Email, user.CreatedAt));
+        return new Response(user.Id, user.Name, user.Email, user.CreatedAt);
     }
 }
 ```
@@ -88,6 +107,8 @@ That's it. The framework:
 3. Lets Minimal API auto-bind the body (`Request`), services (`IUserStore`), and the cancellation token.
 4. Validates request DTOs via DataAnnotations attributes — including record positional parameters, type-level attributes, and `IValidatableObject`.
 5. Returns Problem Details if validation fails.
+
+Prefer returning a `Response` record for the default Slice style. Use `IResult` only when the feature intentionally needs ASP.NET-specific response helpers such as `Results.NotFound()` or `Results.Created(...)`.
 
 ## Cross-cutting concerns via `[Filter<T>]`
 
@@ -132,9 +153,10 @@ Use `ISliceValidator<T>` when DataAnnotations alone is not expressive enough, su
 public static class PostEcho
 {
     public record Request([Required, MinLength(1)] string Message);
+    public record Response(string Echo);
 
-    public static IResult Handle(Request req)
-        => Results.Ok(new { echo = req.Message });
+    public static Response Handle(Request req)
+        => new(req.Message);
 }
 
 public sealed class EchoRequestValidator : ISliceValidator<PostEcho.Request>
@@ -199,7 +221,7 @@ public static IEndpointRouteBuilder MapSlicesGenerated(this IEndpointRouteBuilde
     app.MapMethods(
             "/users",
             new[] { "POST" },
-            new Func<CreateUser.Request, IUserStore, CancellationToken, Task<IResult>>(CreateUser.Handle))
+            new Func<CreateUser.Request, IUserStore, CancellationToken, Task<CreateUser.Response>>(CreateUser.Handle))
         .AddEndpointFilterFactory(DataAnnotationsValidationFilter.CreateFilterFactory)
         .WithTags("Users")
         .WithName("Users.CreateUser");
@@ -322,9 +344,11 @@ slice new feature CreateOrder --method POST --route /orders
 slice new feature GetProductDetail --method GET
 slice new filter RequireApiKeyFilter
 slice routes
+slice routes --format json
+slice client csharp --output SliceApiClient.g.cs
 ```
 
-`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. `POST`, `PUT`, and `PATCH` templates include an empty `Request`; `GET` and `DELETE` templates do not. `slice routes` lists discovered feature routes and flags whether each return type is Workers-compatible. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
+`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. Generated templates return a nested `Response` record by default; `POST`, `PUT`, and `PATCH` templates also include an empty `Request`. `slice routes` lists discovered feature routes and reports whether each slice is `portable`, `partial`, or `aspnet-only` for Workers-style dispatch. Use `--format json` to export route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
 
 ---
 

@@ -47,16 +47,21 @@ internal static class FeatureTemplate
 
         if (hasRequest)
         {
-            sb.AppendLine("    public static Task<IResult> Handle(Request req, CancellationToken ct)");
+            sb.AppendLine("    public static Task<Response> Handle(Request req, CancellationToken ct)");
         }
         else
         {
-            sb.AppendLine("    public static Task<IResult> Handle(CancellationToken ct)");
+            sb.AppendLine("    public static Task<Response> Handle(CancellationToken ct)");
         }
 
         sb.AppendLine("    {");
         sb.AppendLine("        // TODO: implement handler");
-        sb.AppendLine("        return Task.FromResult<IResult>(Results.Ok(new Response()));");
+        if (hasRequest)
+        {
+            sb.AppendLine("        _ = req;");
+        }
+        sb.AppendLine("        _ = ct;");
+        sb.AppendLine("        return Task.FromResult(new Response());");
         sb.AppendLine("    }");
         sb.AppendLine("}");
 

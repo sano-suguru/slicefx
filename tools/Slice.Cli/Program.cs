@@ -7,9 +7,15 @@ var newCmd = new Command("new", "Scaffold a new Slice file.")
     NewFilterCommand.Build()
 };
 
+var clientCmd = new Command("client", "Generate typed clients from Slice feature routes.")
+{
+    GenerateCSharpClientCommand.Build()
+};
+
 var root = new RootCommand("Slice CLI — vertical slice scaffolding.")
 {
     newCmd,
+    clientCmd,
     ListRoutesCommand.Build()
 };
 
