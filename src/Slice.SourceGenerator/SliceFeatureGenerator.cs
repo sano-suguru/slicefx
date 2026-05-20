@@ -72,6 +72,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     return;
                 }
 
+                var manifestSource = RouteManifestEmitter.Emit(models, asmName);
+                spc.AddSource(
+                    $"{asmName}.SliceRouteManifest.g.cs",
+                    Microsoft.CodeAnalysis.Text.SourceText.From(manifestSource, Encoding.UTF8));
+
                 if (emitAspNet)
                 {
                     var source = RegistrationEmitter.Emit(models, asmName);

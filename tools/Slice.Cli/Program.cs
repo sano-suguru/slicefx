@@ -9,7 +9,8 @@ var newCmd = new Command("new", "Scaffold a new Slice file.")
 
 var root = new RootCommand("Slice CLI — vertical slice scaffolding.")
 {
-    newCmd
+    newCmd,
+    ListRoutesCommand.Build()
 };
 
 return await root.Parse(args).InvokeAsync().ConfigureAwait(false);

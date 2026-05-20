@@ -4,11 +4,13 @@
 
 Website: <https://sugu-sano.github.io/Slice/>
 
-Slice is an experimental .NET web framework built on top of ASP.NET Core. It sits at the intersection of three ideas:
+Slice is an experimental .NET web framework built on top of ASP.NET Core. It sits at the intersection of five ideas:
 
 - **FastEndpoints' shape** — 1 class = 1 endpoint, built on ASP.NET Core Minimal API.
 - **FastAPI's DX** — declarative attributes, type-driven validation, parameter-based DI, OpenAPI for free.
 - **axum's discipline** — static handlers, zero runtime reflection, AOT and serverless as first-class targets.
+- **Hono's small surface** — keep routing, validation, and cross-cutting behavior thin enough to reason about at the feature boundary.
+- **Vercel's convention-first deployment model** — make route and runtime metadata easy to generate so one slice can later become one deployable unit.
 
 `Slice.Core` has zero NuGet package dependencies; the optional source generator lives in a separate project and uses Roslyn packages.
 
@@ -35,12 +37,16 @@ Packages are split so optional dependencies stay out of `Slice.Core`:
 - **Declarative everything.** `[Feature]`, `[Filter<T>]`. The source generator or runtime fallback reads these and registers Minimal API endpoints, validation, and filter chains automatically.
 - **AOT-ready structure.** Handlers are static and receive a strongly-typed delegate. The generated path avoids startup reflection; the runtime fallback keeps the same API shape for non-AOT scenarios.
 - **Zero runtime framework dependencies.** Slice.Core has only one reference: `Microsoft.AspNetCore.App`. No FluentValidation, no MediatR, no AutoMapper. Roslyn dependencies are isolated to `Slice.SourceGenerator`.
+- **Convention-first, not convention-only.** Feature files live naturally under `Features/<Group>`, and generated metadata should support tooling and deployment, but the public authoring model stays explicit and .NET-native.
+- **Portable where practical.** ASP.NET Minimal API remains the main runtime. Workers/serverless paths should reuse the same feature shape when the return type and dependencies are portable.
 
 ## Development discipline
 
 Changes are guarded by CI, a PR checklist, and a small set of project invariants. See [docs/development-discipline.md](docs/development-discipline.md) for the Definition of Done and local verification commands.
 
 For release preparation, see [docs/oss-release-checklist.md](docs/oss-release-checklist.md).
+
+For the current Hono/Vercel-inspired direction, see [docs/hono-vercel-direction.md](docs/hono-vercel-direction.md).
 
 ## Hello, Slice
 
@@ -174,6 +180,7 @@ builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidat
 | Test host pattern (`Slice.TestHost`) | ✅ experimental |
 | Cloudflare Workers adapter (`Slice.Workers`) | ✅ experimental (in-process dispatch; WASI publish path) |
 | CLI scaffolding (`slice new feature User`) | ✅ experimental |
+| Generated route metadata manifest | ✅ experimental |
 
 ## Source generator, adapters, and roadmap
 
@@ -216,6 +223,8 @@ Result: zero reflection at startup, trimmer/AOT happy, near-zero cold start.
 
 For compatibility, `AddSlice()` / `MapSlices()` still exist as the runtime-discovery fallback. For AOT/trimming, import `Slice.Generated` and call the generated methods directly.
 
+The source generator also emits a route metadata manifest for tooling and deployment experiments. The manifest contains method, pattern, feature type, tag, endpoint name, summary, request type, return type, filters, and Workers compatibility. It is intentionally string-based so it can be consumed without adding dependencies to `Slice.Core`.
+
 ### AWS Lambda adapter
 
 **Status:** implemented experimentally in `src/Slice.Lambda`, with a reference app in `samples/Slice.LambdaSample`.
@@ -245,6 +254,8 @@ Deploy the sample with the Lambda .NET tooling (`dotnet lambda package`) for the
 **Status:** In-process dispatch and componentize-dotnet WASI publish are implemented experimentally, with a reference app in `samples/Slice.WorkersSample`.
 
 `Slice.Workers` is an ASP.NET-independent satellite that routes `[Feature]` handlers through a lightweight `WorkerRouteTable` built at startup by the source generator. The same `[Feature]` classes work without modification; features that return `IResult` / `Task<IResult>` (ASP.NET-specific) are excluded automatically and the generator emits a `SLICE008` info diagnostic.
+
+Portable Workers features should return `WorkerResponse`, `SliceResult`, a POCO, `Task<T>`, or `ValueTask<T>`. ASP.NET-specific `IResult` remains the right choice for Minimal API features that rely on ASP.NET response helpers, filters, or endpoint behavior.
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -310,9 +321,10 @@ The CLI is packaged as a local .NET tool command named `slice`. It scaffolds fea
 slice new feature CreateOrder --method POST --route /orders
 slice new feature GetProductDetail --method GET
 slice new filter RequireApiKeyFilter
+slice routes
 ```
 
-`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. `POST`, `PUT`, and `PATCH` templates include an empty `Request`; `GET` and `DELETE` templates do not. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
+`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. `POST`, `PUT`, and `PATCH` templates include an empty `Request`; `GET` and `DELETE` templates do not. `slice routes` lists discovered feature routes and flags whether each return type is Workers-compatible. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
 
 ---
 
@@ -331,7 +343,7 @@ If you align the slice boundary with the function boundary, you get:
 - **Faster cold starts** — less code to load and JIT (or none, with AOT).
 - **Same app shape, multiple deployment modes** — run as a Kestrel server in development, host the same app on AWS Lambda today, and keep the path open for finer-grained function-per-feature deployment.
 
-Slice's static-handler shape is designed to make the function-per-feature mapping straightforward, even though the current Lambda adapter hosts the ASP.NET Core app as a Lambda entry point.
+Slice's static-handler shape is designed to make the function-per-feature mapping straightforward, even though the current Lambda adapter hosts the ASP.NET Core app as a Lambda entry point. The near-term deployment direction is full-app deployment plus generated route metadata first; function-per-feature build output should be evaluated on top of that manifest without changing the feature authoring model.
 
 ## Build & run
 
