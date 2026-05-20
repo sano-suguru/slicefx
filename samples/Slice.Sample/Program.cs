@@ -4,6 +4,7 @@ using Slice.Sample.Services;
 var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.Services.AddSliceGenerated();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IUserStore, InMemoryUserStore>();
 
 var app = builder.Build();

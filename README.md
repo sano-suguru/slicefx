@@ -238,7 +238,7 @@ var builder = WorkerHost.CreateBuilder();
 // Source-generated route registration — no manual wiring needed.
 builder.AddSliceGenerated();
 
-builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 await app.DispatchAsync(request); // in-process use; or Run() for WASI stdin/stdout IPC
@@ -274,7 +274,7 @@ The `wasi-experimental` workload (Mono-based, WASI Preview 1) is not supported i
 ```csharp
 await using var host = SliceTestHost.Create<Program>(svc =>
 {
-    svc.Replace<IUserStore>(new InMemoryUserStore());   // mock real infra
+    svc.Replace<IUserStore>(new InMemoryUserStore(TimeProvider.System));   // mock real infra
 });
 var resp = await host.Client.PostAsJsonAsync("/users", new { name = "Alice", email = "a@b.c" });
 ```

@@ -17,7 +17,7 @@ internal static class Program
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Slice.Sample"));
 
         await using var host = SliceTestHost.Create<global::Program>(svc =>
-            svc.Replace<IUserStore>(new InMemoryUserStore()),
+            svc.Replace<IUserStore>(new InMemoryUserStore(TimeProvider.System)),
             contentRoot);
 
         // GET /health

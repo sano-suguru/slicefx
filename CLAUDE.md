@@ -120,7 +120,7 @@ Features returning `IResult`/`Task<IResult>` are excluded from Workers routes au
 ```csharp
 var builder = WorkerHost.CreateBuilder();
 builder.AddSliceGenerated();              // source-generated route wiring
-builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton(TimeProvider.System);
 var app = builder.Build();
 await app.DispatchAsync(request);         // in-process dispatch
 ```

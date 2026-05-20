@@ -16,7 +16,8 @@ public static class GetHealth
     /// <summary>
     /// Returns a lightweight health response for smoke tests.
     /// </summary>
+    /// <param name="timeProvider">Clock service resolved from the sample host.</param>
     /// <returns>The current health status.</returns>
-    public static Response Handle()
-        => new("ok", DateTime.UtcNow);
+    public static Response Handle(TimeProvider timeProvider)
+        => new("ok", timeProvider.GetUtcNow().UtcDateTime);
 }

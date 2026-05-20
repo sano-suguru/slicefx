@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Slice.Generated;
 using Slice.Workers;
-using Slice.WorkersSample.Services;
 
 var builder = WorkerHost.CreateBuilder();
 
@@ -9,7 +8,7 @@ var builder = WorkerHost.CreateBuilder();
 builder.AddSliceGenerated();
 
 // Register application services.
-builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 

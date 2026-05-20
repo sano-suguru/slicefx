@@ -55,11 +55,19 @@ public interface IUserStore
 public sealed class InMemoryUserStore : IUserStore
 {
     private readonly ConcurrentDictionary<Guid, User> _users = new();
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// Initializes a new in-memory user store with the clock used for generated timestamps.
+    /// </summary>
+    /// <param name="timeProvider">Clock service resolved from the sample host.</param>
+    public InMemoryUserStore(TimeProvider timeProvider)
+        => _timeProvider = timeProvider;
 
     /// <inheritdoc />
     public Task<User> AddAsync(string name, string email, CancellationToken ct)
     {
-        var user = new User(Guid.NewGuid(), name, email, DateTime.UtcNow);
+        var user = new User(Guid.NewGuid(), name, email, _timeProvider.GetUtcNow().UtcDateTime);
         _users[user.Id] = user;
         return Task.FromResult(user);
     }

@@ -16,7 +16,8 @@ public static class GetHealth
     /// <summary>
     /// Returns a lightweight health response.
     /// </summary>
+    /// <param name="timeProvider">Clock service resolved from the Lambda sample host.</param>
     /// <returns>An HTTP 200 response containing the health payload.</returns>
-    public static IResult Handle()
-        => Results.Ok(new Response("ok", DateTime.UtcNow));
+    public static IResult Handle(TimeProvider timeProvider)
+        => Results.Ok(new Response("ok", timeProvider.GetUtcNow().UtcDateTime));
 }

@@ -8,6 +8,7 @@ var builder = WebApplication.CreateSlimBuilder(args);
 
 // Registers all features and filters discovered by the source generator.
 builder.Services.AddSliceGenerated();
+builder.Services.AddSingleton(TimeProvider.System);
 
 // ISliceValidator<T> implementations are registered manually (not auto-scanned).
 builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidator>();

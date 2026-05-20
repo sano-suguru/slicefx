@@ -33,6 +33,7 @@ public sealed class WorkerApp : IAsyncDisposable
     /// <summary>
     /// Runs the worker in stdin/stdout JSON IPC mode without an async entry point.
     /// This is intended for WASI command hosts that do not support blocking on async Main.
+    /// Standard output is reserved for protocol responses; diagnostics are written to standard error.
     /// </summary>
     /// <param name="ct">A token that stops the read loop when canceled.</param>
     public void Run(CancellationToken ct = default)
@@ -65,6 +66,7 @@ public sealed class WorkerApp : IAsyncDisposable
     /// Runs the worker in stdin/stdout JSON IPC mode (P2: WASI command invocation).
     /// Each line of stdin is one serialized <see cref="WorkerRequest"/> JSON.
     /// Each line of stdout is one serialized <see cref="WorkerResponse"/> JSON.
+    /// Diagnostics are written to standard error to keep stdout parseable by the host.
     /// </summary>
     /// <param name="ct">A token that stops the read loop when canceled.</param>
     /// <returns>A task that completes when stdin closes or cancellation stops the loop.</returns>

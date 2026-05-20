@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using Slice.WorkersSample.Services;
 
 namespace Slice.WorkersSample.Features.Echo;
 
@@ -19,15 +18,15 @@ public static class PostEcho
     /// Response body for the Workers echo endpoint.
     /// </summary>
     /// <param name="Echo">Original request message.</param>
-    /// <param name="At">UTC time provided by the sample clock service.</param>
+    /// <param name="At">UTC time provided by the sample TimeProvider service.</param>
     public record Response(string Echo, DateTimeOffset At);
 
     /// <summary>
     /// Produces an echo response without ASP.NET-specific result types.
     /// </summary>
     /// <param name="req">Validated request body.</param>
-    /// <param name="clock">Clock service resolved from the Workers host.</param>
+    /// <param name="timeProvider">Clock service resolved from the Workers host.</param>
     /// <returns>The echo response payload.</returns>
-    public static Response Handle(Request req, IClock clock)
-        => new(req.Message, clock.UtcNow);
+    public static Response Handle(Request req, TimeProvider timeProvider)
+        => new(req.Message, timeProvider.GetUtcNow());
 }

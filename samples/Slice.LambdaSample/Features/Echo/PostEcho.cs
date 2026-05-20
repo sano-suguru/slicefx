@@ -26,7 +26,8 @@ public static class PostEcho
     /// Returns the request message with a timestamp.
     /// </summary>
     /// <param name="req">Validated request body.</param>
+    /// <param name="timeProvider">Clock service resolved from the Lambda sample host.</param>
     /// <returns>An HTTP 200 response containing the echo payload.</returns>
-    public static IResult Handle(Request req)
-        => Results.Ok(new Response(req.Message, DateTime.UtcNow));
+    public static IResult Handle(Request req, TimeProvider timeProvider)
+        => Results.Ok(new Response(req.Message, timeProvider.GetUtcNow().UtcDateTime));
 }

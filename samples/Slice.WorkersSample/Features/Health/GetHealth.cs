@@ -1,5 +1,3 @@
-using Slice.WorkersSample.Services;
-
 namespace Slice.WorkersSample.Features.Health;
 
 /// <summary>
@@ -12,14 +10,14 @@ public static class GetHealth
     /// Health payload returned by the Workers sample.
     /// </summary>
     /// <param name="Status">Current health status, for example <c>ok</c>.</param>
-    /// <param name="Timestamp">UTC time provided by the sample clock service.</param>
+    /// <param name="Timestamp">UTC time provided by the sample TimeProvider service.</param>
     public record Response(string Status, DateTimeOffset Timestamp);
 
     /// <summary>
     /// Returns the current health state for in-process probes.
     /// </summary>
-    /// <param name="clock">Clock service resolved from the Workers host.</param>
+    /// <param name="timeProvider">Clock service resolved from the Workers host.</param>
     /// <returns>The health response payload.</returns>
-    public static Response Handle(IClock clock)
-        => new("ok", clock.UtcNow);
+    public static Response Handle(TimeProvider timeProvider)
+        => new("ok", timeProvider.GetUtcNow());
 }
