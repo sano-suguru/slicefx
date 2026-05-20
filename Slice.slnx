@@ -17,6 +17,9 @@
     <Project Path="src/Slice.TestHost/Slice.TestHost.csproj" />
     <Project Path="src/Slice.Workers/Slice.Workers.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Slice.Core.Tests/Slice.Core.Tests.csproj" />
+  </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Slice.Cli/Slice.Cli.csproj" />
   </Folder>
