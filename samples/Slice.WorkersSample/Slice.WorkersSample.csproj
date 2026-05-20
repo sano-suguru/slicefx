@@ -1,9 +1,22 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
     <RootNamespace>Slice.WorkersSample</RootNamespace>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <UseAppHost>false</UseAppHost>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SelfContained>true</SelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,5 +26,24 @@
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
+    <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-alpha.1.25162.1" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <Target Name="PublishAfterBuild" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'" />
+
+  <Target Name="CompileSingleWasmObject" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <Exec Command="$(ExecCommand)" EnvironmentVariables="@(EmscriptenEnvVars)" />
+  </Target>
+
+  <Target Name="CopyWorkerWasmComponent" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and Exists('$(NativeOutputPath)$(MSBuildProjectName).wasm')">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\worker" />
+    <Copy SourceFiles="$(NativeOutputPath)$(MSBuildProjectName).wasm"
+          DestinationFiles="$(MSBuildProjectDirectory)\worker\slice-workers-sample.wasm" />
+  </Target>
 
 </Project>

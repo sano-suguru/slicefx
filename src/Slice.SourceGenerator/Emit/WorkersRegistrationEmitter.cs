@@ -23,7 +23,8 @@ internal static class WorkersRegistrationEmitter
 
     public static (string Source, ImmutableArray<Diagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
-        string assemblyName)
+        string assemblyName,
+        string? workersJsonContextFqn)
     {
         var className = assemblyName.Replace('.', '_') + "_SliceWorkersRegistrations";
         var sb = new StringBuilder();
@@ -40,7 +41,7 @@ internal static class WorkersRegistrationEmitter
         sb.AppendLine();
         sb.AppendLine("namespace Slice.Generated;");
         sb.AppendLine();
-        sb.AppendLine($"public static class {className}");
+        sb.AppendLine($"public static partial class {className}");
         sb.AppendLine("{");
 
         // AddSliceGenerated — same name as ASP.NET version but targets WorkerHostBuilder
@@ -51,6 +52,12 @@ internal static class WorkersRegistrationEmitter
         sb.AppendLine("        return builder;");
         sb.AppendLine("    }");
         sb.AppendLine();
+
+        if (workersJsonContextFqn is not null)
+        {
+            EmitJsonTypeInfoHelper(sb, workersJsonContextFqn);
+            sb.AppendLine();
+        }
 
         // RegisterWorkerRoutes
         sb.AppendLine("    public static void RegisterWorkerRoutes(global::Slice.Workers.Routing.WorkerRouteTable table)");
@@ -71,11 +78,12 @@ internal static class WorkersRegistrationEmitter
             }
 
             sb.AppendLine($"        // {ToSingleLineComment(f.EndpointName)}");
-            EmitTableAdd(sb, f);
+            EmitTableAdd(sb, f, workersJsonContextFqn);
             sb.AppendLine();
         }
 
         sb.AppendLine("    }");
+        EmitValidationHelpers(sb, features);
         sb.AppendLine("}");
 
         return (sb.ToString(), diagnostics.ToImmutable());
@@ -90,7 +98,7 @@ internal static class WorkersRegistrationEmitter
             : null;
     }
 
-    private static void EmitTableAdd(StringBuilder sb, FeatureModel f)
+    private static void EmitTableAdd(StringBuilder sb, FeatureModel f, string? workersJsonContextFqn)
     {
         var @params = f.GetParams();
         var filterFqns = f.GetFilterFqns();
@@ -111,10 +119,26 @@ internal static class WorkersRegistrationEmitter
         if (bodyParam is not null)
         {
             sb.AppendLine($"                    var {bodyParam.Name} = await global::Slice.Workers.Binding.JsonBodyReader");
-            sb.AppendLine($"                        .ReadAsync<{bodyParam.TypeFqn}>(ctx);");
+            if (workersJsonContextFqn is not null)
+            {
+                sb.AppendLine($"                        .ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>());");
+            }
+            else
+            {
+                sb.AppendLine($"                        .ReadAsync<{bodyParam.TypeFqn}>(ctx);");
+            }
             sb.AppendLine($"                    if ({bodyParam.Name} is null) return global::Slice.Workers.SliceResult.Problem(400, \"Bad Request\", \"Request body is required.\");");
-            sb.AppendLine($"                    var __daErrors = global::Slice.Workers.Validation.WorkersValidationRunner.Validate({bodyParam.Name});");
-            sb.AppendLine($"                    if (__daErrors is not null) return global::Slice.Workers.SliceResult.ValidationProblem(__daErrors);");
+
+            if (ShouldUseGeneratedValidation(f))
+            {
+                sb.AppendLine($"                    var __daErrors = {ValidationMethodName(f)}({bodyParam.Name});");
+                sb.AppendLine($"                    if (__daErrors is not null) return global::Slice.Workers.SliceResult.ValidationProblem(__daErrors);");
+            }
+            else if (f.RequiresReflectionValidation)
+            {
+                sb.AppendLine($"                    var __daErrors = global::Slice.Workers.Validation.WorkersValidationRunner.Validate({bodyParam.Name});");
+                sb.AppendLine($"                    if (__daErrors is not null) return global::Slice.Workers.SliceResult.ValidationProblem(__daErrors);");
+            }
 
             if (validatorTypeFqn is not null)
             {
@@ -124,7 +148,7 @@ internal static class WorkersRegistrationEmitter
                 sb.AppendLine($"                    {{");
                 sb.AppendLine($"                        var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken);");
                 sb.AppendLine($"                        if (!__vr.IsValid) return global::Slice.Workers.SliceResult.ValidationProblem(__vr.Errors!);");
-                sb.AppendLine($"                    }}");
+                sb.AppendLine($"                                    }}");
             }
         }
 
@@ -196,13 +220,162 @@ internal static class WorkersRegistrationEmitter
                 sb.AppendLine($"                    var __result = {callExpr};");
             }
 
-            sb.AppendLine($"                    return __result is global::Slice.Workers.WorkerResponse __wr");
-            sb.AppendLine($"                        ? __wr");
-            sb.AppendLine($"                        : global::Slice.Workers.SliceResult.Ok(__result);");
+            if (IsWorkerResponseType(GetAwaitedReturnType(f.ReturnTypeFqn)))
+            {
+                sb.AppendLine($"                    return __result;");
+            }
+            else
+            {
+                var resultType = GetAwaitedReturnType(f.ReturnTypeFqn);
+                if (workersJsonContextFqn is not null)
+                {
+                    sb.AppendLine($"                    return global::Slice.Workers.SliceResult.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>());");
+                }
+                else
+                {
+                    sb.AppendLine($"                    return global::Slice.Workers.SliceResult.Ok(__result);");
+                }
+            }
         }
 
         sb.AppendLine($"                }};");
         sb.AppendLine($"            }});");
+    }
+
+    private static bool ShouldUseGeneratedValidation(FeatureModel f)
+        => !f.RequiresReflectionValidation && !string.IsNullOrEmpty(f.SerializedValidationRules);
+
+    private static void EmitValidationMethod(StringBuilder sb, FeatureModel f)
+    {
+        var requestType = f.FullyQualifiedTypeName + ".Request";
+        sb.AppendLine($"    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? {ValidationMethodName(f)}({requestType} value)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var errors = new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>(global::System.StringComparer.Ordinal);");
+
+        foreach (var line in f.SerializedValidationRules.Split('\n'))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var parts = line.Split('|');
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            var propertyName = parts[0];
+            var propertyAccess = $"value.{propertyName}";
+            var localName = "__" + SanitizeIdentifier(propertyName);
+            if (parts[1] == "Required")
+            {
+                var allowEmptyStrings = parts.Length > 2 && parts[2] == "true";
+                if (allowEmptyStrings)
+                {
+                    sb.AppendLine($"        if ({propertyAccess} is null)");
+                }
+                else
+                {
+                    sb.AppendLine($"        if ({propertyAccess} is null || ({propertyAccess} is string {localName}Required && {localName}Required.Length == 0))");
+                }
+                sb.AppendLine("        {");
+                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str($"The {propertyName} field is required.")});");
+                sb.AppendLine("        }");
+            }
+            else if (parts[1] == "StringLength" && parts.Length > 3)
+            {
+                sb.AppendLine($"        if ({propertyAccess} is string {localName}StringLength && ({localName}StringLength.Length < {parts[2]} || {localName}StringLength.Length > {parts[3]}))");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str($"The field {propertyName} must be a string with a minimum length of {parts[2]} and a maximum length of {parts[3]}.")});");
+                sb.AppendLine("        }");
+            }
+            else if (parts[1] == "MinLength" && parts.Length > 2)
+            {
+                var lengthMember = parts.Length > 3 ? parts[3] : "Length";
+                sb.AppendLine($"        if ({propertyAccess} is not null && {propertyAccess}.{lengthMember} < {parts[2]})");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str($"The field {propertyName} must be a string or array type with a minimum length of '{parts[2]}'.")});");
+                sb.AppendLine("        }");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("        return __ToValidationErrors(errors);");
+        sb.AppendLine("    }");
+    }
+
+    private static void EmitValidationHelpers(StringBuilder sb, ImmutableArray<FeatureModel> features)
+    {
+        var emittedAny = false;
+        foreach (var f in features)
+        {
+            if (!ShouldUseGeneratedValidation(f))
+            {
+                continue;
+            }
+
+            if (!emittedAny)
+            {
+                emittedAny = true;
+                sb.AppendLine();
+            }
+
+            EmitValidationMethod(sb, f);
+            sb.AppendLine();
+        }
+
+        if (!emittedAny)
+        {
+            return;
+        }
+
+        sb.AppendLine("    private static void __AddValidationError(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>> errors, string key, string message)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (!errors.TryGetValue(key, out var messages))");
+        sb.AppendLine("        {");
+        sb.AppendLine("            messages = [];");
+        sb.AppendLine("            errors.Add(key, messages);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        messages.Add(message);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? __ToValidationErrors(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>> errors)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (errors.Count == 0)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            return null;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        var result = new global::System.Collections.Generic.Dictionary<string, string[]>(global::System.StringComparer.Ordinal);");
+        sb.AppendLine("        foreach (var entry in errors)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            result.Add(entry.Key, entry.Value.ToArray());");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        return result;");
+        sb.AppendLine("    }");
+    }
+
+    private static string ValidationMethodName(FeatureModel f)
+        => "__Validate_" + SanitizeIdentifier(f.FullyQualifiedTypeName);
+
+    private static string SanitizeIdentifier(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            sb.Append(char.IsLetterOrDigit(ch) ? ch : '_');
+        }
+
+        return sb.ToString();
+    }
+
+    private static void EmitJsonTypeInfoHelper(StringBuilder sb, string workersJsonContextFqn)
+    {
+        sb.AppendLine("    private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> __JsonTypeInfo<T>()");
+        sb.AppendLine($"        => (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>){workersJsonContextFqn}.Default.GetTypeInfo(typeof(T))!;");
     }
 
     private static HandleParamModel? FindBodyParam(FeatureModel feature, ImmutableArray<HandleParamModel> @params)
@@ -230,6 +403,34 @@ internal static class WorkersRegistrationEmitter
     private static bool IsGenericAwaitable(string returnTypeFqn)
         => returnTypeFqn.StartsWith("global::System.Threading.Tasks.Task<", StringComparison.Ordinal)
         || returnTypeFqn.StartsWith("global::System.Threading.Tasks.ValueTask<", StringComparison.Ordinal);
+
+    private static string? GetAwaitedReturnType(string returnTypeFqn)
+    {
+        if (returnTypeFqn is "void"
+            or "global::System.Threading.Tasks.Task"
+            or "global::System.Threading.Tasks.ValueTask")
+        {
+            return null;
+        }
+
+        if (returnTypeFqn.StartsWith("global::System.Threading.Tasks.Task<", StringComparison.Ordinal))
+        {
+            return GetSingleGenericArgument(returnTypeFqn, "global::System.Threading.Tasks.Task<");
+        }
+
+        if (returnTypeFqn.StartsWith("global::System.Threading.Tasks.ValueTask<", StringComparison.Ordinal))
+        {
+            return GetSingleGenericArgument(returnTypeFqn, "global::System.Threading.Tasks.ValueTask<");
+        }
+
+        return returnTypeFqn;
+    }
+
+    private static string GetSingleGenericArgument(string typeFqn, string prefix)
+        => typeFqn.Substring(prefix.Length, typeFqn.Length - prefix.Length - 1);
+
+    private static bool IsWorkerResponseType(string? typeFqn)
+        => typeFqn == "global::Slice.Workers.WorkerResponse";
 
     private static string? FindSliceValidatorType(ImmutableArray<string> filterFqns, string? bodyTypeFqn)
     {

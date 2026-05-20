@@ -223,7 +223,7 @@ Deploy the sample with the Lambda .NET tooling (`dotnet lambda package`) for the
 
 ### Cloudflare Workers adapter (experimental)
 
-**Status:** In-process dispatch implemented in `src/Slice.Workers`, with a reference app in `samples/Slice.WorkersSample`. WASI publish (wasmtime / wrangler) is deferred to v1.6+; see note below.
+**Status:** In-process dispatch and componentize-dotnet WASI publish are implemented experimentally, with a reference app in `samples/Slice.WorkersSample`.
 
 `Slice.Workers` is an ASP.NET-independent satellite that routes `[Feature]` handlers through a lightweight `WorkerRouteTable` built at startup by the source generator. The same `[Feature]` classes work without modification; features that return `IResult` / `Task<IResult>` (ASP.NET-specific) are excluded automatically and the generator emits a `SLICE008` info diagnostic.
 
@@ -241,7 +241,7 @@ builder.AddSliceGenerated();
 builder.Services.AddSingleton<IClock, SystemClock>();
 
 var app = builder.Build();
-await app.DispatchAsync(request); // in-process use; or RunAsync() for stdin/stdout IPC
+await app.DispatchAsync(request); // in-process use; or Run() for WASI stdin/stdout IPC
 ```
 
 **In-process dispatch (works today):**
@@ -253,7 +253,17 @@ dotnet run --project samples/Slice.WorkersSample -- --probe /health
 # [probe] dispatching POST /echo {"message":""}  →  status=400  (DataAnnotations validation)
 ```
 
-**WASI publish note:** The `wasi-experimental` workload (Mono-based, WASI Preview 1) is not supported in .NET 10 and crashes on modern wasmtime (Preview 1 ABI was dropped in wasmtime 44+). The correct path forward is [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model), which is being tracked for v1.6.
+**WASI publish / local Worker dev:**
+
+```pwsh
+dotnet publish samples\Slice.WorkersSample -r wasi-wasm -c Release
+cd samples\Slice.WorkersSample\worker
+npm install
+npm run build
+npm run dev
+```
+
+The `wasi-experimental` workload (Mono-based, WASI Preview 1) is not supported in .NET 10. The sample uses [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) to emit a WASI 0.2 component, then `@bytecodealliance/jco` + `@bytecodealliance/preview2-shim` for the Cloudflare JavaScript bridge.
 
 ### Test host pattern
 

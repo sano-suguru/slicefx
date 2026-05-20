@@ -1,0 +1,16 @@
+{
+  "name": "slice-workers-sample-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "dotnet publish .. -r wasi-wasm -c Release && npm run transpile",
+    "transpile": "jco transpile slice-workers-sample.wasm -o component --name slice-workers-sample --tla-compat --no-namespaced-exports",
+    "dev": "node dev-server.mjs"
+  },
+  "dependencies": {
+    "@bytecodealliance/preview2-shim": "0.17.9"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "1.19.0"
+  }
+}

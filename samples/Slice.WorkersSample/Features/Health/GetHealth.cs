@@ -1,4 +1,3 @@
-using Slice.Workers;
 using Slice.WorkersSample.Services;
 
 namespace Slice.WorkersSample.Features.Health;
@@ -8,6 +7,6 @@ public static class GetHealth
 {
     public record Response(string Status, DateTimeOffset Timestamp);
 
-    public static WorkerResponse Handle(IClock clock)
-        => SliceResult.Ok(new Response("ok", clock.UtcNow));
+    public static Response Handle(IClock clock)
+        => new("ok", clock.UtcNow);
 }

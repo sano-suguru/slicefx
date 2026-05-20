@@ -15,7 +15,10 @@ internal sealed record FeatureModel(
     // Serialised as "typeFqn|name;typeFqn|name" so the record uses primitive equality.
     string SerializedParams,
     // Serialised as "fqn1;fqn2" — order is declaration order.
-    string SerializedFilterFqns)
+    string SerializedFilterFqns,
+    // Serialised as one validation rule per line: "property|rule|arg1|arg2".
+    string SerializedValidationRules,
+    bool RequiresReflectionValidation)
 {
     public ImmutableArray<HandleParamModel> GetParams()
     {

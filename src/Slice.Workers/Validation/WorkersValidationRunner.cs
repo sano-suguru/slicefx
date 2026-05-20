@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -7,11 +7,9 @@ namespace Slice.Workers.Validation;
 
 public static class WorkersValidationRunner
 {
-    private static readonly ConcurrentDictionary<Type, TypeValidationPlan?> s_plans = new();
-
-    public static IReadOnlyDictionary<string, string[]>? Validate<T>(T value) where T : notnull
+    public static IReadOnlyDictionary<string, string[]>? Validate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicProperties)] T>(T value) where T : notnull
     {
-        var plan = s_plans.GetOrAdd(typeof(T), TypeValidationPlan.Create);
+        var plan = ValidationPlanCache<T>.Plan;
         if (plan is null)
         {
             return null;
@@ -19,6 +17,11 @@ public static class WorkersValidationRunner
 
         var errors = plan.Validate(value);
         return errors.Count == 0 ? null : errors;
+    }
+
+    private static class ValidationPlanCache<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicProperties)] T>
+    {
+        public static readonly TypeValidationPlan? Plan = TypeValidationPlan.Create(typeof(T));
     }
 
     private sealed class TypeValidationPlan
@@ -40,7 +43,7 @@ public static class WorkersValidationRunner
             _validatesSelf = validatesSelf;
         }
 
-        public static TypeValidationPlan? Create(Type type)
+        public static TypeValidationPlan? Create([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
         {
             var effectiveType = Nullable.GetUnderlyingType(type) ?? type;
 

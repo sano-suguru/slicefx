@@ -5,6 +5,9 @@
 [Dd]ebug/
 artifacts/
 nupkg/
+samples/Slice.WorkersSample/worker/*.wasm
+samples/Slice.WorkersSample/worker/component/
+samples/Slice.WorkersSample/worker/node_modules/
 *.nupkg
 *.snupkg
 

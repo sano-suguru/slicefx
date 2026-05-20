@@ -19,6 +19,36 @@ public sealed class WorkerApp : IAsyncDisposable
         => _dispatcher.DispatchAsync(request, ct);
 
     /// <summary>
+    /// Runs the worker in stdin/stdout JSON IPC mode without an async entry point.
+    /// This is intended for WASI command hosts that do not support blocking on async Main.
+    /// </summary>
+    public void Run(CancellationToken ct = default)
+    {
+        using var reader = new StreamReader(Console.OpenStandardInput());
+        using var writer = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+
+        string? line;
+        while (!ct.IsCancellationRequested && (line = reader.ReadLine()) is not null)
+        {
+            WorkerResponse response;
+            try
+            {
+                var request = JsonProtocol.ParseRequest(line);
+                response = request is null
+                    ? SliceResult.Problem(400, "Bad Request", "Could not parse request JSON.")
+                    : _dispatcher.DispatchAsync(request, ct).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.ToString());
+                response = SliceResult.Problem(500, "Internal Server Error", "An unexpected error occurred.");
+            }
+
+            writer.WriteLine(JsonProtocol.SerializeResponse(response));
+        }
+    }
+
+    /// <summary>
     /// Runs the worker in stdin/stdout JSON IPC mode (P2: WASI command invocation).
     /// Each line of stdin is one serialized <see cref="WorkerRequest"/> JSON.
     /// Each line of stdout is one serialized <see cref="WorkerResponse"/> JSON.

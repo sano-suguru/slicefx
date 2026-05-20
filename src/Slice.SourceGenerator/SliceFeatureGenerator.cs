@@ -45,10 +45,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 c.GetTypeByMetadataName("Slice.Workers.Routing.WorkerRouteTable") is not null);
 
         context.RegisterSourceOutput(
-            validModels.Combine(assemblyName).Combine(hasAspNetRef).Combine(hasWorkersRef),
+            validModels.Combine(assemblyName).Combine(hasAspNetRef).Combine(hasWorkersRef).Combine(context.CompilationProvider),
             static (spc, pair) =>
             {
-                var (((models, asmName), emitAspNet), emitWorkers) = pair;
+                var ((((models, asmName), emitAspNet), emitWorkers), compilation) = pair;
                 if (models.IsEmpty)
                 {
                     return;
@@ -78,7 +78,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     return;
                 }
 
-                var (workersSource, workersDiagnostics) = WorkersRegistrationEmitter.Emit(models, asmName);
+                var workersJsonContextFqn = FindWorkersJsonContext(models, compilation);
+                var (workersSource, workersDiagnostics) = WorkersRegistrationEmitter.Emit(models, asmName, workersJsonContextFqn);
                 foreach (var d in workersDiagnostics)
                 {
                     spc.ReportDiagnostic(d);
@@ -194,6 +195,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
         }
         var serializedFilters = string.Join(";", filterParts);
+        var (serializedValidationRules, requiresReflectionValidation) = CreateValidationRules(featureType, handle);
 
         var model = new FeatureModel(
             featureType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -205,7 +207,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             string.IsNullOrWhiteSpace(summary) ? null : summary,
             handle.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             serializedParams,
-            serializedFilters);
+            serializedFilters,
+            serializedValidationRules,
+            requiresReflectionValidation);
 
         return tagInferred && tag == "Default"
             ? new FeatureResult(model, Diagnostic.Create(
@@ -213,6 +217,215 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 featureType.Locations.Length > 0 ? featureType.Locations[0] : null,
                 featureType.Name))
             : new FeatureResult(model, null);
+    }
+
+    private static (string SerializedRules, bool RequiresReflectionValidation) CreateValidationRules(
+        INamedTypeSymbol featureType,
+        IMethodSymbol handle)
+    {
+        var requestType = featureType.GetTypeMembers("Request").FirstOrDefault();
+        if (requestType is null || !handle.Parameters.Any(p => SymbolEqualityComparer.Default.Equals(p.Type, requestType)))
+        {
+            return (string.Empty, RequiresReflectionValidation: false);
+        }
+
+        var requiresReflectionValidation =
+            requestType.GetAttributes().Any(IsValidationAttribute)
+            || ImplementsIValidatableObject(requestType);
+
+        var primaryCtorParams = requestType.InstanceConstructors
+            .OrderByDescending(c => c.Parameters.Length)
+            .FirstOrDefault()
+            ?.Parameters
+            .Where(p => p.Name is not null)
+            .ToDictionary(p => p.Name, StringComparer.Ordinal)
+            ?? new Dictionary<string, IParameterSymbol>(StringComparer.Ordinal);
+
+        var rules = new List<string>();
+        foreach (var property in requestType.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic || property.GetMethod is null)
+            {
+                continue;
+            }
+
+            var attributes = property.GetAttributes().Where(IsValidationAttribute).ToList();
+            if (primaryCtorParams.TryGetValue(property.Name, out var matchingParameter))
+            {
+                attributes.AddRange(matchingParameter.GetAttributes().Where(IsValidationAttribute));
+            }
+
+            foreach (var attribute in attributes)
+            {
+                var rule = TryCreateValidationRule(property, attribute);
+                if (rule is null)
+                {
+                    requiresReflectionValidation = true;
+                    continue;
+                }
+
+                rules.Add(rule);
+            }
+        }
+
+        return requiresReflectionValidation
+            ? (string.Empty, RequiresReflectionValidation: true)
+            : (string.Join("\n", rules), RequiresReflectionValidation: false);
+    }
+
+    private static bool ImplementsIValidatableObject(INamedTypeSymbol type)
+    {
+        foreach (var i in type.AllInterfaces)
+        {
+            if (i.ToDisplayString() == "System.ComponentModel.DataAnnotations.IValidatableObject")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsValidationAttribute(AttributeData attribute)
+        => InheritsFrom(attribute.AttributeClass, "System.ComponentModel.DataAnnotations.ValidationAttribute");
+
+    private static bool InheritsFrom(INamedTypeSymbol? type, string metadataName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.ToDisplayString() == metadataName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? TryCreateValidationRule(IPropertySymbol property, AttributeData attribute)
+    {
+        if (HasCustomErrorMessage(attribute))
+        {
+            return null;
+        }
+
+        var propertyName = property.Name;
+        var attributeName = attribute.AttributeClass?.ToDisplayString();
+        if (attributeName == "System.ComponentModel.DataAnnotations.RequiredAttribute")
+        {
+            var allowEmptyStrings = false;
+            foreach (var namedArgument in attribute.NamedArguments)
+            {
+                if (namedArgument.Key == "AllowEmptyStrings" && namedArgument.Value.Value is bool value)
+                {
+                    allowEmptyStrings = value;
+                }
+            }
+
+            return $"{propertyName}|Required|{(allowEmptyStrings ? "true" : "false")}";
+        }
+
+        if (attributeName == "System.ComponentModel.DataAnnotations.StringLengthAttribute"
+            && attribute.ConstructorArguments.Length == 1
+            && attribute.ConstructorArguments[0].Value is int maximumLength)
+        {
+            if (property.Type.SpecialType != SpecialType.System_String)
+            {
+                return null;
+            }
+
+            var minimumLength = 0;
+            foreach (var namedArgument in attribute.NamedArguments)
+            {
+                if (namedArgument.Key == "MinimumLength" && namedArgument.Value.Value is int value)
+                {
+                    minimumLength = value;
+                }
+            }
+
+            return $"{propertyName}|StringLength|{minimumLength}|{maximumLength}";
+        }
+
+        if (attributeName == "System.ComponentModel.DataAnnotations.MinLengthAttribute"
+            && attribute.ConstructorArguments.Length == 1
+            && attribute.ConstructorArguments[0].Value is int length)
+        {
+            var lengthMember = TryGetLengthMember(property.Type);
+            if (lengthMember is null)
+            {
+                return null;
+            }
+
+            return $"{propertyName}|MinLength|{length}|{lengthMember}";
+        }
+
+        return null;
+    }
+
+    private static string? TryGetLengthMember(ITypeSymbol type)
+    {
+        if (type.SpecialType == SpecialType.System_String || type is IArrayTypeSymbol)
+        {
+            return "Length";
+        }
+
+        if (!type.IsReferenceType)
+        {
+            return null;
+        }
+
+        foreach (var member in type.GetMembers("Count").OfType<IPropertySymbol>())
+        {
+            if (!member.IsStatic
+                && member.DeclaredAccessibility == Accessibility.Public
+                && member.GetMethod is not null
+                && member.Type.SpecialType == SpecialType.System_Int32)
+            {
+                return "Count";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasCustomErrorMessage(AttributeData attribute)
+    {
+        foreach (var namedArgument in attribute.NamedArguments)
+        {
+            if (namedArgument.Key is "ErrorMessage" or "ErrorMessageResourceName" or "ErrorMessageResourceType")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? FindWorkersJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
+    {
+        foreach (var model in models)
+        {
+            var typeName = model.FullyQualifiedTypeName;
+            if (typeName.StartsWith("global::", StringComparison.Ordinal))
+            {
+                typeName = typeName.Substring("global::".Length);
+            }
+
+            var featuresIndex = typeName.IndexOf(".Features.", StringComparison.Ordinal);
+            if (featuresIndex < 0)
+            {
+                continue;
+            }
+
+            var rootNamespace = typeName.Substring(0, featuresIndex);
+            var candidate = rootNamespace + ".WorkerJsonContext";
+            if (compilation.GetTypeByMetadataName(candidate) is not null)
+            {
+                return "global::" + candidate;
+            }
+        }
+
+        return null;
     }
 
     // Mirrors SliceExtensions.InferTag: same IndexOf(".Features.") string logic.
