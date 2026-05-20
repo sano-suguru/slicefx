@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Slice.slnx
+
+      - name: Build
+        run: dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Verify formatting
+        run: dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
+
+      - name: Guard Slice.Core dependency boundary
+        shell: pwsh
+        run: |
+          $coreProject = Get-Content src/Slice.Core/Slice.Core.csproj -Raw
+          if ($coreProject -match '<PackageReference\b') {
+            throw 'Slice.Core must not contain PackageReference entries.'
+          }

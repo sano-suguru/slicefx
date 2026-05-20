@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Slice.TestHostSample</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Slice.TestHost\Slice.TestHost.csproj" />
+    <ProjectReference Include="..\Slice.Sample\Slice.Sample.csproj" />
+  </ItemGroup>
+
+</Project>

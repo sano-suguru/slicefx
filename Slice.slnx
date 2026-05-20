@@ -1,0 +1,23 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/samples/">
+    <Project Path="samples/Slice.LambdaSample/Slice.LambdaSample.csproj" />
+    <Project Path="samples/Slice.Sample/Slice.Sample.csproj" />
+    <Project Path="samples/Slice.TestHostSample/Slice.TestHostSample.csproj" />
+    <Project Path="samples/Slice.WorkersSample/Slice.WorkersSample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Slice.Core/Slice.Core.csproj" />
+    <Project Path="src/Slice.Lambda/Slice.Lambda.csproj" />
+    <Project Path="src/Slice.SourceGenerator/Slice.SourceGenerator.csproj" />
+    <Project Path="src/Slice.TestHost/Slice.TestHost.csproj" />
+    <Project Path="src/Slice.Workers/Slice.Workers.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Slice.Cli/Slice.Cli.csproj" />
+  </Folder>
+</Solution>

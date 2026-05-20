@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Slice.WorkersSample</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Slice.Core\Slice.Core.csproj" />
+    <ProjectReference Include="..\..\src\Slice.Workers\Slice.Workers.csproj" />
+    <ProjectReference Include="..\..\src\Slice.SourceGenerator\Slice.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

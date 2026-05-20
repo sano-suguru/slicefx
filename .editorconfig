@@ -1,0 +1,44 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.cs]
+dotnet_analyzer_diagnostic.category-Style.severity = warning
+
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0055.severity = warning
+dotnet_diagnostic.IDE0046.severity = none
+dotnet_diagnostic.IDE0058.severity = none
+dotnet_diagnostic.IDE0060.severity = warning
+dotnet_diagnostic.IDE0130.severity = none
+dotnet_diagnostic.IDE0161.severity = warning
+dotnet_diagnostic.IDE0290.severity = none
+dotnet_diagnostic.IDE0300.severity = warning
+dotnet_diagnostic.IDE0301.severity = warning
+dotnet_diagnostic.IDE0305.severity = warning
+dotnet_diagnostic.IDE0306.severity = warning
+dotnet_diagnostic.CA1515.severity = none
+dotnet_diagnostic.CA1852.severity = none
+
+dotnet_style_prefer_collection_expression = when_types_loosely_match:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = true:warning
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = true:warning
+csharp_style_expression_bodied_constructors = when_on_single_line:warning
+csharp_style_expression_bodied_methods = when_on_single_line:warning
+csharp_prefer_braces = true:warning
+csharp_style_prefer_primary_constructors = true:silent
+csharp_style_prefer_method_group_conversion = true:warning
+csharp_style_unused_value_expression_statement_preference = discard_variable:silent
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning

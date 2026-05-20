@@ -1,0 +1,23 @@
+namespace Slice;
+
+/// <summary>
+/// Validates a value of type <typeparamref name="T"/>.
+/// Implement this interface for request-level validation that goes beyond DataAnnotations
+/// (cross-field rules, database lookups, etc.).
+/// </summary>
+/// <remarks>
+/// Registration pattern:
+/// <list type="number">
+///   <item>Declare <c>[Filter&lt;SliceValidatorFilter&lt;Request&gt;&gt;]</c> on the feature class.</item>
+///   <item>Register the implementation: <c>services.AddScoped&lt;ISliceValidator&lt;Request&gt;, MyValidator&gt;()</c>.</item>
+/// </list>
+/// <see cref="DataAnnotationsValidationFilter"/> is always attached before <c>[Filter&lt;T&gt;]</c>
+/// filters. <c>SliceValidatorFilter&lt;T&gt;</c> then participates in normal declaration order with
+/// other filters. Returning <see cref="SliceValidationResult.Success"/> passes control to the
+/// next filter; returning <c>SliceValidationResult.Failure(...)</c> short-circuits with a
+/// 400 Problem Details response.
+/// </remarks>
+public interface ISliceValidator<T>
+{
+    ValueTask<SliceValidationResult> ValidateAsync(T value, CancellationToken ct);
+}

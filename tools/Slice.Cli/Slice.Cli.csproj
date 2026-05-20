@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Slice.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>slice</ToolCommandName>
+    <PackageId>Slice.Cli</PackageId>
+    <Version>1.4.0</Version>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)nupkg</PackageOutputPath>
+    <Description>CLI scaffolding tool for the Slice vertical slice framework.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.8" />
+  </ItemGroup>
+
+</Project>
