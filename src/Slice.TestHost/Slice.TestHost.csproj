@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <PackageId>Slice.TestHost</PackageId>
+    <Description>In-process test host helpers for Slice applications.</Description>
+    <PackageTags>slice;testing;aspnetcore;testhost</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>

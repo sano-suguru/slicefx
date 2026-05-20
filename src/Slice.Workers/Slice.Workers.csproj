@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <RootNamespace>Slice.Workers</RootNamespace>
+    <PackageId>Slice.Workers</PackageId>
+    <Description>ASP.NET-independent Workers runtime adapter for Slice applications.</Description>
+    <PackageTags>slice;cloudflare-workers;workers;wasi;serverless</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

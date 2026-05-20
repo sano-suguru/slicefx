@@ -6,9 +6,9 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>slice</ToolCommandName>
     <PackageId>Slice.Cli</PackageId>
-    <Version>1.4.0</Version>
     <PackageOutputPath>$(MSBuildThisFileDirectory)nupkg</PackageOutputPath>
     <Description>CLI scaffolding tool for the Slice vertical slice framework.</Description>
+    <PackageTags>slice;cli;scaffolding;dotnet-tool;vertical-slice</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

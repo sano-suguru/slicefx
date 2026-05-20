@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Slice is an experimental .NET web framework built on ASP.NET Core Minimal API that makes Vertical Slice Architecture the primary unit: **1 file = 1 feature = 1 deploy unit**. The runtime framework lives in `src/Slice.Core/`; the optional Roslyn source generator lives in `src/Slice.SourceGenerator/`. `samples/Slice.Sample/` is the reference for how user code should look.
 
-This is v1.x in active development — v1.0 (Source Generator / AOT), v1.1 (TestHost), v1.2 (Lambda adapter), and v1.3 (fluent validator) are complete. There is no CI, no linter config beyond `dotnet` defaults.
+This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI runs the solution build and formatter checks.
 
 ## Commands
 
@@ -34,7 +34,7 @@ curl -X DELETE http://localhost:5099/users/{id} -H "X-API-Key: secret"
 - **No new framework abstractions.** Slice intentionally avoids `IPipelineBehavior`, `IMediator`, etc. Cross-cutting concerns reuse ASP.NET Core's `IEndpointFilter`.
 - **No per-request reflection.** Anything that runs per-request must avoid reflection. `MapSlices` is the runtime fallback and builds a strongly-typed delegate once at startup; `MapSlicesGenerated` is the AOT-friendly generated path.
 - **`WebApplication.CreateSlimBuilder` is intentional** (trimming-friendly host). Do not switch to `CreateBuilder` without reason.
-- **Experimental satellite scope.** Source generator, AWS Lambda adapter, TestHost, fluent validator (`ISliceValidator<T>`), CLI scaffolding, and Cloudflare Workers adapter (`Slice.Workers`) are all implemented experimentally. `Slice.Workers` provides in-process dispatch, stdin/stdout IPC, and a v1.6 componentize-dotnet WASI publish path for Cloudflare Workers. Do not use the `wasi-experimental` Mono workload for this codebase.
+- **Experimental satellite scope.** Source generator, AWS Lambda adapter, TestHost, fluent validator (`ISliceValidator<T>`), CLI scaffolding, and Cloudflare Workers adapter (`Slice.Workers`) are all implemented experimentally. `Slice.Workers` provides in-process dispatch, stdin/stdout IPC, and a componentize-dotnet WASI publish path for Cloudflare Workers. Do not use the `wasi-experimental` Mono workload for this codebase.
 
 ## Authoring a feature (the pattern all samples follow)
 
@@ -109,11 +109,11 @@ the global namespace — add `using Slice;` to access `ISliceValidator<T>` direc
 
 ### Slice.Workers (`src/Slice.Workers/`)
 
-ASP.NET-independent Workers satellite (v1.6, experimental). Bypasses Kestrel entirely; the source generator emits a second output file (`<Asm>.SliceWorkersRegistrations.g.cs`) containing `RegisterWorkerRoutes(WorkerRouteTable)` and `AddSliceGenerated(WorkerHostBuilder)`. Emitted only when `Slice.Workers.Routing.WorkerRouteTable` is present in the compilation, so existing projects are unaffected.
+ASP.NET-independent Workers satellite (experimental). Bypasses Kestrel entirely; the source generator emits a second output file (`<Asm>.SliceWorkersRegistrations.g.cs`) containing `RegisterWorkerRoutes(WorkerRouteTable)` and `AddSliceGenerated(WorkerHostBuilder)`. Emitted only when `Slice.Workers.Routing.WorkerRouteTable` is present in the compilation, so existing projects are unaffected.
 
 **In-process dispatch and IPC:** `WorkerApp.DispatchAsync(WorkerRequest)` routes requests in-process through the source-generated `WorkerRouteTable`. `WorkerApp.Run()` runs the synchronous JSON-lines stdin/stdout IPC loop used by WASI command hosts; `RunAsync()` remains available for non-WASI hosts.
 
-**WASI publish (v1.6):** `samples/Slice.WorkersSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release`. The sample copies the generated component to `samples/Slice.WorkersSample/worker/slice-workers-sample.wasm`; `samples/Slice.WorkersSample/worker` then uses `@bytecodealliance/jco` and `@bytecodealliance/preview2-shim` to transpile the component for the Cloudflare shim (`npm install`, then `npm run build`).
+**WASI publish:** `samples/Slice.WorkersSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release`. The sample copies the generated component to `samples/Slice.WorkersSample/worker/slice-workers-sample.wasm`; `samples/Slice.WorkersSample/worker` then uses `@bytecodealliance/jco` and `@bytecodealliance/preview2-shim` to transpile the component for the Cloudflare shim (`npm install`, then `npm run build`).
 
 Features returning `IResult`/`Task<IResult>` are excluded from Workers routes automatically (SLICE008 info diagnostic). `[Filter<T>]` filters other than `SliceValidatorFilter<T>` are not executed in the Workers path (they require ASP.NET's `IEndpointFilter` pipeline).
 

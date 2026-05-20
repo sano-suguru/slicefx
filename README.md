@@ -2,6 +2,8 @@
 
 > A Vertical-Slice-first .NET web framework. **1 file = 1 feature = 1 deploy unit.**
 
+Website: <https://sugu-sano.github.io/Slice/>
+
 Slice is an experimental .NET web framework built on top of ASP.NET Core. It sits at the intersection of three ideas:
 
 - **FastEndpoints' shape** — 1 class = 1 endpoint, built on ASP.NET Core Minimal API.
@@ -9,6 +11,21 @@ Slice is an experimental .NET web framework built on top of ASP.NET Core. It sit
 - **axum's discipline** — static handlers, zero runtime reflection, AOT and serverless as first-class targets.
 
 `Slice.Core` has zero NuGet package dependencies; the optional source generator lives in a separate project and uses Roslyn packages.
+
+## Project status
+
+Slice is being prepared for OSS preview releases. The core API, source generator, serverless adapters, test host, and CLI exist, but the project should still be treated as experimental. Preview packages use `0.x` versions until the API is intentionally stabilized for a future `1.0`.
+
+Packages are split so optional dependencies stay out of `Slice.Core`:
+
+| Package | Purpose |
+| --- | --- |
+| `Slice` | Core runtime: `[Feature]`, `[Filter<T>]`, validation filters, and runtime fallback registration. |
+| `Slice.SourceGenerator` | AOT-friendly generated registrations for Slice features. |
+| `Slice.Lambda` | AWS Lambda hosting adapter. |
+| `Slice.TestHost` | In-process test host helpers. |
+| `Slice.Workers` | ASP.NET-independent Workers/WASI adapter. |
+| `Slice.Cli` | Local scaffolding tool for features and filters. |
 
 ## Design principles
 
@@ -22,6 +39,8 @@ Slice is an experimental .NET web framework built on top of ASP.NET Core. It sit
 ## Development discipline
 
 Changes are guarded by CI, a PR checklist, and a small set of project invariants. See [docs/development-discipline.md](docs/development-discipline.md) for the Definition of Done and local verification commands.
+
+For release preparation, see [docs/oss-release-checklist.md](docs/oss-release-checklist.md).
 
 ## Hello, Slice
 
@@ -153,7 +172,7 @@ builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidat
 | Source Generator for AOT (no startup reflection) | ✅ experimental |
 | AWS Lambda adapter (`Slice.Lambda`) | ✅ experimental |
 | Test host pattern (`Slice.TestHost`) | ✅ experimental |
-| Cloudflare Workers adapter (`Slice.Workers`) | ✅ experimental (in-process dispatch; WASI publish in v1.6+) |
+| Cloudflare Workers adapter (`Slice.Workers`) | ✅ experimental (in-process dispatch; WASI publish path) |
 | CLI scaffolding (`slice new feature User`) | ✅ experimental |
 
 ## Source generator, adapters, and roadmap
@@ -333,4 +352,4 @@ curl -X DELETE http://localhost:5099/users/{id} -H "X-API-Key: secret"
 
 ## License
 
-MIT. Built in an afternoon as a design exploration — see the conversation that produced it.
+MIT. See [LICENSE](LICENSE).

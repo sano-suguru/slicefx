@@ -10,5 +10,20 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Version>0.1.0-preview.1</Version>
+    <Authors>Slice contributors</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/sugu-sano/Slice</RepositoryUrl>
+    <PackageProjectUrl>https://sugu-sano.github.io/Slice/</PackageProjectUrl>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md"
+          Pack="true"
+          PackagePath="\"
+          Visible="false"
+          Condition="Exists('$(MSBuildThisFileDirectory)README.md')" />
+  </ItemGroup>
 </Project>

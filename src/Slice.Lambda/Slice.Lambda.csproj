@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <RootNamespace>Slice.Lambda</RootNamespace>
+    <PackageId>Slice.Lambda</PackageId>
+    <Description>AWS Lambda hosting adapter for Slice applications.</Description>
+    <PackageTags>slice;aws-lambda;aspnetcore;serverless</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

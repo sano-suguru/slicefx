@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slice - Vertical-Slice-first .NET Web Framework</title>
+    <meta name="description" content="Slice is a Vertical-Slice-first experimental .NET web framework built on ASP.NET Core Minimal APIs.">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans JP"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        }
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #020617;
+            color: #f8fafc;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .code-window-header {
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+        }
+        .hljs {
+            background: transparent !important;
+            padding: 0 !important;
+            font-size: 0.9rem;
+            line-height: 1.55;
+        }
+        body[data-lang="ja"] .lang-en { display: none !important; }
+        body[data-lang="en"] .lang-ja { display: none !important; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col relative overflow-x-hidden" data-lang="ja">
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-900/30 blur-[120px] animate-pulse-slow"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px] animate-pulse-slow" style="animation-delay: 2s;"></div>
+    </div>
+
+    <nav class="relative z-10 w-full px-6 py-4 glass-panel sticky top-0 border-x-0 border-t-0 border-b border-white/10">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <a href="#" class="flex items-center gap-2" aria-label="Slice home">
+                <div class="w-8 h-8 rounded bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center font-bold text-white shadow-lg shadow-brand-500/30">S</div>
+                <span class="text-xl font-bold tracking-tight">Slice</span>
+                <span class="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-brand-900/50 text-brand-400 border border-brand-500/30">experimental</span>
+            </a>
+            <div class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+                <a href="#features" class="hover:text-white transition-colors"><span class="lang-ja">特徴</span><span class="lang-en">Features</span></a>
+                <a href="#code" class="hover:text-white transition-colors"><span class="lang-ja">コード例</span><span class="lang-en">Code</span></a>
+                <a href="#packages" class="hover:text-white transition-colors"><span class="lang-ja">構成</span><span class="lang-en">Packages</span></a>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="langToggle" class="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700 hover:bg-slate-700" type="button">
+                    <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                    <span class="lang-ja">EN</span><span class="lang-en">JA</span>
+                </button>
+                <a href="https://github.com/sugu-sano/Slice" class="hidden sm:flex px-4 py-2 text-sm font-medium bg-white text-slate-900 rounded-md hover:bg-slate-200 transition-colors items-center gap-2">
+                    <i data-lucide="github" class="w-4 h-4"></i>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10 flex-grow">
+        <section class="max-w-7xl mx-auto px-6 pt-24 pb-20 lg:pt-32 lg:pb-28">
+            <div class="text-center max-w-4xl mx-auto opacity-0 animate-fade-in-up">
+                <p class="mb-5 text-sm font-mono text-brand-400">ASP.NET Core Minimal APIs + Vertical Slice Architecture + AOT</p>
+                <h1 class="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
+                    <span class="lang-ja">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-cyan-300">1ファイル</span> =
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300">1機能</span> =
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-brand-400">1デプロイ単位</span>
+                    </span>
+                    <span class="lang-en">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-cyan-300">1 file</span> =
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-emerald-300">1 feature</span> =
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-brand-400">1 deploy unit</span>
+                    </span>
+                </h1>
+                <p class="text-xl md:text-2xl text-slate-400 mb-10 font-medium">
+                    <span class="lang-ja">垂直スライス・ファーストの実験的 .NET Webフレームワーク。</span>
+                    <span class="lang-en">A Vertical-Slice-first experimental .NET web framework.</span>
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <a href="#code" class="px-8 py-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-brand-600/20 flex items-center gap-2 w-full sm:w-auto justify-center">
+                        <span class="lang-ja">コードを見る</span><span class="lang-en">View code</span>
+                        <i data-lucide="arrow-down" class="w-5 h-5"></i>
+                    </a>
+                    <div class="px-6 py-4 glass-panel rounded-lg flex items-center gap-3 font-mono text-sm text-slate-300 border border-slate-700 w-full sm:w-auto justify-center">
+                        <span class="text-brand-400">$</span>
+                        <span>dotnet run --project samples/Slice.Sample</span>
+                        <button onclick="copyCommand()" class="hover:text-white transition-colors p-1" title="Copy to clipboard" type="button">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-slate-900/50 border-y border-white/5 py-16" id="features">
+            <div class="max-w-7xl mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">3つの思想の交差点</span><span class="lang-en">Intersection of three ideas</span></h2>
+                    <p class="text-slate-400"><span class="lang-ja">Sliceは既存の優れたアイデアをASP.NET Core上に統合します。</span><span class="lang-en">Slice combines proven ideas on top of ASP.NET Core.</span></p>
+                </div>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.1s;">
+                        <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-brand-400 border border-slate-700"><i data-lucide="file-code-2"></i></div>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">FastEndpointsの構造</span><span class="lang-en">FastEndpoints' shape</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">1つの静的クラスが1つのエンドポイントに対応。リクエスト、レスポンス、ハンドラー、バリデーションを近くに置けます。</span><span class="lang-en">One static class maps to one endpoint, keeping request, response, handler, and validation close together.</span></p>
+                    </article>
+                    <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.2s;">
+                        <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-purple-400 border border-slate-700"><i data-lucide="sparkles"></i></div>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">FastAPIのDX</span><span class="lang-en">FastAPI's DX</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">宣言的な属性、型駆動のバリデーション、パラメータベースのDI。Minimal APIのバインディングとOpenAPIをそのまま活かします。</span><span class="lang-en">Declarative attributes, type-driven validation, parameter-based DI, and Minimal API binding/OpenAPI without hiding ASP.NET Core.</span></p>
+                    </article>
+                    <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.3s;">
+                        <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-emerald-400 border border-slate-700"><i data-lucide="zap"></i></div>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">axumの規律</span><span class="lang-en">axum's discipline</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">静的ハンドラー、生成コードによる登録、ホットパスのリフレクションゼロ。AOTとサーバーレスを第一級に扱います。</span><span class="lang-en">Static handlers, generated registrations, and no hot-path reflection. AOT and serverless are first-class design targets.</span></p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="max-w-7xl mx-auto px-6 py-24">
+            <h2 class="text-3xl font-bold mb-12 text-center"><span class="lang-ja">現在できること</span><span class="lang-en">What works today</span></h2>
+            <div class="grid lg:grid-cols-2 gap-12 items-start">
+                <div class="space-y-8">
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Slice.CoreはNuGet依存ゼロ</span><span class="lang-en">Zero NuGet dependencies in Slice.Core</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja"><code>Microsoft.AspNetCore.App</code> だけを使い、FluentValidationやMediatRは必須にしません。</span><span class="lang-en">The core runtime only depends on <code>Microsoft.AspNetCore.App</code>; FluentValidation and MediatR are not required.</span></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Source Generator実装済み</span><span class="lang-en">Source generator included</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja"><code>AddSliceGenerated()</code> と <code>MapSlicesGenerated()</code> で起動時のスキャンを生成コードに置き換えます。</span><span class="lang-en"><code>AddSliceGenerated()</code> and <code>MapSlicesGenerated()</code> replace startup scanning with generated registrations.</span></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">サーバーレスとテストのアダプタ</span><span class="lang-en">Serverless and testing adapters</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">AWS Lambda、Cloudflare Workers/WASI、TestHost、CLIスキャフォールディングを実験的に提供しています。</span><span class="lang-en">Experimental adapters exist for AWS Lambda, Cloudflare Workers/WASI, TestHost, and CLI scaffolding.</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-8 rounded-2xl border border-slate-700">
+                    <h3 class="text-xl font-bold mb-6 border-b border-slate-700 pb-4"><span class="lang-ja">機能一覧</span><span class="lang-en">Feature checklist</span></h3>
+                    <ul class="space-y-4 text-slate-300">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><code>[Feature("METHOD /path")]</code> declarative routing</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>Generated and runtime fallback registrations</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>Static handlers with Minimal API binding</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><code>[Filter&lt;T&gt;]</code> endpoint filters</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>DataAnnotations and <code>ISliceValidator&lt;T&gt;</code></span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>OpenAPI tags inferred from namespaces</span></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="max-w-5xl mx-auto px-6 py-12" id="code">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold mb-4">Hello, Slice</h2>
+                <p class="text-slate-400"><span class="lang-ja">リクエスト、レスポンス、ハンドラー、バリデーション。すべてを1つのファイルに。</span><span class="lang-en">Request, response, handler, validation, and filters in one feature file.</span></p>
+            </div>
+
+            <div class="rounded-xl overflow-hidden glass-panel border border-slate-700 mb-8 shadow-2xl shadow-black/50">
+                <div class="code-window-header px-4 py-3 flex items-center gap-2">
+                    <div class="flex gap-2"><div class="w-3 h-3 rounded-full bg-red-500/80"></div><div class="w-3 h-3 rounded-full bg-yellow-500/80"></div><div class="w-3 h-3 rounded-full bg-green-500/80"></div></div>
+                    <div class="text-xs font-mono text-slate-400 ml-4">Features/Users/CreateUser.cs</div>
+                </div>
+                <div class="p-6 overflow-x-auto bg-[#282c34]">
+<pre><code class="language-csharp">using System.ComponentModel.DataAnnotations;
+
+namespace Slice.Sample.Features.Users;
+
+[Feature("POST /users", Summary = "Create a new user")]
+public static class CreateUser
+{
+    public record Request(
+        [Required, MinLength(2)] string Name,
+        [Required, EmailAddress] string Email);
+
+    public record Response(Guid Id, string Name, string Email, DateTime CreatedAt);
+
+    public static async Task&lt;IResult&gt; Handle(Request req, IUserStore store, CancellationToken ct)
+    {
+        var user = await store.AddAsync(req.Name, req.Email, ct);
+
+        return Results.Created($"/users/{user.Id}",
+            new Response(user.Id, user.Name, user.Email, user.CreatedAt));
+    }
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="rounded-xl overflow-hidden glass-panel border border-slate-700 shadow-2xl shadow-black/50 lg:w-3/4 lg:ml-auto -mt-16 relative z-20">
+                <div class="code-window-header px-4 py-3 flex items-center gap-2">
+                    <div class="flex gap-2"><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div></div>
+                    <div class="text-xs font-mono text-slate-400 ml-4">Program.cs</div>
+                </div>
+                <div class="p-6 overflow-x-auto bg-[#282c34]">
+<pre><code class="language-csharp">using Slice.Generated;
+
+var builder = WebApplication.CreateSlimBuilder(args);
+
+builder.Services.AddSliceGenerated();
+builder.Services.AddSingleton&lt;IUserStore, InMemoryUserStore&gt;();
+
+var app = builder.Build();
+
+app.MapSlicesGenerated();
+
+app.Run();</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-slate-900/80 border-t border-white/5 py-24 mt-12" id="packages">
+            <div class="max-w-5xl mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-brand-400"><span class="lang-ja">小さなコア、任意のアダプタ</span><span class="lang-en">Small core, optional adapters</span></h2>
+                    <p class="text-slate-400"><span class="lang-ja">ホスティングやテスト用の依存関係はサテライトパッケージに分離しています。</span><span class="lang-en">Hosting and testing dependencies stay in satellite packages.</span></p>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-6">
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice</h3><p class="text-sm text-slate-400">Core runtime: attributes, validation filters, and runtime fallback.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.SourceGenerator</h3><p class="text-sm text-slate-400">AOT-friendly generated registrations for feature routes.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Lambda</h3><p class="text-sm text-slate-400">AWS Lambda hosting integration over ASP.NET Core.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Workers</h3><p class="text-sm text-slate-400">ASP.NET-independent dispatch for Workers and WASI experiments.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.TestHost</h3><p class="text-sm text-slate-400">In-process HTTP testing helpers for Slice apps.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400">Feature and filter scaffolding through the <code>slice</code> command.</p></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-slate-800 bg-[#020617] py-12 relative z-10">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2 text-slate-400">
+                <div class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center font-bold text-xs">S</div>
+                <span>Slice Framework - An experimental design exploration.</span>
+            </div>
+            <div class="text-sm text-slate-500">Released under the MIT License.</div>
+        </div>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
+        });
+
+        const langToggle = document.getElementById('langToggle');
+        langToggle.addEventListener('click', () => {
+            const currentLang = document.body.getAttribute('data-lang');
+            const newLang = currentLang === 'ja' ? 'en' : 'ja';
+            document.body.setAttribute('data-lang', newLang);
+            document.documentElement.lang = newLang;
+        });
+
+        function copyCommand() {
+            const text = 'dotnet run --project samples/Slice.Sample';
+            navigator.clipboard.writeText(text).then(() => {
+                const isJa = document.body.getAttribute('data-lang') === 'ja';
+                alert(isJa ? 'クリップボードにコピーしました。' : 'Copied to clipboard.');
+            });
+        }
+    </script>
+</body>
+</html>

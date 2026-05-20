@@ -6,6 +6,11 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <DevelopmentDependency>true</DevelopmentDependency>
+    <PackageId>Slice.SourceGenerator</PackageId>
+    <Description>AOT-friendly source generator for Slice feature registrations.</Description>
+    <PackageTags>slice;source-generator;roslyn;aot;aspnetcore</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
     <!-- Suppress XML doc warnings inherited from Directory.Build.props -->
     <WarningsNotAsErrors>CS1591</WarningsNotAsErrors>
     <!-- Reduce noise from analyzer-specific rules -->
@@ -15,6 +20,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(OutputPath)$(AssemblyName).dll"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
   </ItemGroup>
 
   <ItemGroup>
