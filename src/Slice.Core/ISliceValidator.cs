@@ -17,7 +17,14 @@ namespace Slice;
 /// next filter; returning <c>SliceValidationResult.Failure(...)</c> short-circuits with a
 /// 400 Problem Details response.
 /// </remarks>
+/// <typeparam name="T">The value type to validate.</typeparam>
 public interface ISliceValidator<T>
 {
+    /// <summary>
+    /// Validates the supplied value.
+    /// </summary>
+    /// <param name="value">The value to validate.</param>
+    /// <param name="ct">A token that is canceled when the request is aborted.</param>
+    /// <returns>The validation result.</returns>
     ValueTask<SliceValidationResult> ValidateAsync(T value, CancellationToken ct);
 }

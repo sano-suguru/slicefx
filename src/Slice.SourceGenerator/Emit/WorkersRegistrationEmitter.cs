@@ -21,6 +21,13 @@ internal static class WorkersRegistrationEmitter
 
     private const string SliceValidatorFilterPrefix = "global::Slice.SliceValidatorFilter<";
 
+    /// <summary>
+    /// Emits Slice Workers registration source for the specified feature models.
+    /// </summary>
+    /// <param name="features">The feature models to include in generated registrations.</param>
+    /// <param name="assemblyName">The target assembly name used to form the generated class name.</param>
+    /// <param name="workersJsonContextFqn">The fully qualified JSON source-generation context type, when available.</param>
+    /// <returns>The generated C# source and any diagnostics produced while emitting it.</returns>
     public static (string Source, ImmutableArray<Diagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
         string assemblyName,
@@ -41,10 +48,18 @@ internal static class WorkersRegistrationEmitter
         sb.AppendLine();
         sb.AppendLine("namespace Slice.Generated;");
         sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Provides generated Slice Workers route registrations.");
+        sb.AppendLine("/// </summary>");
         sb.AppendLine($"public static partial class {className}");
         sb.AppendLine("{");
 
         // AddSliceGenerated — same name as ASP.NET version but targets WorkerHostBuilder
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Registers generated Slice Workers routes with the host builder.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <param name=\"builder\">The Worker host builder to configure.</param>");
+        sb.AppendLine("    /// <returns>The same Worker host builder for chaining.</returns>");
         sb.AppendLine("    public static global::Slice.Workers.WorkerHostBuilder AddSliceGenerated(");
         sb.AppendLine("        this global::Slice.Workers.WorkerHostBuilder builder)");
         sb.AppendLine("    {");
@@ -60,6 +75,10 @@ internal static class WorkersRegistrationEmitter
         }
 
         // RegisterWorkerRoutes
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Registers generated Slice Workers routes in the route table.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <param name=\"table\">The Worker route table to populate.</param>");
         sb.AppendLine("    public static void RegisterWorkerRoutes(global::Slice.Workers.Routing.WorkerRouteTable table)");
         sb.AppendLine("    {");
 

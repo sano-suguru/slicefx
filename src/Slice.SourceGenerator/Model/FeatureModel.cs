@@ -20,6 +20,10 @@ internal sealed record FeatureModel(
     string SerializedValidationRules,
     bool RequiresReflectionValidation)
 {
+    /// <summary>
+    /// Deserializes the feature handler parameters.
+    /// </summary>
+    /// <returns>The handler parameter models.</returns>
     public ImmutableArray<HandleParamModel> GetParams()
     {
         if (string.IsNullOrEmpty(SerializedParams))
@@ -54,6 +58,10 @@ internal sealed record FeatureModel(
         return builder.ToImmutable();
     }
 
+    /// <summary>
+    /// Deserializes the endpoint filter type names referenced by the feature.
+    /// </summary>
+    /// <returns>The fully qualified endpoint filter type names.</returns>
     public ImmutableArray<string> GetFilterFqns()
     {
         if (string.IsNullOrEmpty(SerializedFilterFqns))

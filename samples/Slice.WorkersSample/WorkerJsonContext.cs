@@ -2,6 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace Slice.WorkersSample;
 
+/// <summary>
+/// Source-generated JSON metadata used by the Workers sample routes.
+/// </summary>
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Features.Echo.PostEcho.Request), TypeInfoPropertyName = "PostEchoRequest")]
 [JsonSerializable(typeof(Features.Echo.PostEcho.Response), TypeInfoPropertyName = "PostEchoResponse")]

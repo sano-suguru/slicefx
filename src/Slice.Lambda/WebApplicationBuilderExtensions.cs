@@ -19,6 +19,7 @@ public static class WebApplicationBuilderExtensions
     /// (API Gateway HTTP API v2 payload format), which is the recommended choice for
     /// new Lambda-backed APIs.
     /// </param>
+    /// <returns>The same builder so calls can be chained.</returns>
     public static WebApplicationBuilder UseSliceLambda(
         this WebApplicationBuilder builder,
         LambdaEventSource eventSource = LambdaEventSource.HttpApi)

@@ -5,11 +5,18 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Slice.SourceGenerator;
 
+/// <summary>
+/// Generates Slice endpoint registration code for discovered feature types.
+/// </summary>
 [Generator]
 public sealed class SliceFeatureGenerator : IIncrementalGenerator
 {
     private static readonly char[] s_spaceSeparator = [' '];
 
+    /// <summary>
+    /// Initializes the incremental source generator pipeline.
+    /// </summary>
+    /// <param name="context">The initialization context used to register generator steps.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var features = context.SyntaxProvider
@@ -469,8 +476,20 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
 internal readonly struct FeatureResult(FeatureModel? model, Diagnostic? diagnostic)
 {
+    /// <summary>
+    /// Gets the discovered feature model when the feature is valid.
+    /// </summary>
     public FeatureModel? Model { get; } = model;
+
+    /// <summary>
+    /// Gets the diagnostic reported for an invalid or notable feature.
+    /// </summary>
     public Diagnostic? Diagnostic { get; } = diagnostic;
 
+    /// <summary>
+    /// Creates a feature result that contains only a diagnostic.
+    /// </summary>
+    /// <param name="diagnostic">The diagnostic to report.</param>
+    /// <returns>A feature result containing the diagnostic.</returns>
     public static FeatureResult Error(Diagnostic diagnostic) => new(null, diagnostic);
 }

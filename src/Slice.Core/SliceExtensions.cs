@@ -6,12 +6,20 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Slice;
 
+/// <summary>
+/// Extension methods for registering Slice services and mapping Slice features.
+/// </summary>
 public static class SliceExtensions
 {
     /// <summary>
     /// Registers Slice services. Discovers feature filters declared via <c>[Filter&lt;T&gt;]</c>
     /// and registers them as scoped services (one instance per request).
     /// </summary>
+    /// <param name="services">The service collection to add Slice services to.</param>
+    /// <param name="assemblies">
+    /// Assemblies to scan for features. When omitted, the application entry assembly is used.
+    /// </param>
+    /// <returns>The same service collection so calls can be chained.</returns>
     public static IServiceCollection AddSlice(this IServiceCollection services, params ReadOnlySpan<Assembly> assemblies)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -53,6 +61,11 @@ public static class SliceExtensions
     /// Discovers every [Feature]-attributed class in the given assemblies (defaults to the entry assembly)
     /// and maps it to a Minimal API endpoint.
     /// </summary>
+    /// <param name="endpoints">The endpoint route builder to map features onto.</param>
+    /// <param name="assemblies">
+    /// Assemblies to scan for features. When omitted, the application entry assembly is used.
+    /// </param>
+    /// <returns>The same endpoint route builder so calls can be chained.</returns>
     public static IEndpointRouteBuilder MapSlices(
         this IEndpointRouteBuilder endpoints,
         params ReadOnlySpan<Assembly> assemblies)

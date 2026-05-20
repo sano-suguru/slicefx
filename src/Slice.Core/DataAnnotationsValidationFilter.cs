@@ -18,6 +18,14 @@ public sealed class DataAnnotationsValidationFilter : IEndpointFilter
 
     private DataAnnotationsValidationFilter(ParameterValidation[] parameters) => _parameters = parameters;
 
+    /// <summary>
+    /// Creates a validation filter for the request-like parameters accepted by a feature handler.
+    /// </summary>
+    /// <param name="handle">The public static feature handler method.</param>
+    /// <param name="services">The application service provider used to identify service parameters.</param>
+    /// <returns>
+    /// A configured validation filter, or <see langword="null"/> when no parameters require validation.
+    /// </returns>
     public static DataAnnotationsValidationFilter? Create(MethodInfo handle, IServiceProvider services)
     {
         var serviceProviderIsService = services.GetService<IServiceProviderIsService>();
@@ -42,6 +50,12 @@ public sealed class DataAnnotationsValidationFilter : IEndpointFilter
         return validations.Count == 0 ? null : new DataAnnotationsValidationFilter([.. validations]);
     }
 
+    /// <summary>
+    /// Validates configured endpoint arguments before continuing the endpoint pipeline.
+    /// </summary>
+    /// <param name="context">The current endpoint filter invocation context.</param>
+    /// <param name="next">The next filter or endpoint delegate.</param>
+    /// <returns>The endpoint result, or a validation problem response when validation fails.</returns>
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         foreach (var parameter in _parameters)
@@ -67,6 +81,9 @@ public sealed class DataAnnotationsValidationFilter : IEndpointFilter
     /// Builds the validation filter from the endpoint's MethodInfo at startup, then returns a
     /// per-request delegate (or passes through unchanged if no parameters require validation).
     /// </summary>
+    /// <param name="context">The endpoint filter factory context.</param>
+    /// <param name="next">The next filter or endpoint delegate.</param>
+    /// <returns>An endpoint filter delegate with validation applied when needed.</returns>
     public static EndpointFilterDelegate CreateFilterFactory(
         EndpointFilterFactoryContext context,
         EndpointFilterDelegate next)

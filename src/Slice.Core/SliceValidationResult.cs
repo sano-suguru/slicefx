@@ -25,6 +25,8 @@ public sealed class SliceValidationResult
     public IReadOnlyDictionary<string, string[]>? Errors { get; }
 
     /// <summary>Returns a failure result with the given pre-built error dictionary.</summary>
+    /// <param name="errors">A non-empty dictionary of field names to validation messages.</param>
+    /// <returns>A failed validation result.</returns>
     public static SliceValidationResult Failure(IReadOnlyDictionary<string, string[]> errors)
     {
         ArgumentNullException.ThrowIfNull(errors);
@@ -32,6 +34,9 @@ public sealed class SliceValidationResult
     }
 
     /// <summary>Returns a failure result for a single field with one or more error messages.</summary>
+    /// <param name="field">The field name associated with the validation errors.</param>
+    /// <param name="messages">One or more validation messages for the field.</param>
+    /// <returns>A failed validation result.</returns>
     public static SliceValidationResult Failure(string field, params string[] messages)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(field);

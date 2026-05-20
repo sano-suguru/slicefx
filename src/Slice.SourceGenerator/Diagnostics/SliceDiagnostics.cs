@@ -6,6 +6,9 @@ internal static class SliceDiagnostics
 {
     private const string Category = "Slice";
 
+    /// <summary>
+    /// Diagnostic reported when a feature type does not define a Handle method.
+    /// </summary>
     public static readonly DiagnosticDescriptor MissingHandleMethod = new(
         "SLICE001",
         "Missing Handle method",
@@ -14,6 +17,9 @@ internal static class SliceDiagnostics
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Diagnostic reported when a feature Handle method is not public and static.
+    /// </summary>
     public static readonly DiagnosticDescriptor HandleNotPublicStatic = new(
         "SLICE002",
         "Handle method must be public and static",
@@ -22,6 +28,9 @@ internal static class SliceDiagnostics
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Diagnostic reported when a feature route is not in METHOD /path form.
+    /// </summary>
     public static readonly DiagnosticDescriptor InvalidRouteFormat = new(
         "SLICE003",
         "Invalid route format",
@@ -30,6 +39,9 @@ internal static class SliceDiagnostics
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Diagnostic reported when two features generate the same endpoint name.
+    /// </summary>
     public static readonly DiagnosticDescriptor DuplicateEndpointName = new(
         "SLICE004",
         "Duplicate endpoint name",
@@ -38,6 +50,9 @@ internal static class SliceDiagnostics
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Diagnostic reported when tag inference cannot find a .Features. namespace segment.
+    /// </summary>
     public static readonly DiagnosticDescriptor TagInferenceFallback = new(
         "SLICE006",
         "Tag inference fell back to Default",
@@ -46,6 +61,9 @@ internal static class SliceDiagnostics
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Diagnostic reported when a feature return type cannot be used by the Workers route table.
+    /// </summary>
     public static readonly DiagnosticDescriptor UnsupportedReturnTypeForWorkers = new(
         "SLICE008",
         "Return type not supported in Workers path",

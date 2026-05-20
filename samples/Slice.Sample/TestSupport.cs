@@ -1,3 +1,4 @@
-// Makes the compiler-generated Program class public so that WebApplicationFactory<Program>
-// can reference it from test / demo assemblies.
+/// <summary>
+/// Exposes the sample app entry point to test hosts and demo assemblies.
+/// </summary>
 public partial class Program { }

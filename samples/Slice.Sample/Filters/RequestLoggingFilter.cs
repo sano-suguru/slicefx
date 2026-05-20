@@ -5,8 +5,15 @@ namespace Slice.Sample.Filters;
 /// <summary>
 /// Logs request start, end, elapsed time, and the response status code.
 /// </summary>
+/// <param name="logger">Logger used to write request lifecycle messages.</param>
 public sealed partial class RequestLoggingFilter(ILogger<RequestLoggingFilter> logger) : IEndpointFilter
 {
+    /// <summary>
+    /// Logs around the next endpoint filter or feature handler.
+    /// </summary>
+    /// <param name="context">Current endpoint invocation context.</param>
+    /// <param name="next">Next delegate in the endpoint filter pipeline.</param>
+    /// <returns>The result produced by the remaining pipeline.</returns>
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var endpoint = context.HttpContext.GetEndpoint();

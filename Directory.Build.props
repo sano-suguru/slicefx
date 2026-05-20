@@ -10,7 +10,5 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- Public XML docs are useful, but not required for this experimental repo yet. -->
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 </Project>

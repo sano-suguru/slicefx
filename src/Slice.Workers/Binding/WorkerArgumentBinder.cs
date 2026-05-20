@@ -3,8 +3,19 @@ using Slice.Workers.Routing;
 
 namespace Slice.Workers.Binding;
 
+/// <summary>
+/// Converts route and query string values into scalar handler argument types for Slice Workers.
+/// </summary>
 public static class WorkerArgumentBinder
 {
+    /// <summary>
+    /// Attempts to read and convert a captured route value.
+    /// </summary>
+    /// <typeparam name="T">The target argument type.</typeparam>
+    /// <param name="ctx">The current Worker invoker context.</param>
+    /// <param name="name">The route parameter name to read.</param>
+    /// <param name="value">When this method returns, contains the converted value or <c>default</c>.</param>
+    /// <returns><c>true</c> when the route value exists and can be converted; otherwise, <c>false</c>.</returns>
     public static bool TryGetFromRoute<T>(WorkerInvokerContext ctx, string name, out T? value)
     {
         if (ctx.RouteValues.TryGetValue(name, out var raw))
@@ -16,6 +27,17 @@ public static class WorkerArgumentBinder
         return false;
     }
 
+    /// <summary>
+    /// Attempts to read and convert a query string value.
+    /// </summary>
+    /// <typeparam name="T">The target argument type.</typeparam>
+    /// <param name="ctx">The current Worker invoker context.</param>
+    /// <param name="name">The query string key to read.</param>
+    /// <param name="value">When this method returns, contains the converted value or <c>default</c>.</param>
+    /// <returns>
+    /// <c>false</c> when a matching value exists but cannot be converted; otherwise, <c>true</c>.
+    /// Missing query values return <c>true</c> with <c>default</c>.
+    /// </returns>
     public static bool TryGetFromQuery<T>(WorkerInvokerContext ctx, string name, out T? value)
     {
         value = default;

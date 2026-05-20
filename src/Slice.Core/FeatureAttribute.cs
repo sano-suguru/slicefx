@@ -23,9 +23,19 @@ namespace Slice;
 [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
 public sealed class FeatureAttribute : Attribute
 {
+    /// <summary>
+    /// Gets the HTTP method parsed from <see cref="Route"/>.
+    /// </summary>
     public string Method { get; }
+
+    /// <summary>
+    /// Gets the route pattern parsed from <see cref="Route"/>.
+    /// </summary>
     public string Pattern { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FeatureAttribute"/> class.
+    /// </summary>
     /// <param name="route">Route in "METHOD /path" form, e.g. "POST /users" or "GET /users/{id:guid}".</param>
     public FeatureAttribute(string route)
     {
@@ -47,5 +57,8 @@ public sealed class FeatureAttribute : Attribute
     /// <summary>Optional summary for OpenAPI / documentation.</summary>
     public string? Summary { get; set; }
 
+    /// <summary>
+    /// Gets the original route declaration in "METHOD /path" form.
+    /// </summary>
     public string Route { get; }
 }

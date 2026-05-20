@@ -5,8 +5,20 @@ using System.Runtime.InteropServices;
 
 namespace Slice.Workers.Validation;
 
+/// <summary>
+/// Runs DataAnnotations validation for request models in the Slice Workers dispatch path.
+/// </summary>
 public static class WorkersValidationRunner
 {
+    /// <summary>
+    /// Validates a value using public property attributes, matching primary-constructor parameter attributes, type attributes, and <see cref="IValidatableObject"/>.
+    /// </summary>
+    /// <typeparam name="T">The model type to validate.</typeparam>
+    /// <param name="value">The value to validate.</param>
+    /// <returns>
+    /// A dictionary of field names to validation messages when validation fails; otherwise, <c>null</c>.
+    /// Returns <c>null</c> when the type has no applicable validation metadata.
+    /// </returns>
     public static IReadOnlyDictionary<string, string[]>? Validate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicProperties)] T>(T value) where T : notnull
     {
         var plan = ValidationPlanCache<T>.Plan;

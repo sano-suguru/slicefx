@@ -22,6 +22,8 @@ public static class SliceTestHost
     /// Pass the application's project directory when the app reads static files or configuration
     /// from its content root and discovery is not sufficient.
     /// </param>
+    /// <typeparam name="TEntryPoint">The application entry point type used by ASP.NET Core's test host.</typeparam>
+    /// <returns>A started in-process Slice test host.</returns>
     public static SliceTestHost<TEntryPoint> Create<TEntryPoint>(
         Action<IServiceCollection>? configure = null,
         string? contentRoot = null)
@@ -33,6 +35,7 @@ public static class SliceTestHost
 /// An in-process test host wrapping a running instance of the application.
 /// Dispose via <c>await using</c> to shut down the host cleanly.
 /// </summary>
+/// <typeparam name="TEntryPoint">The application entry point type used by ASP.NET Core's test host.</typeparam>
 public sealed class SliceTestHost<TEntryPoint> : IAsyncDisposable
     where TEntryPoint : class
 {
@@ -62,6 +65,10 @@ public sealed class SliceTestHost<TEntryPoint> : IAsyncDisposable
         return new SliceTestHost<TEntryPoint>(factory);
     }
 
+    /// <summary>
+    /// Disposes the HTTP client and underlying web application factory.
+    /// </summary>
+    /// <returns>A task that completes when the host has shut down.</returns>
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();

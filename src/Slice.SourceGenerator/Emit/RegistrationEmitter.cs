@@ -5,6 +5,12 @@ namespace Slice.SourceGenerator;
 
 internal static class RegistrationEmitter
 {
+    /// <summary>
+    /// Emits ASP.NET Core Slice registration source for the specified feature models.
+    /// </summary>
+    /// <param name="features">The feature models to include in generated registrations.</param>
+    /// <param name="assemblyName">The target assembly name used to form the generated class name.</param>
+    /// <returns>The generated C# source.</returns>
     public static string Emit(ImmutableArray<FeatureModel> features, string assemblyName)
     {
         var className = assemblyName.Replace('.', '_') + "_SliceRegistrations";
@@ -19,6 +25,9 @@ internal static class RegistrationEmitter
         sb.AppendLine();
         sb.AppendLine("namespace Slice.Generated;");
         sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Provides generated Slice endpoint registrations.");
+        sb.AppendLine("/// </summary>");
         sb.AppendLine($"public static class {className}");
         sb.AppendLine("{");
 
@@ -35,6 +44,11 @@ internal static class RegistrationEmitter
 
     private static void EmitAddSliceGenerated(StringBuilder sb, ImmutableArray<FeatureModel> features)
     {
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Registers services required by generated Slice endpoint registrations.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <param name=\"services\">The service collection to add Slice services to.</param>");
+        sb.AppendLine("    /// <returns>The same service collection for chaining.</returns>");
         sb.AppendLine("    public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddSliceGenerated(");
         sb.AppendLine("        this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)");
         sb.AppendLine("    {");
@@ -57,6 +71,11 @@ internal static class RegistrationEmitter
 
     private static void EmitMapSlicesGenerated(StringBuilder sb, ImmutableArray<FeatureModel> features)
     {
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Maps generated Slice endpoints to the route builder.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <param name=\"app\">The endpoint route builder to map Slice endpoints onto.</param>");
+        sb.AppendLine("    /// <returns>The same endpoint route builder for chaining.</returns>");
         sb.AppendLine("    public static global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder MapSlicesGenerated(");
         sb.AppendLine("        this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app)");
         sb.AppendLine("    {");
