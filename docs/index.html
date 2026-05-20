@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" class="scroll-smooth">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@1.16.0/dist/umd/lucide.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -52,6 +52,9 @@
             background-color: #020617;
             color: #f8fafc;
         }
+        html {
+            scroll-padding-top: 5rem;
+        }
         .glass-panel {
             background: rgba(30, 41, 59, 0.72);
             backdrop-filter: blur(12px);
@@ -68,17 +71,40 @@
             font-size: 0.9rem;
             line-height: 1.55;
         }
+        @keyframes fadeInUp {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.8s ease-out both;
+            opacity: 1;
+        }
         body[data-lang="ja"] .lang-en { display: none !important; }
         body[data-lang="en"] .lang-ja { display: none !important; }
+        [id] {
+            scroll-margin-top: 5rem;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto !important;
+            }
+            .animate-fade-in-up,
+            .animate-pulse-slow,
+            .opacity-0 {
+                animation: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+        }
     </style>
 </head>
-<body class="antialiased min-h-screen flex flex-col relative overflow-x-hidden" data-lang="ja">
+<body class="antialiased min-h-screen flex flex-col relative overflow-x-hidden" data-lang="en">
     <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-brand-900/30 blur-[120px] animate-pulse-slow"></div>
         <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px] animate-pulse-slow" style="animation-delay: 2s;"></div>
     </div>
 
-    <nav class="relative z-10 w-full px-6 py-4 glass-panel sticky top-0 border-x-0 border-t-0 border-b border-white/10">
+    <nav class="relative z-50 w-full px-6 py-4 glass-panel sticky top-0 border-x-0 border-t-0 border-b border-white/10">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <a href="#" class="flex items-center gap-2" aria-label="Slice home">
                 <div class="w-8 h-8 rounded bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center font-bold text-white shadow-lg shadow-brand-500/30">S</div>
@@ -91,7 +117,7 @@
                 <a href="#packages" class="hover:text-white transition-colors"><span class="lang-ja">構成</span><span class="lang-en">Packages</span></a>
             </div>
             <div class="flex items-center gap-4">
-                <button id="langToggle" class="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700 hover:bg-slate-700" type="button">
+                <button id="langToggle" class="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700 hover:bg-slate-700" type="button" aria-label="Switch language to Japanese" aria-live="polite">
                     <i data-lucide="globe" class="w-3.5 h-3.5"></i>
                     <span class="lang-ja">EN</span><span class="lang-en">JA</span>
                 </button>
@@ -131,7 +157,7 @@
                     <div class="px-6 py-4 glass-panel rounded-lg flex items-center gap-3 font-mono text-sm text-slate-300 border border-slate-700 w-full sm:w-auto justify-center">
                         <span class="text-brand-400">$</span>
                         <span>dotnet run --project samples/Slice.Sample</span>
-                        <button onclick="copyCommand()" class="hover:text-white transition-colors p-1" title="Copy to clipboard" type="button">
+                        <button onclick="copyCommand()" class="hover:text-white transition-colors p-1" title="Copy to clipboard" type="button" aria-label="Copy command">
                             <i data-lucide="copy" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -293,26 +319,97 @@ app.Run();</code></pre>
     </footer>
 
     <script>
-        lucide.createIcons();
+        const languageStorageKey = 'slice-docs-language';
+        const supportedLanguages = new Set(['en', 'ja']);
+        const langToggle = document.getElementById('langToggle');
+
+        function readSavedLanguage() {
+            try {
+                return localStorage.getItem(languageStorageKey);
+            } catch (error) {
+                console.warn('Could not read language preference.', error);
+                return null;
+            }
+        }
+
+        function saveLanguage(lang) {
+            try {
+                localStorage.setItem(languageStorageKey, lang);
+            } catch (error) {
+                console.warn('Could not save language preference.', error);
+            }
+        }
+
+        function getCurrentLanguage() {
+            const currentLang = document.body.getAttribute('data-lang');
+            return supportedLanguages.has(currentLang) ? currentLang : 'en';
+        }
+
+        function setLanguage(lang, persist = false) {
+            const nextLang = supportedLanguages.has(lang) ? lang : 'en';
+            document.body.setAttribute('data-lang', nextLang);
+            document.documentElement.lang = nextLang;
+
+            if (langToggle) {
+                const switchLabel = nextLang === 'ja' ? 'English' : 'Japanese';
+                langToggle.setAttribute('aria-label', `Switch language to ${switchLabel}`);
+            }
+
+            if (persist) {
+                saveLanguage(nextLang);
+            }
+        }
+
+        const savedLanguage = readSavedLanguage();
+        setLanguage(supportedLanguages.has(savedLanguage) ? savedLanguage : 'en');
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
+            if (window.hljs) {
+                document.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
+            }
         });
 
-        const langToggle = document.getElementById('langToggle');
-        langToggle.addEventListener('click', () => {
-            const currentLang = document.body.getAttribute('data-lang');
-            const newLang = currentLang === 'ja' ? 'en' : 'ja';
-            document.body.setAttribute('data-lang', newLang);
-            document.documentElement.lang = newLang;
+        langToggle?.addEventListener('click', () => {
+            const newLang = getCurrentLanguage() === 'ja' ? 'en' : 'ja';
+            setLanguage(newLang, true);
         });
+
+        function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            }
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+
+            try {
+                const copied = document.execCommand('copy');
+                return copied ? Promise.resolve() : Promise.reject(new Error('Copy command was not accepted.'));
+            } finally {
+                textarea.remove();
+            }
+        }
 
         function copyCommand() {
             const text = 'dotnet run --project samples/Slice.Sample';
-            navigator.clipboard.writeText(text).then(() => {
-                const isJa = document.body.getAttribute('data-lang') === 'ja';
-                alert(isJa ? 'クリップボードにコピーしました。' : 'Copied to clipboard.');
-            });
+            copyText(text)
+                .then(() => {
+                    const isJa = getCurrentLanguage() === 'ja';
+                    alert(isJa ? 'クリップボードにコピーしました。' : 'Copied to clipboard.');
+                })
+                .catch(() => {
+                    const isJa = getCurrentLanguage() === 'ja';
+                    alert(isJa ? `コピーできませんでした。手動でコピーしてください: ${text}` : `Could not copy automatically. Please copy manually: ${text}`);
+                });
         }
     </script>
 </body>
