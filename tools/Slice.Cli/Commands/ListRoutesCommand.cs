@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Slice.Cli.Internal;
 
@@ -10,6 +11,7 @@ internal static partial class ListRoutesCommand
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     internal static Command Build()
