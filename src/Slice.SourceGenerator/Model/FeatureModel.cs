@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Slice.SourceGenerator;
 
@@ -19,7 +21,16 @@ internal sealed record FeatureModel(
     string SerializedFilterFqns,
     // Serialised as one validation rule per line: "property|rule|arg1|arg2".
     string SerializedValidationRules,
-    bool RequiresReflectionValidation)
+    bool RequiresReflectionValidation,
+    // Serialised as "filterFqn|afterFqn;filterFqn|afterFqn" — one entry per FilterOrderHint(After=...) on a filter.
+    string SerializedFilterOrderHints,
+    string FeatureLocationFilePath,
+    int FeatureLocationSourceStart,
+    int FeatureLocationSourceLength,
+    int FeatureLocationStartLine,
+    int FeatureLocationStartCharacter,
+    int FeatureLocationEndLine,
+    int FeatureLocationEndCharacter)
 {
     /// <summary>
     /// Deserializes the feature handler parameters.
@@ -73,6 +84,67 @@ internal sealed record FeatureModel(
         var parts = SerializedFilterFqns.Split(';');
         return ImmutableArray.Create(parts);
     }
+
+    /// <summary>
+    /// Deserializes the FilterOrderHint(After=...) pairs collected from filter declarations.
+    /// </summary>
+    /// <returns>An array of (filter fqn, required-predecessor fqn) tuples.</returns>
+    public ImmutableArray<FilterOrderHintEntry> GetFilterOrderHints()
+    {
+        if (string.IsNullOrEmpty(SerializedFilterOrderHints))
+        {
+            return [];
+        }
+
+        var entries = SerializedFilterOrderHints.Split(';');
+        var builder = ImmutableArray.CreateBuilder<FilterOrderHintEntry>(entries.Length);
+        foreach (var entry in entries)
+        {
+            var sep = entry.IndexOf('|');
+            if (sep <= 0 || sep >= entry.Length - 1)
+            {
+                continue;
+            }
+
+            builder.Add(new FilterOrderHintEntry(entry.Substring(0, sep), entry.Substring(sep + 1)));
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// Rehydrates the feature type location used for diagnostics emitted after the incremental model is collected.
+    /// </summary>
+    /// <returns>The source location when available; otherwise <see cref="Location.None"/>.</returns>
+    public Location GetDiagnosticLocation()
+    {
+        if (FeatureLocationSourceStart < 0
+            || FeatureLocationSourceLength < 0)
+        {
+            return Location.None;
+        }
+
+        return Location.Create(
+            FeatureLocationFilePath,
+            new TextSpan(FeatureLocationSourceStart, FeatureLocationSourceLength),
+            new LinePositionSpan(
+                new LinePosition(FeatureLocationStartLine, FeatureLocationStartCharacter),
+                new LinePosition(FeatureLocationEndLine, FeatureLocationEndCharacter)));
+    }
+}
+
+internal readonly record struct FilterOrderHintEntry(string FilterFqn, string AfterFqn);
+
+internal readonly record struct DiagnosticLocationModel(
+    string FilePath,
+    int SourceStart,
+    int SourceLength,
+    int StartLine,
+    int StartCharacter,
+    int EndLine,
+    int EndCharacter)
+{
+    public static DiagnosticLocationModel None { get; } = new(string.Empty, -1, -1, -1, -1, -1, -1);
 }
 
 internal sealed record HandleParamModel(string TypeFqn, string Name, bool IsInterfaceOrAbstract);

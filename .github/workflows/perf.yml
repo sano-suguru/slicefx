@@ -1,0 +1,44 @@
+name: Perf (nightly)
+
+on:
+  schedule:
+    # 02:00 UTC daily
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Source Generator benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore tests/Slice.Benchmarks/Slice.Benchmarks.csproj
+
+      - name: Build benchmarks (Release)
+        run: dotnet build tests/Slice.Benchmarks/Slice.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run benchmarks
+        run: dotnet run -c Release --project tests/Slice.Benchmarks --no-build -- --filter '*'
+
+      - name: Upload BenchmarkDotNet artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: BenchmarkDotNet.Artifacts/
+          if-no-files-found: warn
+
+      - name: Check perf gates
+        run: bash tests/Slice.Benchmarks/check-gates.sh tests/Slice.Benchmarks/gates.json BenchmarkDotNet.Artifacts/results

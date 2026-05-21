@@ -57,18 +57,34 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (pair, _) => FindReferencedSliceModules(pair.Left, pair.Right))
             .WithTrackingName("SliceReferencedModules");
 
+        // Reduce Compilation/Options to cacheable primitives BEFORE the emit step so that
+        // the final RegisterSourceOutput action does not take Compilation as a cache key.
+        // Compilation changes on every keystroke; the derived bool/string? values are stable.
+        var emitExtensions = context.CompilationProvider
+            .Combine(context.AnalyzerConfigOptionsProvider)
+            .Select(static (pair, _) =>
+            {
+                var role = GetGenerationRole(pair.Left, pair.Right);
+                return role is SliceGenerationRole.Host or SliceGenerationRole.Both;
+            })
+            .WithTrackingName("SliceEmitExtensions");
+
+        var workersJsonContextFqn = validModels
+            .Combine(context.CompilationProvider)
+            .Combine(hasWorkersRef)
+            .Select(static (pair, _) => pair.Right ? FindWorkersJsonContext(pair.Left.Left, pair.Left.Right) : null)
+            .WithTrackingName("SliceWorkersJsonContext");
+
         context.RegisterSourceOutput(
             validModels.Combine(assemblyName)
                 .Combine(hasAspNetRef)
                 .Combine(hasWorkersRef)
                 .Combine(referencedModules)
-                .Combine(context.CompilationProvider)
-                .Combine(context.AnalyzerConfigOptionsProvider),
+                .Combine(emitExtensions)
+                .Combine(workersJsonContextFqn),
             static (spc, pair) =>
             {
-                var ((((((models, asmName), emitAspNet), emitWorkers), referencedModules), compilation), options) = pair;
-                var generationRole = GetGenerationRole(compilation, options);
-                var emitExtensions = generationRole is SliceGenerationRole.Host or SliceGenerationRole.Both;
+                var ((((((models, asmName), emitAspNet), emitWorkers), referencedModules), emitExtensions), workersJsonContextFqn) = pair;
 
                 var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
                 foreach (var diagnostic in duplicateDiagnostics)
@@ -79,6 +95,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 if (!duplicateDiagnostics.IsEmpty)
                 {
                     return;
+                }
+
+                foreach (var diagnostic in FindFilterOrderDiagnostics(models))
+                {
+                    spc.ReportDiagnostic(diagnostic);
                 }
 
                 var manifestSource = RouteManifestEmitter.Emit(models, asmName);
@@ -99,7 +120,6 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     return;
                 }
 
-                var workersJsonContextFqn = FindWorkersJsonContext(models, compilation);
                 var (workersSource, workersDiagnostics) = WorkersRegistrationEmitter.Emit(
                     models,
                     asmName,
@@ -378,8 +398,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
         var serializedParams = string.Join(";", paramParts);
 
-        // Collect filter FQNs in declaration order.
+        // Collect filter FQNs in declaration order, plus any [FilterOrderHint(After=...)]
+        // declared on each filter type so the generator can warn on declaration-order violations.
         var filterParts = new List<string>();
+        var orderHintParts = new List<string>();
         foreach (var a in featureType.GetAttributes())
         {
             if (a.AttributeClass is { IsGenericType: true } ac
@@ -387,13 +409,37 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 && ac.ContainingNamespace?.ToDisplayString() == "Slice"
                 && ac.TypeArguments.Length == 1)
             {
-                filterParts.Add(ac.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                var filterTypeArg = ac.TypeArguments[0];
+                var filterFqn = filterTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                filterParts.Add(filterFqn);
+
+                if (filterTypeArg is INamedTypeSymbol filterNamedType)
+                {
+                    foreach (var hintAttr in filterNamedType.GetAttributes())
+                    {
+                        if (hintAttr.AttributeClass?.ToDisplayString() != "Slice.FilterOrderHintAttribute")
+                        {
+                            continue;
+                        }
+
+                        foreach (var kv in hintAttr.NamedArguments)
+                        {
+                            if (kv.Key == "After" && kv.Value.Value is INamedTypeSymbol afterType)
+                            {
+                                var afterFqn = afterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                orderHintParts.Add(filterFqn + "|" + afterFqn);
+                            }
+                        }
+                    }
+                }
             }
         }
         var serializedFilters = string.Join(";", filterParts);
+        var serializedOrderHints = string.Join(";", orderHintParts);
         var (serializedValidationRules, requiresReflectionValidation) = CreateValidationRules(featureType, handle);
         var returnsAspNetResult = ReturnsAspNetResult(handle.ReturnType, ctx.SemanticModel.Compilation);
 
+        var featureLocation = CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null);
         var model = new FeatureModel(
             featureType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             featureType.Name,
@@ -407,7 +453,15 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             serializedParams,
             serializedFilters,
             serializedValidationRules,
-            requiresReflectionValidation);
+            requiresReflectionValidation,
+            serializedOrderHints,
+            featureLocation.FilePath,
+            featureLocation.SourceStart,
+            featureLocation.SourceLength,
+            featureLocation.StartLine,
+            featureLocation.StartCharacter,
+            featureLocation.EndLine,
+            featureLocation.EndCharacter);
 
         return tagInferred && tag == "Default"
             ? new FeatureResult(model, Diagnostic.Create(
@@ -631,6 +685,27 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return false;
     }
 
+    private static DiagnosticLocationModel CreateDiagnosticLocation(Location? location)
+    {
+        if (location is null || !location.IsInSource)
+        {
+            return DiagnosticLocationModel.None;
+        }
+
+        var lineSpan = location.GetLineSpan();
+        return new DiagnosticLocationModel(
+            lineSpan.Path,
+            location.SourceSpan.Start,
+            location.SourceSpan.Length,
+            lineSpan.StartLinePosition.Line,
+            lineSpan.StartLinePosition.Character,
+            lineSpan.EndLinePosition.Line,
+            lineSpan.EndLinePosition.Character);
+    }
+
+    // Looks up WorkerJsonContext by namespace convention only. Slice.Workers projects
+    // should place it at <RootNamespace>.WorkerJsonContext; SLICE009 surfaces a clear
+    // info diagnostic when the conventional location turns up nothing.
     private static string? FindWorkersJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
     {
         var jsonContextType = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
@@ -654,34 +729,6 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
             {
                 return "global::" + candidate;
-            }
-        }
-
-        var discovered = FindWorkersJsonContext(compilation.GlobalNamespace, jsonContextType);
-        if (discovered is not null)
-        {
-            return discovered.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        }
-
-        return null;
-    }
-
-    private static INamedTypeSymbol? FindWorkersJsonContext(INamespaceSymbol @namespace, INamedTypeSymbol? jsonContextType)
-    {
-        foreach (var type in @namespace.GetTypeMembers())
-        {
-            if (type.Name == "WorkerJsonContext" && InheritsFrom(type, jsonContextType))
-            {
-                return type;
-            }
-        }
-
-        foreach (var childNamespace in @namespace.GetNamespaceMembers())
-        {
-            var found = FindWorkersJsonContext(childNamespace, jsonContextType);
-            if (found is not null)
-            {
-                return found;
             }
         }
 
@@ -719,6 +766,54 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
         return "Default";
     }
+
+    private static ImmutableArray<Diagnostic> FindFilterOrderDiagnostics(ImmutableArray<FeatureModel> models)
+    {
+        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        foreach (var model in models)
+        {
+            var hints = model.GetFilterOrderHints();
+            if (hints.IsEmpty)
+            {
+                continue;
+            }
+
+            var filters = model.GetFilterFqns();
+            var positions = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < filters.Length; i++)
+            {
+                positions[filters[i]] = i;
+            }
+
+            foreach (var hint in hints)
+            {
+                if (!positions.TryGetValue(hint.FilterFqn, out var filterIndex))
+                {
+                    continue;
+                }
+
+                if (!positions.TryGetValue(hint.AfterFqn, out var afterIndex))
+                {
+                    continue;
+                }
+
+                if (filterIndex < afterIndex)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        SliceDiagnostics.FilterOrderViolation,
+                        model.GetDiagnosticLocation(),
+                        model.FullyQualifiedTypeName,
+                        TrimGlobalPrefix(hint.FilterFqn),
+                        TrimGlobalPrefix(hint.AfterFqn)));
+                }
+            }
+        }
+
+        return diagnostics.ToImmutable();
+    }
+
+    private static string TrimGlobalPrefix(string value)
+        => value.StartsWith("global::", StringComparison.Ordinal) ? value.Substring("global::".Length) : value;
 
     private static ImmutableArray<Diagnostic> FindDuplicateEndpointNameDiagnostics(
         ImmutableArray<FeatureModel> models,

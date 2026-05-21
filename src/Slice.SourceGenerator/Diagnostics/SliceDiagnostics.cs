@@ -93,4 +93,16 @@ internal static class SliceDiagnostics
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a feature's [Filter&lt;T&gt;] declarations place filters in an order
+    /// that contradicts a [FilterOrderHint(After = typeof(...))] declared on one of the filters.
+    /// </summary>
+    public static readonly DiagnosticDescriptor FilterOrderViolation = new(
+        "SLICE010",
+        "Filter order violates declared hint",
+        "Feature '{0}': filter '{1}' is annotated [FilterOrderHint(After = typeof({2}))] but is declared before it. Reorder the [Filter<T>] attributes so '{1}' follows '{2}'.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

@@ -10,3 +10,4 @@ SLICE005 | Slice | Error | AmbiguousHandleMethod
 SLICE006 | Slice | Info | TagInferenceFallback
 SLICE008 | Slice | Info | UnsupportedReturnTypeForWorkers
 SLICE009 | Slice | Info | MissingWorkersJsonContext
+SLICE010 | Slice | Warning | FilterOrderViolation

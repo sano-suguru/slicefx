@@ -547,6 +547,90 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_reports_SLICE010_when_filter_order_violates_FilterOrderHint()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace OrderHintApp.Features.Things;
+
+            [Feature("GET /things")]
+            [Filter<AuthFilter>]
+            [Filter<LoggingFilter>]
+            public static class ListThings
+            {
+                public static string Handle() => "ok";
+            }
+
+            public sealed class LoggingFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+
+            [FilterOrderHint(After = typeof(LoggingFilter))]
+            public sealed class AuthFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("OrderHintApp", source);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE010"));
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.NotEqual(Location.None, diagnostic.Location);
+        Assert.Contains("AuthFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("LoggingFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_does_not_report_SLICE010_when_filter_order_matches_FilterOrderHint()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace OrderHintOkApp.Features.Things;
+
+            [Feature("GET /things")]
+            [Filter<LoggingFilter>]
+            [Filter<AuthFilter>]
+            public static class ListThings
+            {
+                public static string Handle() => "ok";
+            }
+
+            public sealed class LoggingFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+
+            [FilterOrderHint(After = typeof(LoggingFilter))]
+            public sealed class AuthFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("OrderHintOkApp", source);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE010");
+    }
+
+    [Fact]
     public void Generator_reports_SLICE001_for_feature_missing_handle_method()
     {
         var source = """

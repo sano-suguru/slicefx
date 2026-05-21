@@ -19,6 +19,9 @@ coverage.*
 *.coveragexml
 *.trx
 
+# BenchmarkDotNet output
+BenchmarkDotNet.Artifacts/
+
 # Visual Studio / Rider / VS Code user state
 .vs/
 .idea/
