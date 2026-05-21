@@ -243,7 +243,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         foreach (var attribute in assembly.GetAttributes())
         {
             if (!IsAttribute(attribute.AttributeClass, routeAttribute, "Slice.SliceFeatureRouteAttribute")
-                || attribute.ConstructorArguments.Length != 4
+                || attribute.ConstructorArguments.Length < 4
                 || attribute.ConstructorArguments[0].Value is not string endpointName
                 || attribute.ConstructorArguments[1].Value is not string featureType
                 || attribute.ConstructorArguments[2].Value is not string httpMethod

@@ -377,9 +377,11 @@ internal static partial class GenerateCSharpClientCommand
     {
         returnType = RouteCatalog.NormalizeWhitespace(returnType);
         return TryUnwrapGeneric(returnType, "Task", out var taskType) ||
-               TryUnwrapGeneric(returnType, "ValueTask", out taskType)
+               TryUnwrapGeneric(returnType, "System.Threading.Tasks.Task", out taskType) ||
+               TryUnwrapGeneric(returnType, "ValueTask", out taskType) ||
+               TryUnwrapGeneric(returnType, "System.Threading.Tasks.ValueTask", out taskType)
             ? taskType
-            : returnType is "Task" or "ValueTask" ? "void" : returnType;
+            : returnType is "Task" or "System.Threading.Tasks.Task" or "ValueTask" or "System.Threading.Tasks.ValueTask" ? "void" : returnType;
     }
 
     private static bool TryUnwrapGeneric(string type, string wrapper, out string inner)

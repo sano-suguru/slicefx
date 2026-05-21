@@ -11,6 +11,34 @@ public sealed class SliceFeatureRouteAttribute(
     string pattern) : Attribute
 {
     /// <summary>
+    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with full route metadata.
+    /// </summary>
+    public SliceFeatureRouteAttribute(
+        string endpointName,
+        string featureType,
+        string httpMethod,
+        string pattern,
+        string? tag,
+        string? summary,
+        string? requestType,
+        string? returnType,
+        string? portability,
+        string? portabilityReason,
+        string? serializedFilterTypes,
+        string? serializedParameters)
+        : this(endpointName, featureType, httpMethod, pattern)
+    {
+        Tag = tag;
+        Summary = summary;
+        RequestType = requestType;
+        ReturnType = returnType;
+        Portability = portability;
+        PortabilityReason = portabilityReason;
+        SerializedFilterTypes = serializedFilterTypes;
+        SerializedParameters = serializedParameters;
+    }
+
+    /// <summary>
     /// Gets the endpoint name generated for the feature.
     /// </summary>
     public string EndpointName { get; } = endpointName;
@@ -29,4 +57,44 @@ public sealed class SliceFeatureRouteAttribute(
     /// Gets the route pattern.
     /// </summary>
     public string Pattern { get; } = pattern;
+
+    /// <summary>
+    /// Gets the generated route tag.
+    /// </summary>
+    public string? Tag { get; }
+
+    /// <summary>
+    /// Gets the generated route summary.
+    /// </summary>
+    public string? Summary { get; }
+
+    /// <summary>
+    /// Gets the request type name when the route has a Slice request body.
+    /// </summary>
+    public string? RequestType { get; }
+
+    /// <summary>
+    /// Gets the handler return type name.
+    /// </summary>
+    public string? ReturnType { get; }
+
+    /// <summary>
+    /// Gets the route portability classification.
+    /// </summary>
+    public string? Portability { get; }
+
+    /// <summary>
+    /// Gets the reason for the portability classification when one exists.
+    /// </summary>
+    public string? PortabilityReason { get; }
+
+    /// <summary>
+    /// Gets newline-separated filter type names.
+    /// </summary>
+    public string? SerializedFilterTypes { get; }
+
+    /// <summary>
+    /// Gets newline-separated handler parameters serialized as <c>Type|Name</c>.
+    /// </summary>
+    public string? SerializedParameters { get; }
 }

@@ -271,7 +271,7 @@ public class SourceGeneratorCompileTests
         Assert.DoesNotContain("\"/union\"", workersSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/task-ok\"", workersSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/value-task-ok\"", workersSource, StringComparison.Ordinal);
-        Assert.Equal(4, CountOccurrences(generatedSource, "\"aspnet-only\""));
+        Assert.Equal(8, CountOccurrences(generatedSource, "\"aspnet-only\""));
     }
 
     [Fact]

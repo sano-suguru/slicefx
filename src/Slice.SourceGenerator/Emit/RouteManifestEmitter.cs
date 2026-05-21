@@ -42,8 +42,9 @@ internal static class RouteManifestEmitter
         sb.AppendLine();
         foreach (var feature in features)
         {
+            var (portability, portabilityReason) = ClassifyPortability(feature);
             sb.AppendLine(
-                $"[assembly: global::Slice.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(TrimGlobalPrefix(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)})]");
+                $"[assembly: global::Slice.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(TrimGlobalPrefix(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(TrimGlobalPrefix(feature.ReturnTypeFqn))}, {CSharpLiteral.String(portability)}, {CSharpNullableStringLiteral(portabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))})]");
         }
     }
 
@@ -83,7 +84,7 @@ internal static class RouteManifestEmitter
             sb.AppendLine($"            {CSharpNullableStringLiteral(feature.Summary)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(FindRequestType(feature))},");
             sb.AppendLine($"            {CSharpLiteral.String(TrimGlobalPrefix(feature.ReturnTypeFqn))},");
-            sb.AppendLine($"            {BoolLiteral(portability != "aspnet-only")},");
+            sb.AppendLine($"            {BoolLiteral(portability == "portable")},");
             sb.AppendLine($"            {CSharpLiteral.String(portability)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(portabilityReason)},");
             sb.AppendLine($"            {FilterTypesLiteral(feature)}),");
@@ -151,10 +152,24 @@ internal static class RouteManifestEmitter
         return $"new[] {{ {string.Join(", ", values)} }}";
     }
 
+    private static string? SerializeFilterTypes(FeatureModel feature)
+    {
+        var filters = feature.GetFilterFqns();
+        return filters.IsEmpty
+            ? null
+            : string.Join("\n", filters.Select(static f => TrimGlobalPrefix(f)));
+    }
+
+    private static string? SerializeParameters(FeatureModel feature)
+    {
+        var parameters = feature.GetParams();
+        return parameters.IsEmpty
+            ? null
+            : string.Join("\n", parameters.Select(static p => $"{TrimGlobalPrefix(p.TypeFqn)}|{p.Name}"));
+    }
+
     private static string TrimGlobalPrefix(string value)
-        => value.StartsWith("global::", StringComparison.Ordinal)
-            ? value.Substring("global::".Length)
-            : value;
+        => value.Replace("global::", "");
 
     private static string BoolLiteral(bool value) => value ? "true" : "false";
 

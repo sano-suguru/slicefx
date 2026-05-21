@@ -53,11 +53,11 @@ The generated route manifest is the shared metadata seam for Hono/Vercel-inspire
 
 - HTTP method and route pattern.
 - Feature type, inferred tag, endpoint name, and summary.
-- Request type and return type names.
+- Request type, return type, and handler parameter names.
 - Referenced filter type names.
-- A Workers compatibility flag and portability status using `portable`, `partial`, or `aspnet-only`.
+- Portability status using `portable`, `partial`, or `aspnet-only`.
 
-The manifest is deliberately string-based. Deployment tools, docs, and CLI commands can read route shape and compatibility without adding runtime dependencies to `Slice.Core`. The CLI route catalog should continue converging with the generated manifest so route listing, compatibility reporting, typed client generation, OpenAPI, and future deployment checks share one contract.
+The manifest is deliberately string-based. Deployment tools, docs, and CLI commands can read route shape and compatibility without adding runtime dependencies to `Slice.Core`. The CLI route catalog should prefer generated metadata from built project outputs, then fall back to source scanning only for unbuilt projects. Route listing, compatibility reporting, typed client generation, OpenAPI, and future deployment checks should share this contract.
 
 ## CLI-generated tooling
 

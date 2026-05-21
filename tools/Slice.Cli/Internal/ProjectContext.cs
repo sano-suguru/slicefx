@@ -2,7 +2,11 @@ using System.Xml.Linq;
 
 namespace Slice.Cli.Internal;
 
-internal sealed record ProjectContext(FileInfo ProjectFile, string RootNamespace, DirectoryInfo ProjectDirectory);
+internal sealed record ProjectContext(
+    FileInfo ProjectFile,
+    string RootNamespace,
+    string AssemblyName,
+    DirectoryInfo ProjectDirectory);
 
 internal static class ProjectContextDiscovery
 {
@@ -38,31 +42,35 @@ internal static class ProjectContextDiscovery
             projectFile = new FileInfo(found[0]);
         }
 
-        var rawRootNamespace = ReadRootNamespace(projectFile, out var isExplicit);
-        var rootNamespace = isExplicit
+        var projectProperties = ReadProjectProperties(projectFile);
+        var rawRootNamespace = projectProperties.RootNamespace ?? Path.GetFileNameWithoutExtension(projectFile.Name);
+        var rootNamespace = projectProperties.RootNamespace is not null
             ? CliValidation.RequireNamespace(rawRootNamespace, "RootNamespace")
             : CliValidation.RequireNamespace(NameUtilities.ToNamespaceSegment(rawRootNamespace), "RootNamespace");
-        return new ProjectContext(projectFile, rootNamespace, projectFile.Directory!);
+        var assemblyName = string.IsNullOrWhiteSpace(projectProperties.AssemblyName)
+            ? Path.GetFileNameWithoutExtension(projectFile.Name)
+            : projectProperties.AssemblyName!;
+        return new ProjectContext(projectFile, rootNamespace, assemblyName, projectFile.Directory!);
     }
 
-    private static string ReadRootNamespace(FileInfo projectFile, out bool isExplicit)
+    private static ProjectProperties ReadProjectProperties(FileInfo projectFile)
     {
         try
         {
             var doc = XDocument.Load(projectFile.FullName);
-            var value = doc.Descendants("RootNamespace").FirstOrDefault()?.Value;
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                isExplicit = true;
-                return value;
-            }
+            var rootNamespace = doc.Descendants("RootNamespace").FirstOrDefault()?.Value;
+            var assemblyName = doc.Descendants("AssemblyName").FirstOrDefault()?.Value;
+            return new ProjectProperties(
+                string.IsNullOrWhiteSpace(rootNamespace) ? null : rootNamespace,
+                string.IsNullOrWhiteSpace(assemblyName) ? null : assemblyName);
         }
         catch (Exception ex) when (ex is not CliException)
         {
             // Fall through to filename-based default
         }
 
-        isExplicit = false;
-        return Path.GetFileNameWithoutExtension(projectFile.Name);
+        return new ProjectProperties(null, null);
     }
+
+    private sealed record ProjectProperties(string? RootNamespace, string? AssemblyName);
 }

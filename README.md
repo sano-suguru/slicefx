@@ -248,7 +248,7 @@ public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
 
 Result: zero reflection at startup, trimmer/AOT happy, near-zero cold start.
 
-The source generator also emits a route metadata manifest for tooling and deployment experiments, including empty manifests for projects that do not define features yet. The manifest contains method, pattern, feature type, tag, endpoint name, summary, request type, return type, filters, and Workers compatibility. It is intentionally string-based so it can be consumed without adding dependencies to `Slice.Core`.
+The source generator also emits route metadata for tooling and deployment experiments, including empty manifests for projects that do not define features yet. The metadata contains method, pattern, feature type, tag, endpoint name, summary, request type, return type, handler parameters, filters, and portability status (`portable`, `partial`, or `aspnet-only`). It is intentionally string-based so tooling can consume route shape without adding dependencies to `Slice.Core`.
 
 For multi-assembly apps, reference `Slice.SourceGenerator` from each feature assembly and from the host. Class library projects default to generated module helpers only; executable hosts default to the public extension surface and aggregate directly referenced Slice modules. Set the MSBuild property `SliceRole` to `Host`, `Feature`, or `Both` only when you need to override that default.
 
@@ -365,7 +365,11 @@ slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
 ```
 
-`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. Generated templates return a nested `Response` record by default; `POST`, `PUT`, and `PATCH` templates also include an empty `Request`. `slice routes` lists discovered feature routes and reports whether each slice is `portable`, `partial`, or `aspnet-only` for Workers-style dispatch. Use `--format json` to export route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
+`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. Generated templates return a nested `Response` record by default; `POST`, `PUT`, and `PATCH` templates also include an empty `Request`.
+
+`slice routes` first reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs` source files. The command reports whether each slice is `portable`, `partial`, or `aspnet-only` for Workers-style dispatch, and `--format json` exports the same route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
+
+`Features/<Group>/<Feature>.cs` is the recommended and scaffolded project shape, not a compiler-enforced file-system routing rule. The generator discovers `[Feature]` classes, so explicit attributes remain the source of truth.
 
 ---
 

@@ -11,6 +11,12 @@ internal static partial class RouteCatalog
 
     internal static SliceRouteInfo[] Discover(ProjectContext ctx)
     {
+        var generatedRoutes = GeneratedRouteCatalog.Discover(ctx);
+        return generatedRoutes.Found ? generatedRoutes.Routes : DiscoverFromSource(ctx);
+    }
+
+    private static SliceRouteInfo[] DiscoverFromSource(ProjectContext ctx)
+    {
         var featuresDir = Path.Combine(ctx.ProjectDirectory.FullName, "Features");
         if (!Directory.Exists(featuresDir))
         {
@@ -18,64 +24,61 @@ internal static partial class RouteCatalog
         }
 
         return [.. Directory.EnumerateFiles(featuresDir, "*.cs", SearchOption.AllDirectories)
-            .Select(ReadRoute)
-            .Where(static route => route is not null)
-            .Cast<SliceRouteInfo>()
+            .SelectMany(ReadRoutes)
             .OrderBy(static route => route.Pattern, StringComparer.Ordinal)
-            .ThenBy(static route => route.Method, StringComparer.Ordinal)];
+            .ThenBy(static route => route.Method, StringComparer.Ordinal)
+            .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)];
     }
 
-    private static SliceRouteInfo? ReadRoute(string file)
+    private static IEnumerable<SliceRouteInfo> ReadRoutes(string file)
     {
         var source = File.ReadAllText(file);
-        var featureMatch = FeatureAttributeRegex().Match(source);
-        if (!featureMatch.Success)
+        foreach (Match featureMatch in FeatureAttributeRegex().Matches(source))
         {
-            return null;
+            var route = UnescapeCSharpString(featureMatch.Groups["route"].Value);
+            var parts = route.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length != 2)
+            {
+                continue;
+            }
+
+            var classMatch = ClassRegex().Match(source, featureMatch.Index);
+            if (!classMatch.Success)
+            {
+                continue;
+            }
+
+            var namespaceMatch = NamespaceRegex().Match(source);
+            var @namespace = namespaceMatch.Success ? namespaceMatch.Groups["namespace"].Value : "";
+            var args = featureMatch.Groups["args"].Value;
+            var tag = ReadNamedStringArgument(args, "Tag") ?? InferTag(@namespace);
+            var summary = ReadNamedStringArgument(args, "Summary");
+            var handleMatch = HandleRegex().Match(source, classMatch.Index);
+            var returnType = handleMatch.Success ? NormalizeWhitespace(handleMatch.Groups["return"].Value) : "";
+            var parameters = handleMatch.Success ? ReadParameters(handleMatch.Groups["params"].Value) : [];
+            var requestType = FindRequestType(parameters);
+            var attributeBlock = ReadClassAttributeBlock(source, classMatch.Index);
+            var filters = FilterRegex().Matches(attributeBlock)
+                .Select(static match => match.Groups["filter"].Value.Trim())
+                .ToArray();
+            var (portability, portabilityReason) = ClassifyPortability(returnType, filters);
+            var featureName = classMatch.Groups["class"].Value;
+
+            yield return new SliceRouteInfo(
+                parts[0].ToUpperInvariant(),
+                parts[1],
+                @namespace,
+                featureName,
+                tag,
+                $"{tag}.{featureName}",
+                summary,
+                requestType,
+                returnType,
+                portability,
+                portabilityReason,
+                filters,
+                parameters);
         }
-
-        var route = UnescapeCSharpString(featureMatch.Groups["route"].Value);
-        var parts = route.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length != 2)
-        {
-            return null;
-        }
-
-        var classMatch = ClassRegex().Match(source, featureMatch.Index);
-        if (!classMatch.Success)
-        {
-            return null;
-        }
-
-        var namespaceMatch = NamespaceRegex().Match(source);
-        var @namespace = namespaceMatch.Success ? namespaceMatch.Groups["namespace"].Value : "";
-        var args = featureMatch.Groups["args"].Value;
-        var tag = ReadNamedStringArgument(args, "Tag") ?? InferTag(@namespace);
-        var summary = ReadNamedStringArgument(args, "Summary");
-        var handleMatch = HandleRegex().Match(source);
-        var returnType = handleMatch.Success ? NormalizeWhitespace(handleMatch.Groups["return"].Value) : "";
-        var parameters = handleMatch.Success ? ReadParameters(handleMatch.Groups["params"].Value) : [];
-        var requestType = FindRequestType(parameters);
-        var filters = FilterRegex().Matches(source)
-            .Select(static match => match.Groups["filter"].Value.Trim())
-            .ToArray();
-        var (portability, portabilityReason) = ClassifyPortability(returnType, filters);
-        var featureName = classMatch.Groups["class"].Value;
-
-        return new SliceRouteInfo(
-            parts[0].ToUpperInvariant(),
-            parts[1],
-            @namespace,
-            featureName,
-            tag,
-            $"{tag}.{featureName}",
-            summary,
-            requestType,
-            returnType,
-            portability,
-            portabilityReason,
-            filters,
-            parameters);
     }
 
     private static SliceRouteParameter[] ReadParameters(string parameters)
@@ -189,6 +192,21 @@ internal static partial class RouteCatalog
         return hasAspNetFilter
             ? (PortabilityPartial, "non-validator endpoint filters do not run in Workers")
             : (PortabilityPortable, null);
+    }
+
+    private static string ReadClassAttributeBlock(string source, int classIndex)
+    {
+        var blockStart = 0;
+        for (var index = classIndex - 1; index >= 0; index--)
+        {
+            if (source[index] is '}' or ';')
+            {
+                blockStart = index + 1;
+                break;
+            }
+        }
+
+        return source[blockStart..classIndex];
     }
 
     private static string UnescapeCSharpString(string value)
