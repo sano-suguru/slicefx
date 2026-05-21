@@ -149,6 +149,132 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_escapes_control_characters_in_workers_string_literals()
+    {
+        var source = """
+            using Slice;
+
+            namespace WorkerEscapingApp.Features.Diagnostics;
+
+            [Feature("GET /control\0")]
+            public static class GetControl
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerEscapingApp", source, includeWorkersReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("/control", generatedSource, StringComparison.Ordinal);
+        Assert.DoesNotContain('\0', generatedSource);
+    }
+
+    [Fact]
+    public void Generator_classifies_workers_route_parameters_case_insensitively()
+    {
+        var source = """
+            using System;
+            using Slice;
+
+            namespace WorkerRouteApp.Features.Users;
+
+            [Feature("GET /users/{Id:guid}")]
+            public static class GetUser
+            {
+                public static string Handle(Guid id) => id.ToString();
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerRouteApp", source, includeWorkersReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var id)", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(".TryGetFromQuery<global::System.Guid>(ctx, \"id\", out var id)", workersSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_excludes_aspnet_typed_results_from_workers_routes_and_manifest()
+    {
+        var source = """
+            using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Http;
+            using Microsoft.AspNetCore.Http.HttpResults;
+            using Slice;
+
+            namespace WorkerTypedResultsApp.Features.Results;
+
+            [Feature("GET /ok")]
+            public static class GetOk
+            {
+                public static Ok<Response> Handle() => TypedResults.Ok(new Response("ok"));
+
+                public sealed record Response(string Message);
+            }
+
+            [Feature("GET /union")]
+            public static class GetUnion
+            {
+                public static Results<Ok<Response>, NotFound> Handle(bool missing)
+                {
+                    if (missing)
+                    {
+                        return TypedResults.NotFound();
+                    }
+
+                    return TypedResults.Ok(new Response("ok"));
+                }
+
+                public sealed record Response(string Message);
+            }
+
+            [Feature("GET /task-ok")]
+            public static class GetTaskOk
+            {
+                public static Task<Ok<Response>> Handle()
+                    => Task.FromResult(TypedResults.Ok(new Response("ok")));
+
+                public sealed record Response(string Message);
+            }
+
+            [Feature("GET /value-task-ok")]
+            public static class GetValueTaskOk
+            {
+                public static ValueTask<Ok<Response>> Handle()
+                    => new(TypedResults.Ok(new Response("ok")));
+
+                public sealed record Response(string Message);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerTypedResultsApp", source, includeWorkersReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Equal(4, generatorDiagnostics.Count(static diagnostic => diagnostic.Id == "SLICE008"));
+        Assert.DoesNotContain("table.Add(", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/ok\"", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/union\"", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/task-ok\"", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/value-task-ok\"", workersSource, StringComparison.Ordinal);
+        Assert.Equal(4, CountOccurrences(generatedSource, "\"aspnet-only\""));
+    }
+
+    [Fact]
     public void Generator_aggregates_referenced_feature_assemblies_without_extension_ambiguity()
     {
         var featureSource = """
@@ -560,6 +686,26 @@ public class SourceGeneratorCompileTests
         Assert.True(afterIndex >= 0, $"Could not find '{after}'.");
         Assert.True(beforeIndex < afterIndex, $"Expected '{before}' to appear before '{after}'.");
     }
+
+    private static int CountOccurrences(string value, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
+    }
+
+    private static string GetGeneratedSource(GeneratorDriver driver, string hintNameSuffix)
+        => driver.GetRunResult()
+            .GeneratedTrees
+            .Single(tree => tree.FilePath.EndsWith(hintNameSuffix, StringComparison.Ordinal))
+            .GetText()
+            .ToString();
 
     private sealed class TestAnalyzerConfigOptionsProvider(
         params (string Name, string Value)[] properties) : AnalyzerConfigOptionsProvider

@@ -170,8 +170,8 @@ internal static class RegistrationEmitter
         var delegateType = BuildDelegateType(paramModels, f.ReturnTypeFqn);
 
         sb.AppendLine($"        app.MapMethods(");
-        sb.AppendLine($"            {CSharpStringLiteral(f.Pattern)},");
-        sb.AppendLine($"            new[] {{ {CSharpStringLiteral(f.HttpMethod)} }},");
+        sb.AppendLine($"            {CSharpLiteral.String(f.Pattern)},");
+        sb.AppendLine($"            new[] {{ {CSharpLiteral.String(f.HttpMethod)} }},");
         sb.AppendLine($"            new {delegateType}(");
         sb.AppendLine($"                {f.FullyQualifiedTypeName}.Handle))");
         sb.AppendLine($"        .AddEndpointFilterFactory(");
@@ -182,12 +182,12 @@ internal static class RegistrationEmitter
             sb.AppendLine($"        .AddEndpointFilter<{ft}>()");
         }
 
-        sb.AppendLine($"        .WithTags({CSharpStringLiteral(f.Tag)})");
-        sb.AppendLine($"        .WithName({CSharpStringLiteral(f.EndpointName)})");
+        sb.AppendLine($"        .WithTags({CSharpLiteral.String(f.Tag)})");
+        sb.AppendLine($"        .WithName({CSharpLiteral.String(f.EndpointName)})");
 
         if (f.Summary is not null)
         {
-            sb.AppendLine($"        .WithSummary({CSharpStringLiteral(f.Summary)});");
+            sb.AppendLine($"        .WithSummary({CSharpLiteral.String(f.Summary)});");
         }
         else
         {
@@ -214,63 +214,6 @@ internal static class RegistrationEmitter
         return args.Count == 1
             ? $"global::System.Func<{args[0]}>"
             : $"global::System.Func<{string.Join(", ", args)}>";
-    }
-
-    private static string CSharpStringLiteral(string value)
-    {
-        var sb = new StringBuilder(value.Length + 2);
-        sb.Append('"');
-
-        foreach (var ch in value)
-        {
-            switch (ch)
-            {
-                case '\\':
-                    sb.Append(@"\\");
-                    break;
-                case '"':
-                    sb.Append("\\\"");
-                    break;
-                case '\0':
-                    sb.Append(@"\0");
-                    break;
-                case '\a':
-                    sb.Append(@"\a");
-                    break;
-                case '\b':
-                    sb.Append(@"\b");
-                    break;
-                case '\f':
-                    sb.Append(@"\f");
-                    break;
-                case '\n':
-                    sb.Append(@"\n");
-                    break;
-                case '\r':
-                    sb.Append(@"\r");
-                    break;
-                case '\t':
-                    sb.Append(@"\t");
-                    break;
-                case '\v':
-                    sb.Append(@"\v");
-                    break;
-                default:
-                    if (char.IsControl(ch))
-                    {
-                        sb.Append(@"\u").Append(((int)ch).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
-                    }
-                    else
-                    {
-                        sb.Append(ch);
-                    }
-
-                    break;
-            }
-        }
-
-        sb.Append('"');
-        return sb.ToString();
     }
 
     private static string ToSingleLineComment(string value)

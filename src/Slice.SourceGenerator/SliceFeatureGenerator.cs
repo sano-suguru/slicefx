@@ -392,6 +392,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
         var serializedFilters = string.Join(";", filterParts);
         var (serializedValidationRules, requiresReflectionValidation) = CreateValidationRules(featureType, handle);
+        var returnsAspNetResult = ReturnsAspNetResult(handle.ReturnType, ctx.SemanticModel.Compilation);
 
         var model = new FeatureModel(
             featureType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -402,6 +403,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             pattern,
             string.IsNullOrWhiteSpace(summary) ? null : summary,
             handle.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            returnsAspNetResult,
             serializedParams,
             serializedFilters,
             serializedValidationRules,
@@ -496,6 +498,38 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
 
         return false;
+    }
+
+    private static bool ReturnsAspNetResult(ITypeSymbol returnType, Compilation compilation)
+    {
+        var iResultType = compilation.GetTypeByMetadataName("Microsoft.AspNetCore.Http.IResult");
+        if (iResultType is null)
+        {
+            return false;
+        }
+
+        var resultType = UnwrapGenericAwaitable(returnType, compilation);
+        return SymbolEqualityComparer.Default.Equals(resultType, iResultType)
+            || resultType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, iResultType));
+    }
+
+    private static ITypeSymbol UnwrapGenericAwaitable(ITypeSymbol type, Compilation compilation)
+    {
+        if (type is not INamedTypeSymbol { IsGenericType: true } named)
+        {
+            return type;
+        }
+
+        var original = named.OriginalDefinition;
+        var taskType = compilation.GetTypeByMetadataName("System.Threading.Tasks.Task`1");
+        var valueTaskType = compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask`1");
+        if (SymbolEqualityComparer.Default.Equals(original, taskType)
+            || SymbolEqualityComparer.Default.Equals(original, valueTaskType))
+        {
+            return named.TypeArguments[0];
+        }
+
+        return type;
     }
 
     private static string? TryCreateValidationRule(IPropertySymbol property, AttributeData attribute)

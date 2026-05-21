@@ -12,6 +12,7 @@ internal sealed record FeatureModel(
     string Pattern,
     string? Summary,
     string ReturnTypeFqn,
+    bool ReturnsAspNetResult,
     // Serialised as "typeFqn|name;typeFqn|name" so the record uses primitive equality.
     string SerializedParams,
     // Serialised as "fqn1;fqn2" — order is declaration order.

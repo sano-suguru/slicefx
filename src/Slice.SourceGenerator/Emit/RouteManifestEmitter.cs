@@ -43,7 +43,7 @@ internal static class RouteManifestEmitter
         foreach (var feature in features)
         {
             sb.AppendLine(
-                $"[assembly: global::Slice.SliceFeatureRouteAttribute({CSharpStringLiteral(feature.EndpointName)}, {CSharpStringLiteral(TrimGlobalPrefix(feature.FullyQualifiedTypeName))}, {CSharpStringLiteral(feature.HttpMethod)}, {CSharpStringLiteral(feature.Pattern)})]");
+                $"[assembly: global::Slice.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(TrimGlobalPrefix(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)})]");
         }
     }
 
@@ -75,16 +75,16 @@ internal static class RouteManifestEmitter
         {
             var (portability, portabilityReason) = ClassifyPortability(feature);
             sb.AppendLine("        new SliceRouteDescriptor(");
-            sb.AppendLine($"            {CSharpStringLiteral(feature.HttpMethod)},");
-            sb.AppendLine($"            {CSharpStringLiteral(feature.Pattern)},");
-            sb.AppendLine($"            {CSharpStringLiteral(TrimGlobalPrefix(feature.FullyQualifiedTypeName))},");
-            sb.AppendLine($"            {CSharpStringLiteral(feature.Tag)},");
-            sb.AppendLine($"            {CSharpStringLiteral(feature.EndpointName)},");
+            sb.AppendLine($"            {CSharpLiteral.String(feature.HttpMethod)},");
+            sb.AppendLine($"            {CSharpLiteral.String(feature.Pattern)},");
+            sb.AppendLine($"            {CSharpLiteral.String(TrimGlobalPrefix(feature.FullyQualifiedTypeName))},");
+            sb.AppendLine($"            {CSharpLiteral.String(feature.Tag)},");
+            sb.AppendLine($"            {CSharpLiteral.String(feature.EndpointName)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(feature.Summary)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(FindRequestType(feature))},");
-            sb.AppendLine($"            {CSharpStringLiteral(TrimGlobalPrefix(feature.ReturnTypeFqn))},");
+            sb.AppendLine($"            {CSharpLiteral.String(TrimGlobalPrefix(feature.ReturnTypeFqn))},");
             sb.AppendLine($"            {BoolLiteral(portability != "aspnet-only")},");
-            sb.AppendLine($"            {CSharpStringLiteral(portability)},");
+            sb.AppendLine($"            {CSharpLiteral.String(portability)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(portabilityReason)},");
             sb.AppendLine($"            {FilterTypesLiteral(feature)}),");
         }
@@ -117,8 +117,7 @@ internal static class RouteManifestEmitter
 
     private static (string Status, string? Reason) ClassifyPortability(FeatureModel feature)
     {
-        if (feature.ReturnTypeFqn == "global::Microsoft.AspNetCore.Http.IResult"
-            || feature.ReturnTypeFqn.Contains("IResult"))
+        if (feature.ReturnsAspNetResult)
         {
             return ("aspnet-only", "returns ASP.NET IResult");
         }
@@ -148,7 +147,7 @@ internal static class RouteManifestEmitter
         }
 
         var values = filters
-            .Select(static f => CSharpStringLiteral(TrimGlobalPrefix(f)));
+            .Select(static f => CSharpLiteral.String(TrimGlobalPrefix(f)));
         return $"new[] {{ {string.Join(", ", values)} }}";
     }
 
@@ -160,62 +159,5 @@ internal static class RouteManifestEmitter
     private static string BoolLiteral(bool value) => value ? "true" : "false";
 
     private static string CSharpNullableStringLiteral(string? value)
-        => value is null ? "null" : CSharpStringLiteral(value);
-
-    private static string CSharpStringLiteral(string value)
-    {
-        var sb = new StringBuilder(value.Length + 2);
-        sb.Append('"');
-
-        foreach (var ch in value)
-        {
-            switch (ch)
-            {
-                case '\\':
-                    sb.Append(@"\\");
-                    break;
-                case '"':
-                    sb.Append("\\\"");
-                    break;
-                case '\0':
-                    sb.Append(@"\0");
-                    break;
-                case '\a':
-                    sb.Append(@"\a");
-                    break;
-                case '\b':
-                    sb.Append(@"\b");
-                    break;
-                case '\f':
-                    sb.Append(@"\f");
-                    break;
-                case '\n':
-                    sb.Append(@"\n");
-                    break;
-                case '\r':
-                    sb.Append(@"\r");
-                    break;
-                case '\t':
-                    sb.Append(@"\t");
-                    break;
-                case '\v':
-                    sb.Append(@"\v");
-                    break;
-                default:
-                    if (char.IsControl(ch))
-                    {
-                        sb.Append(@"\u").Append(((int)ch).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
-                    }
-                    else
-                    {
-                        sb.Append(ch);
-                    }
-
-                    break;
-            }
-        }
-
-        sb.Append('"');
-        return sb.ToString();
-    }
+        => value is null ? "null" : CSharpLiteral.String(value);
 }

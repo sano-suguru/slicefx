@@ -119,7 +119,7 @@ internal static class WorkersRegistrationEmitter
 
         foreach (var f in features)
         {
-            var skipReason = GetSkipReason(f.ReturnTypeFqn);
+            var skipReason = GetSkipReason(f);
             if (skipReason is not null)
             {
                 diagnostics.Add(Diagnostic.Create(
@@ -151,11 +151,10 @@ internal static class WorkersRegistrationEmitter
         return (sb.ToString(), diagnostics.ToImmutable());
     }
 
-    private static string? GetSkipReason(string returnTypeFqn)
+    private static string? GetSkipReason(FeatureModel feature)
     {
         // Skip IResult-based returns (ASP.NET-specific)
-        return returnTypeFqn == "global::Microsoft.AspNetCore.Http.IResult"
-            || returnTypeFqn.Contains("IResult")
+        return feature.ReturnsAspNetResult
             ? "IResult is ASP.NET-specific"
             : null;
     }
@@ -529,7 +528,39 @@ internal static class WorkersRegistrationEmitter
     }
 
     private static bool IsRouteParam(string name, string pattern)
-        => pattern.Contains($"{{{name}}}") || pattern.Contains($"{{{name}:");
+    {
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] != '{')
+            {
+                continue;
+            }
+
+            if (i + 1 < pattern.Length && pattern[i + 1] == '{')
+            {
+                i++;
+                continue;
+            }
+
+            var end = pattern.IndexOf('}', i + 1);
+            if (end < 0)
+            {
+                return false;
+            }
+
+            var token = pattern.Substring(i + 1, end - i - 1);
+            var colon = token.IndexOf(':');
+            var parameterName = colon >= 0 ? token.Substring(0, colon) : token;
+            if (string.Equals(parameterName, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            i = end;
+        }
+
+        return false;
+    }
 
     private static bool IsSimpleGenericTypeFqn(string fqn)
     {
@@ -543,25 +574,7 @@ internal static class WorkersRegistrationEmitter
         return s_simpleTypes.Contains(inner);
     }
 
-    private static string Str(string value)
-    {
-        var sb = new StringBuilder(value.Length + 2);
-        sb.Append('"');
-        foreach (var ch in value)
-        {
-            switch (ch)
-            {
-                case '\\': sb.Append(@"\\"); break;
-                case '"': sb.Append("\\\""); break;
-                case '\n': sb.Append(@"\n"); break;
-                case '\r': sb.Append(@"\r"); break;
-                case '\t': sb.Append(@"\t"); break;
-                default: sb.Append(ch); break;
-            }
-        }
-        sb.Append('"');
-        return sb.ToString();
-    }
+    private static string Str(string value) => CSharpLiteral.String(value);
 
     private static string ToSingleLineComment(string value)
         => value.Replace('\r', ' ').Replace('\n', ' ');
