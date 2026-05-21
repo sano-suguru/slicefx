@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Slice.SourceGenerator;
 
@@ -51,17 +52,25 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (c, _) =>
                 c.GetTypeByMetadataName("Slice.Workers.Routing.WorkerRouteTable") is not null);
 
+        var referencedModules = context.CompilationProvider
+            .Combine(context.AnalyzerConfigOptionsProvider)
+            .Select(static (pair, _) => FindReferencedSliceModules(pair.Left, pair.Right))
+            .WithTrackingName("SliceReferencedModules");
+
         context.RegisterSourceOutput(
-            validModels.Combine(assemblyName).Combine(hasAspNetRef).Combine(hasWorkersRef).Combine(context.CompilationProvider),
+            validModels.Combine(assemblyName)
+                .Combine(hasAspNetRef)
+                .Combine(hasWorkersRef)
+                .Combine(referencedModules)
+                .Combine(context.CompilationProvider)
+                .Combine(context.AnalyzerConfigOptionsProvider),
             static (spc, pair) =>
             {
-                var ((((models, asmName), emitAspNet), emitWorkers), compilation) = pair;
-                if (models.IsEmpty)
-                {
-                    return;
-                }
+                var ((((((models, asmName), emitAspNet), emitWorkers), referencedModules), compilation), options) = pair;
+                var generationRole = GetGenerationRole(compilation, options);
+                var emitExtensions = generationRole is SliceGenerationRole.Host or SliceGenerationRole.Both;
 
-                var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models);
+                var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
                 foreach (var diagnostic in duplicateDiagnostics)
                 {
                     spc.ReportDiagnostic(diagnostic);
@@ -79,7 +88,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
                 if (emitAspNet)
                 {
-                    var source = RegistrationEmitter.Emit(models, asmName);
+                    var source = RegistrationEmitter.Emit(models, asmName, referencedModules, emitExtensions);
                     spc.AddSource(
                         $"{asmName}.SliceRegistrations.g.cs",
                         Microsoft.CodeAnalysis.Text.SourceText.From(source, Encoding.UTF8));
@@ -91,7 +100,12 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 }
 
                 var workersJsonContextFqn = FindWorkersJsonContext(models, compilation);
-                var (workersSource, workersDiagnostics) = WorkersRegistrationEmitter.Emit(models, asmName, workersJsonContextFqn);
+                var (workersSource, workersDiagnostics) = WorkersRegistrationEmitter.Emit(
+                    models,
+                    asmName,
+                    workersJsonContextFqn,
+                    referencedModules,
+                    emitExtensions);
                 foreach (var d in workersDiagnostics)
                 {
                     spc.ReportDiagnostic(d);
@@ -102,6 +116,163 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     Microsoft.CodeAnalysis.Text.SourceText.From(workersSource, Encoding.UTF8));
             });
     }
+
+    private static SliceGenerationRole GetGenerationRole(
+        Compilation compilation,
+        AnalyzerConfigOptionsProvider options)
+    {
+        if (options.GlobalOptions.TryGetValue("build_property.SliceRole", out var role))
+        {
+            if (string.Equals(role, "Host", StringComparison.OrdinalIgnoreCase))
+            {
+                return SliceGenerationRole.Host;
+            }
+
+            if (string.Equals(role, "Feature", StringComparison.OrdinalIgnoreCase))
+            {
+                return SliceGenerationRole.Feature;
+            }
+
+            if (string.Equals(role, "Both", StringComparison.OrdinalIgnoreCase))
+            {
+                return SliceGenerationRole.Both;
+            }
+        }
+
+        return compilation.Options.OutputKind == OutputKind.DynamicallyLinkedLibrary
+            ? SliceGenerationRole.Feature
+            : SliceGenerationRole.Host;
+    }
+
+    private static ImmutableArray<ReferencedSliceModule> FindReferencedSliceModules(
+        Compilation compilation,
+        AnalyzerConfigOptionsProvider options)
+    {
+        var allowedAssemblies = GetReferencedAssemblyAllowList(options);
+        if (allowedAssemblies.Count == 0 && !ShouldAggregateReferences(options))
+        {
+            return [];
+        }
+
+        var moduleAttribute = compilation.GetTypeByMetadataName("Slice.SliceFeatureModuleAttribute");
+        if (moduleAttribute is null)
+        {
+            return [];
+        }
+
+        var builder = ImmutableArray.CreateBuilder<ReferencedSliceModule>();
+        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols
+                     .OrderBy(static a => a.Identity.Name, StringComparer.Ordinal))
+        {
+            if (allowedAssemblies.Count > 0 && !allowedAssemblies.Contains(assembly.Identity.Name))
+            {
+                continue;
+            }
+
+            var routes = FindReferencedSliceRoutes(compilation, assembly);
+            foreach (var attribute in assembly.GetAttributes())
+            {
+                if (!IsAttribute(attribute.AttributeClass, moduleAttribute, "Slice.SliceFeatureModuleAttribute")
+                    || attribute.ConstructorArguments.Length != 1
+                    || attribute.ConstructorArguments[0].Value is not INamedTypeSymbol registrationType)
+                {
+                    continue;
+                }
+
+                var module = new ReferencedSliceModule(
+                    assembly.Identity.Name,
+                    registrationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    routes,
+                    HasPublicStaticMethod(registrationType, "AddSliceServices"),
+                    HasPublicStaticMethod(registrationType, "MapSliceRoutes"),
+                    HasPublicStaticMethod(registrationType, "AddSliceWorkerRoutes")
+                        && HasPublicStaticMethod(registrationType, "RegisterWorkerRoutes"));
+
+                builder.Add(module);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static HashSet<string> GetReferencedAssemblyAllowList(AnalyzerConfigOptionsProvider options)
+    {
+        var assemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!options.GlobalOptions.TryGetValue("build_property.SliceReferencedAssemblies", out var value)
+            || string.IsNullOrWhiteSpace(value))
+        {
+            return assemblies;
+        }
+
+        foreach (var part in value.Split([',', ';']))
+        {
+            var assemblyName = part.Trim();
+            if (assemblyName.Length > 0)
+            {
+                assemblies.Add(assemblyName);
+            }
+        }
+
+        return assemblies;
+    }
+
+    private static bool ShouldAggregateReferences(AnalyzerConfigOptionsProvider options)
+    {
+        if (!options.GlobalOptions.TryGetValue("build_property.SliceAggregateReferences", out var value)
+            || string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(value, "no", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ImmutableArray<ReferencedSliceRoute> FindReferencedSliceRoutes(
+        Compilation compilation,
+        IAssemblySymbol assembly)
+    {
+        var routeAttribute = compilation.GetTypeByMetadataName("Slice.SliceFeatureRouteAttribute");
+        if (routeAttribute is null)
+        {
+            return [];
+        }
+
+        var builder = ImmutableArray.CreateBuilder<ReferencedSliceRoute>();
+        foreach (var attribute in assembly.GetAttributes())
+        {
+            if (!IsAttribute(attribute.AttributeClass, routeAttribute, "Slice.SliceFeatureRouteAttribute")
+                || attribute.ConstructorArguments.Length != 4
+                || attribute.ConstructorArguments[0].Value is not string endpointName
+                || attribute.ConstructorArguments[1].Value is not string featureType
+                || attribute.ConstructorArguments[2].Value is not string httpMethod
+                || attribute.ConstructorArguments[3].Value is not string pattern)
+            {
+                continue;
+            }
+
+            builder.Add(new ReferencedSliceRoute(
+                assembly.Identity.Name,
+                endpointName,
+                featureType,
+                httpMethod,
+                pattern));
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static bool IsAttribute(
+        INamedTypeSymbol? candidate,
+        INamedTypeSymbol expected,
+        string metadataName)
+        => SymbolEqualityComparer.Default.Equals(candidate, expected)
+           || string.Equals(candidate?.ToDisplayString(), metadataName, StringComparison.Ordinal);
+
+    private static bool HasPublicStaticMethod(INamedTypeSymbol type, string methodName)
+        => type.GetMembers(methodName).OfType<IMethodSymbol>().Any(static method =>
+            method.DeclaredAccessibility == Accessibility.Public && method.IsStatic);
 
     // ---------------------------------------------------------------------------
     // Transform
@@ -515,9 +686,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return "Default";
     }
 
-    private static ImmutableArray<Diagnostic> FindDuplicateEndpointNameDiagnostics(ImmutableArray<FeatureModel> models)
+    private static ImmutableArray<Diagnostic> FindDuplicateEndpointNameDiagnostics(
+        ImmutableArray<FeatureModel> models,
+        ImmutableArray<ReferencedSliceModule> referencedModules)
     {
-        var seen = new Dictionary<string, FeatureModel>(StringComparer.Ordinal);
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
         foreach (var model in models)
@@ -528,12 +701,34 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     SliceDiagnostics.DuplicateEndpointName,
                     location: null,
                     model.EndpointName,
-                    existing.FullyQualifiedTypeName,
+                    existing,
                     model.FullyQualifiedTypeName));
                 continue;
             }
 
-            seen.Add(model.EndpointName, model);
+            seen.Add(model.EndpointName, model.FullyQualifiedTypeName);
+        }
+
+        foreach (var route in referencedModules
+                     .SelectMany(static module => module.Routes)
+                     .Distinct()
+                     .OrderBy(static route => route.AssemblyName, StringComparer.Ordinal)
+                     .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)
+                     .ThenBy(static route => route.FeatureType, StringComparer.Ordinal))
+        {
+            var routeIdentity = $"{route.FeatureType} ({route.AssemblyName})";
+            if (seen.TryGetValue(route.EndpointName, out var existing))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    SliceDiagnostics.DuplicateEndpointName,
+                    location: null,
+                    route.EndpointName,
+                    existing,
+                    routeIdentity));
+                continue;
+            }
+
+            seen.Add(route.EndpointName, routeIdentity);
         }
 
         return diagnostics.ToImmutable();

@@ -1,0 +1,7 @@
+<Project>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="SliceRole" />
+    <CompilerVisibleProperty Include="SliceAggregateReferences" />
+    <CompilerVisibleProperty Include="SliceReferencedAssemblies" />
+  </ItemGroup>
+</Project>

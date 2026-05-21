@@ -2,7 +2,7 @@
 
 > Minimal API with feature files and generated contracts — not a replacement framework.
 
-Website: <https://sugu-sano.github.io/Slice/>
+Website: <https://sano-suguru.github.io/slice/>
 
 Slice is an experimental .NET web framework built on ASP.NET Core Minimal APIs. Author each endpoint as one explicit feature file, keep the standard ASP.NET Core programming model, and let Slice generate registrations, route metadata, compatibility reports, and typed clients around that shape.
 
@@ -40,8 +40,8 @@ Packages are split so optional dependencies stay out of `Slice.Core`:
 
 | Package | Purpose |
 | --- | --- |
-| `Slice` | Core runtime: `[Feature]`, `[Filter<T>]`, validation filters, and runtime fallback registration. |
-| `Slice.SourceGenerator` | AOT-friendly generated registrations for Slice features. |
+| `Slice` | Core runtime: `[Feature]`, `[Filter<T>]`, validation attributes, and endpoint filters. |
+| `Slice.SourceGenerator` | Required AOT-friendly generated registrations for Slice features. |
 | `Slice.Lambda` | AWS Lambda hosting adapter. |
 | `Slice.TestHost` | In-process test host helpers. |
 | `Slice.Workers` | ASP.NET-independent Workers/WASI adapter. |
@@ -53,8 +53,8 @@ Packages are split so optional dependencies stay out of `Slice.Core`:
 - **Explicit over magic.** Routes are declared in `[Feature("METHOD /path")]`; file and namespace conventions help tooling, but they do not hide the HTTP contract.
 - **Static handlers.** Every `Handle` method is `static`. Dependencies come in as parameters. No instance state, no DI on the type itself, no reflection on the hot path after startup.
 - **Zero new abstractions.** Slice doesn't invent `IPipelineBehavior<TReq, TRes>` or `IMediator` — it leans on ASP.NET Core's existing `IEndpointFilter`. Less to learn, less to maintain.
-- **Declarative everything.** `[Feature]`, `[Filter<T>]`. The source generator or runtime fallback reads these and registers Minimal API endpoints, validation, and filter chains automatically.
-- **AOT-ready structure.** Handlers are static and receive a strongly-typed delegate. The generated path avoids startup reflection; the runtime fallback keeps the same API shape for non-AOT scenarios.
+- **Declarative everything.** `[Feature]`, `[Filter<T>]`. The source generator reads these and registers Minimal API endpoints, validation, and filter chains automatically.
+- **AOT-ready structure.** Handlers are static and receive a strongly-typed delegate. Generated registrations avoid startup reflection and are the only registration path.
 - **Zero runtime framework dependencies.** Slice.Core has only one reference: `Microsoft.AspNetCore.App`. No FluentValidation, no MediatR, no AutoMapper. Roslyn dependencies are isolated to `Slice.SourceGenerator`.
 - **Convention-first, not convention-only.** Feature files live naturally under `Features/<Group>`, and generated metadata should support tooling and deployment, but the public authoring model stays explicit and .NET-native.
 - **Portable where practical.** ASP.NET Minimal API remains the main runtime. Workers/serverless paths reuse the same feature shape when the return type and dependencies are portable.
@@ -72,13 +72,11 @@ For the current product direction, see [docs/product-direction.md](docs/product-
 
 ```csharp
 // Program.cs — AOT-friendly generated bootstrap
-using Slice.Generated;
-
 var builder = WebApplication.CreateSlimBuilder(args);
-builder.Services.AddSliceGenerated();
+builder.Services.AddSlice();
 builder.Services.AddSingleton<IUserStore, InMemoryUserStore>();
 var app = builder.Build();
-app.MapSlicesGenerated();   // generated registrations for every [Feature]
+app.MapSlices();   // generated registrations for every [Feature]
 app.Run();
 ```
 
@@ -128,7 +126,7 @@ public static class DeleteUser
 }
 ```
 
-Filters are just `IEndpointFilter` implementations — no special interface. `AddSliceGenerated()` or `AddSlice()` auto-registers them in DI, and `[Filter<T>]` applies them in declaration order (outermost wraps innermost).
+Filters are just `IEndpointFilter` implementations — no special interface. `AddSlice()` auto-registers them in DI, and `[Filter<T>]` applies them in declaration order (outermost wraps innermost).
 
 ```csharp
 public sealed class RequireApiKeyFilter : IEndpointFilter
@@ -189,7 +187,7 @@ builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidat
 | Feature | Status |
 | --- | --- |
 | `[Feature("METHOD /path")]` declarative routing | ✅ |
-| Runtime assembly-scan fallback | ✅ |
+| Source-generated `AddSlice()` / `MapSlices()` registrations | ✅ |
 | Static handlers with auto-binding (body / route / query / DI / `CancellationToken`) | ✅ |
 | `[Filter<T>]` per-feature endpoint filters | ✅ |
 | DataAnnotations validation, including positional records and model-level validation | ✅ |
@@ -206,17 +204,17 @@ builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidat
 
 ## Source generator, adapters, and roadmap
 
-Slice keeps `Slice.Core` dependency-free, while `Slice.SourceGenerator` is a separate Roslyn analyzer/generator project. Consumers can choose between the reflection fallback (`AddSlice()` / `MapSlices()`) and generated registrations (`AddSliceGenerated()` / `MapSlicesGenerated()`).
+Slice keeps `Slice.Core` dependency-free, while `Slice.SourceGenerator` is a separate Roslyn analyzer/generator project. The source generator emits `AddSlice()` / `MapSlices()` — the single registration path, AOT-friendly by design.
 
 ### Source Generator for full AOT
 
 **Status:** implemented experimentally in `src/Slice.SourceGenerator` and referenced by the sample as an analyzer.
 
-Slice's startup reflection only does mechanical setup — scan for `[Feature]` attributes, build typed delegates, and attach filters/metadata. The generator replaces that with emitted registrations:
+The generator emits one explicit registration per `[Feature]` class. Feature assemblies expose generated module helpers, and the host assembly emits the user-facing `AddSlice()` / `MapSlices()` extensions that aggregate its own features plus referenced Slice feature assemblies.
 
 ```csharp
 // Simplified generated shape: SliceRegistrations.g.cs
-public static IEndpointRouteBuilder MapSlicesGenerated(this IEndpointRouteBuilder app)
+public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
 {
     app.MapMethods(
             "/users",
@@ -243,9 +241,23 @@ public static IEndpointRouteBuilder MapSlicesGenerated(this IEndpointRouteBuilde
 
 Result: zero reflection at startup, trimmer/AOT happy, near-zero cold start.
 
-For compatibility, `AddSlice()` / `MapSlices()` still exist as the runtime-discovery fallback. For AOT/trimming, import `Slice.Generated` and call the generated methods directly.
+The source generator also emits a route metadata manifest for tooling and deployment experiments, including empty manifests for projects that do not define features yet. The manifest contains method, pattern, feature type, tag, endpoint name, summary, request type, return type, filters, and Workers compatibility. It is intentionally string-based so it can be consumed without adding dependencies to `Slice.Core`.
 
-The source generator also emits a route metadata manifest for tooling and deployment experiments. The manifest contains method, pattern, feature type, tag, endpoint name, summary, request type, return type, filters, and Workers compatibility. It is intentionally string-based so it can be consumed without adding dependencies to `Slice.Core`.
+For multi-assembly apps, reference `Slice.SourceGenerator` from each feature assembly and from the host. Class library projects default to generated module helpers only; executable hosts default to the public extension surface and aggregate directly referenced Slice modules. Set the MSBuild property `SliceRole` to `Host`, `Feature`, or `Both` only when you need to override that default.
+
+Hosts can control referenced module aggregation with MSBuild properties:
+
+```xml
+<PropertyGroup>
+  <!-- Default: true. Set false to map only features compiled into this project. -->
+  <SliceAggregateReferences>false</SliceAggregateReferences>
+
+  <!-- Optional allow-list. When set, only these referenced assembly names are aggregated. -->
+  <SliceReferencedAssemblies>FeatureLib;SharedSlices</SliceReferencedAssemblies>
+</PropertyGroup>
+```
+
+The generator validates endpoint-name uniqueness across local features and aggregated referenced modules before emitting host registrations.
 
 ### AWS Lambda adapter
 
@@ -254,17 +266,16 @@ The source generator also emits a route metadata manifest for tooling and deploy
 `Slice.Lambda` is a thin adapter over `Amazon.Lambda.AspNetCoreServer.Hosting`. `UseSliceLambda()` delegates to `AddAWSLambdaHosting()`, whose hosting package detects the Lambda environment; locally, the same binary runs on Kestrel.
 
 ```csharp
-using Slice.Generated;
 using Slice.Lambda;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
-builder.Services.AddSliceGenerated();
+builder.Services.AddSlice();
 builder.UseSliceLambda();
 
 var app = builder.Build();
 
-app.MapSlicesGenerated();
+app.MapSlices();
 
 await app.RunOnLambdaAsync();
 ```
@@ -281,14 +292,13 @@ Portable Workers features should return `WorkerResponse`, `SliceResult`, a POCO,
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
-using Slice.Generated;
 using Slice.Workers;
 using Slice.WorkersSample.Services;
 
 var builder = WorkerHost.CreateBuilder();
 
 // Source-generated route registration — no manual wiring needed.
-builder.AddSliceGenerated();
+builder.AddSlice();
 
 builder.Services.AddSingleton(TimeProvider.System);
 

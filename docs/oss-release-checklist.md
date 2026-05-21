@@ -23,8 +23,8 @@ This checklist is for deciding whether the repository is ready for a preview rel
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
 - [ ] Review public API names before the first package push.
-  - Core runtime: `[Feature]`, `[Filter<T>]`, `AddSlice`, `MapSlices`, validation types.
-  - Generated API: `AddSliceGenerated`, `MapSlicesGenerated`, route manifest, Workers registrations.
+  - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`DataAnnotationsValidationFilter`, `ISliceValidator<T>`, `SliceValidatorFilter<T>`).
+  - Generated API (emitted by `Slice.SourceGenerator`): `AddSlice`, `MapSlices`, route manifest (`GetSliceRoutesGenerated`), cross-assembly module helpers, Workers registrations (`AddSlice(WorkerHostBuilder)`, `RegisterWorkerRoutes`).
   - Workers API: `WorkerHost`, `WorkerApp`, `WorkerRequest`, `WorkerResponse`, `SliceResult`, `WorkerRouteTable`.
   - CLI API: `slice new feature`, `slice new filter`, `slice routes`, `slice client csharp`.
 - [ ] Align docs and samples with the preview scope.

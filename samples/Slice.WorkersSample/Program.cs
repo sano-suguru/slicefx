@@ -1,11 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
-using Slice.Generated;
 using Slice.Workers;
 
 var builder = WorkerHost.CreateBuilder();
 
 // Registers all [Feature] routes via the source generator.
-builder.AddSliceGenerated();
+builder.AddSlice();
 
 // Register application services.
 builder.Services.AddSingleton(TimeProvider.System);

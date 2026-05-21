@@ -49,7 +49,7 @@ These ideas are useful deployment references, but function-per-feature output re
 
 ## Generated route metadata
 
-The generated route manifest is the shared metadata seam for Hono/Vercel-inspired tooling. It is emitted into `Slice.Generated` by the source generator and contains:
+The generated route manifest is the shared metadata seam for Hono/Vercel-inspired tooling. It is emitted into the `Slice` namespace by the source generator and contains:
 
 - HTTP method and route pattern.
 - Feature type, inferred tag, endpoint name, and summary.

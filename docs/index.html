@@ -227,7 +227,7 @@
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
                             <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Source Generator実装済み</span><span class="lang-en">Source generator included</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja"><code>AddSliceGenerated()</code> と <code>MapSlicesGenerated()</code> で起動時のスキャンを生成コードに置き換えます。</span><span class="lang-en"><code>AddSliceGenerated()</code> and <code>MapSlicesGenerated()</code> replace startup scanning with generated registrations.</span></p>
+                            <p class="text-slate-400"><span class="lang-ja"><code>AddSlice()</code> と <code>MapSlices()</code> はソースジェネレータが生成する唯一の登録経路で、起動時のリフレクションをゼロにします。</span><span class="lang-en"><code>AddSlice()</code> and <code>MapSlices()</code> are emitted by the source generator — the single registration path, with zero startup reflection.</span></p>
                         </div>
                     </div>
                     <div class="flex gap-4">
@@ -250,7 +250,7 @@
                     <h3 class="text-xl font-bold mb-6 border-b border-slate-700 pb-4"><span class="lang-ja">機能一覧</span><span class="lang-en">Feature checklist</span></h3>
                     <ul class="space-y-4 text-slate-300">
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><code>[Feature("METHOD /path")]</code> declarative routing</span></li>
-                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>Generated and runtime fallback registrations</span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>Source-generated registrations</span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>Static handlers with Minimal API binding</span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><code>[Filter&lt;T&gt;]</code> endpoint filters</span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span>DataAnnotations and <code>ISliceValidator&lt;T&gt;</code></span></li>
@@ -303,16 +303,14 @@ public static class CreateUser
                     <div class="text-xs font-mono text-slate-400 ml-4">Program.cs</div>
                 </div>
                 <div class="p-6 overflow-x-auto bg-[#282c34]">
-<pre><code class="language-csharp">using Slice.Generated;
+<pre><code class="language-csharp">var builder = WebApplication.CreateSlimBuilder(args);
 
-var builder = WebApplication.CreateSlimBuilder(args);
-
-builder.Services.AddSliceGenerated();
+builder.Services.AddSlice();
 builder.Services.AddSingleton&lt;IUserStore, InMemoryUserStore&gt;();
 
 var app = builder.Build();
 
-app.MapSlicesGenerated();
+app.MapSlices();
 
 app.Run();</code></pre>
                 </div>
@@ -338,7 +336,7 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
                     <p class="text-slate-400"><span class="lang-ja">ホスティングやテスト用の依存関係はサテライトパッケージに分離しています。</span><span class="lang-en">Hosting and testing dependencies stay in satellite packages.</span></p>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-6">
-                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice</h3><p class="text-sm text-slate-400">Core runtime: attributes, validation filters, and runtime fallback.</p></div>
+                    <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice</h3><p class="text-sm text-slate-400">Core runtime: attributes, validation filters, and endpoint filters.</p></div>
                     <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.SourceGenerator</h3><p class="text-sm text-slate-400">AOT-friendly generated registrations for feature routes.</p></div>
                     <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Lambda</h3><p class="text-sm text-slate-400">AWS Lambda hosting integration over ASP.NET Core.</p></div>
                     <div class="glass-panel p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Workers</h3><p class="text-sm text-slate-400">ASP.NET-independent dispatch for Workers and WASI experiments.</p></div>

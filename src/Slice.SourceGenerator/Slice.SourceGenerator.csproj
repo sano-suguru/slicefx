@@ -27,6 +27,10 @@
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
           Visible="false" />
+    <None Include="buildTransitive\Slice.SourceGenerator.props"
+          Pack="true"
+          PackagePath="buildTransitive\$(PackageId).props"
+          Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

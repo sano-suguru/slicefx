@@ -20,6 +20,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Slice" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Slice.Core\Slice.Core.csproj" />
     <ProjectReference Include="..\..\src\Slice.Workers\Slice.Workers.csproj" />
     <ProjectReference Include="..\..\src\Slice.SourceGenerator\Slice.SourceGenerator.csproj"
