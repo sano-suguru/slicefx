@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Slice is an experimental .NET web framework built on ASP.NET Core Minimal API that makes Vertical Slice Architecture the primary unit: **1 file = 1 feature = 1 deploy unit**. The runtime framework lives in `src/Slice.Core/`; the optional Roslyn source generator lives in `src/Slice.SourceGenerator/`. `samples/Slice.Sample/` is the reference for how user code should look.
 
-This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI (`.github/workflows/ci.yml`) runs restore, Release build, tests, package verification, a `dotnet format --verify-no-changes --severity info` gate, and a guard that fails if `Slice.Core` gains a `<PackageReference>`. A second workflow (`pages.yml`) publishes `docs/` to GitHub Pages. Targets **.NET 10** (`Directory.Build.props` pins `<TargetFramework>net10.0</TargetFramework>` with `LangVersion=latest`; the source generator stays on `netstandard2.0` as Roslyn requires). SDK pinned via `global.json` to `10.0.100` (`rollForward: latestFeature`).
+This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda, fluent validation, Workers, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. CI (`.github/workflows/ci.yml`) runs restore, Release build, tests, package verification, a `dotnet format --verify-no-changes --severity info` gate, and a guard that fails if `Slice.Core` gains a `<PackageReference>`. A second workflow (`pages.yml`) publishes `docs/` to GitHub Pages. Targets **.NET 10** (`Directory.Build.props` pins `<TargetFramework>net10.0</TargetFramework>` with `LangVersion=latest`; the source generator stays on `netstandard2.0` as Roslyn requires). SDK pinned via `global.json` to `10.0.300` (`rollForward: latestFeature`).
 
 ## Commands
 
@@ -20,7 +20,7 @@ dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release  # produces .
 dotnet format                                     # canonical formatter (no config file)
 ```
 
-There is a focused xUnit project under `tests/Slice.Core.Tests`. Also smoke-test the main sample when behavior changes (app must be running):
+xUnit tests live under `tests/`: `Slice.Core.Tests`, `Slice.SourceGenerator.Tests`, `Slice.Workers.Tests`, and `Slice.Cli.Tests`. CI runs `dotnet test Slice.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test Slice.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
 
 ```bash
 curl http://localhost:5099/health
@@ -184,7 +184,7 @@ The source generator emits up to three files per assembly: `{AsmName}_SliceRegis
 
 ```
 Slice.slnx
-global.json               # SDK pin 10.0.100 (rollForward: latestFeature)
+global.json               # SDK pin 10.0.300 (rollForward: latestFeature)
 Directory.Build.props     # net10.0 TFM, LangVersion=latest, TreatWarningsAsErrors, EnforceCodeStyleInBuild
 Directory.Build.targets   # ValidateSliceCorePackageReferences guard (zero-dep enforcement)
 .editorconfig             # file-scoped namespaces; CI enforces via dotnet format
@@ -196,6 +196,8 @@ src/Slice.TestHost/       # in-process test host wrapper over Microsoft.AspNetCo
 src/Slice.Workers/        # Cloudflare Workers / WASI adapter (ASP.NET-independent)
                           # WorkerHost, WorkerApp, WorkerRouteTable, SliceResult
 tools/Slice.Cli/          # .NET tool: slice new feature|filter, slice routes, slice client csharp
+tests/                    # xUnit: Slice.Core.Tests, Slice.SourceGenerator.Tests,
+                          # Slice.Workers.Tests, Slice.Cli.Tests
 docs/                     # published to GitHub Pages via .github/workflows/pages.yml
 README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, LICENSE
 samples/Slice.Sample/
