@@ -129,14 +129,18 @@ Near-term Workers work should focus on better manifest-driven compatibility repo
 
 ## Deployment direction
 
-The near-term Vercel-like target is full-app deployment with generated route metadata. Function-per-feature output remains a design goal, but it should be built on top of a stable manifest rather than a new authoring model.
+`slice manifest aws-lambda` (CLI) generates an AWS SAM `template.yaml` with one `AWS::Serverless::Function` per `[Feature]`, using the source-generated route manifest. This is the Phase 1 "function-per-feature" story for Lambda: same binary, separate Lambda functions with independent routing, timeout, and memory configuration. ASP.NET route constraints are automatically stripped for API Gateway. The default runtime is `provided.al2023` (NativeAOT / self-contained, handler `bootstrap`).
 
-This keeps today's ASP.NET and Lambda behavior intact while creating a path for future build tooling to split slices into finer deployment units.
+Phase 2 (separate Lambda handler classes per feature, emitted by the source generator into a new `Slice.Lambda.PerFunction` satellite) remains a design goal, building on the stable manifest. Phase 3 (separate NativeAOT binaries per feature for smaller cold-start footprint) is long-term.
+
+Cloudflare Workers function-per-feature deployment (one WASM component per feature) requires per-feature NativeAOT compilation and is blocked on `componentize-dotnet` multi-component build support. The current Slice.Workers model (one WASM component, all routes dispatched in-process) is the practical deployment target until that tooling matures.
+
+Even when the build tooling matures, the benefit of per-feature Workers deployment is less clear than for Lambda: Cloudflare Workers are edge functions with negligible cold-start latency, no per-function memory or timeout configuration, and no per-route scaling or billing isolation. The main remaining benefit would be independent deployment per feature (deploying one route without affecting others). That benefit alone may not justify the build complexity unless `componentize-dotnet` makes per-feature compilation straightforward.
 
 ## Next implementation direction
 
-1. Continue converging CLI route discovery on the source-generated route manifest.
+1. ~~Continue converging CLI route discovery on the source-generated route manifest.~~ ✅ Done.
 2. Extend typed client generation from C# first to TypeScript once the route metadata is rich enough.
 3. Add manifest-driven deployment checks where they provide clear feedback.
 4. Keep Workers/fetch-style dispatch focused on `WorkerRequest` -> `WorkerResponse`.
-5. Revisit function-per-feature build output after the manifest shape is stable.
+5. ~~Revisit function-per-feature build output after the manifest shape is stable.~~ ✅ Done (Lambda Phase 1: `slice manifest aws-lambda`). Lambda Phase 2 (source-generated per-feature handlers) is the next step.

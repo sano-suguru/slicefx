@@ -1,5 +1,13 @@
 {
   "version": 1,
   "isRoot": true,
-  "tools": {}
+  "tools": {
+    "slice.cli": {
+      "version": "0.1.0-preview.1",
+      "commands": [
+        "slice"
+      ],
+      "rollForward": false
+    }
+  }
 }

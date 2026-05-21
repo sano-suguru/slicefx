@@ -229,6 +229,7 @@ builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidat
 | CLI scaffolding (`slice new feature User`) | ✅ experimental |
 | Generated route metadata manifest | ✅ experimental |
 | Typed C# client generation (`slice client csharp`) | ✅ experimental |
+| AWS SAM template generation (`slice manifest aws-lambda`) | ✅ experimental |
 
 ## Source generator, adapters, and roadmap
 
@@ -384,11 +385,14 @@ slice new filter RequireApiKeyFilter
 slice routes
 slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
+slice manifest aws-lambda --output template.yaml
 ```
 
 `slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. Generated templates return a nested `Response` record by default; `POST`, `PUT`, and `PATCH` templates also include an empty `Request`.
 
 `slice routes` first reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs` source files. The command reports whether each slice is `portable`, `partial`, or `aspnet-only` for Workers-style dispatch, and `--format json` exports the same route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
+
+`slice manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml` with one `AWS::Serverless::Function` per `[Feature]`. All features are included — `aspnet-only` routes work correctly with `Slice.Lambda`'s ASP.NET Core hosting. ASP.NET route constraints (`{id:guid}`) are automatically stripped to API Gateway syntax (`{id}`). The default runtime is `provided.al2023` (NativeAOT / self-contained), which uses `bootstrap` as the handler. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes. Use `--memory` and `--timeout` to set defaults; individual functions can be further customized in the generated template.
 
 `Features/<Group>/<Feature>.cs` is the recommended and scaffolded project shape, not a compiler-enforced file-system routing rule. The generator discovers `[Feature]` classes, so explicit attributes remain the source of truth.
 

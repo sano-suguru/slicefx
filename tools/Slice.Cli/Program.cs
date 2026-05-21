@@ -12,10 +12,16 @@ var clientCmd = new Command("client", "Generate typed clients from Slice feature
     GenerateCSharpClientCommand.Build()
 };
 
+var manifestCmd = new Command("manifest", "Generate deployment manifests from Slice feature routes.")
+{
+    ManifestAwsLambdaCommand.Build()
+};
+
 var root = new RootCommand("Slice CLI — vertical slice scaffolding.")
 {
     newCmd,
     clientCmd,
+    manifestCmd,
     ListRoutesCommand.Build()
 };
 

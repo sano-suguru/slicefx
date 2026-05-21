@@ -219,6 +219,314 @@ public class CliFixtureTests
         Assert.DoesNotContain("GetFromJsonAsync<System.Threading.Tasks.Task", client);
     }
 
+    [Fact]
+    public async Task Manifest_aws_lambda_generates_sam_template_with_one_function_per_feature()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-manifest-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Manifest.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Users/CreateUser.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace Lambda.Manifest.App.Features.Users;
+
+            [Feature("POST /users", Summary = "Create user")]
+            public static class CreateUser
+            {
+                public record Request(string Name);
+                public record Response(int Id);
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1));
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Users/GetUser.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace Lambda.Manifest.App.Features.Users;
+
+            [Feature("GET /users/{id:guid}")]
+            public static class GetUser
+            {
+                public record Response(System.Guid Id);
+                public static Task<Response> Handle(System.Guid id, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var yaml = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("AWS::Serverless-2016-10-31", yaml);
+        Assert.Contains("SliceApi:", yaml);
+        Assert.Contains("UsersCreateUserFunction:", yaml);
+        Assert.Contains("UsersGetUserFunction:", yaml);
+        Assert.Contains("Method: 'POST'", yaml);
+        Assert.Contains("Method: 'GET'", yaml);
+        Assert.Contains("Path: '/users'", yaml);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_strips_route_constraints_for_api_gateway()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-constraints-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Constraints.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using Slice;
+
+            namespace Lambda.Constraints.App.Features.Items;
+
+            [Feature("GET /items/{id:int}")]
+            public static class GetItem
+            {
+                public static int Handle(int id) => id;
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var yaml = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("Path: '/items/{id}'", yaml);
+        Assert.DoesNotContain("Path: '/items/{id:int}'", yaml);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_uses_bootstrap_handler_for_provided_runtime()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-runtime-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Runtime.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Health/GetHealth.cs",
+            """
+            using Slice;
+
+            namespace Lambda.Runtime.App.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var nativeAotOutput = Path.Combine(fixture.Directory.FullName, "template-native.yaml");
+        var managedOutput = Path.Combine(fixture.Directory.FullName, "template-managed.yaml");
+
+        await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", nativeAotOutput, "--runtime", "provided.al2023"])
+            .InvokeAsync();
+        await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", managedOutput, "--runtime", "dotnet8"])
+            .InvokeAsync();
+
+        var nativeYaml = await File.ReadAllTextAsync(nativeAotOutput);
+        var managedYaml = await File.ReadAllTextAsync(managedOutput);
+
+        Assert.Contains("Handler: 'bootstrap'", nativeYaml);
+        Assert.Contains("Handler: 'lambda-runtime-app::Amazon.Lambda.AspNetCoreServer.Hosting.LambdaRuntimeSupportServer::Run'", managedYaml);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_converts_catch_all_segments_to_api_gateway_syntax()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-catchall-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Catchall.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Files/GetFile.cs",
+            """
+            using Slice;
+
+            namespace Lambda.Catchall.App.Features.Files;
+
+            [Feature("GET /files/{**path}")]
+            public static class GetFile
+            {
+                public static string Handle(string path) => path;
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var yaml = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("Path: '/files/{path+}'", yaml);
+        Assert.DoesNotContain("Path: '/files/{**path}'", yaml);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_force_overwrites_existing_output_file()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-force-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Force.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Health/GetHealth.cs",
+            """
+            using Slice;
+
+            namespace Lambda.Force.App.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
+
+        // First run succeeds.
+        var firstExit = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+        Assert.Equal(0, firstExit);
+
+        // Second run without --force fails.
+        var noForceExit = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+        Assert.Equal(1, noForceExit);
+
+        // Third run with --force succeeds.
+        var forceExit = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, forceExit);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_creates_output_directory_if_not_exists()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-mkdir-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Mkdir.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Health/GetHealth.cs",
+            """
+            using Slice;
+
+            namespace Lambda.Mkdir.App.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "deploy", "infra", "template.yaml");
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(outputFile));
+    }
+
     private static string FindRepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
