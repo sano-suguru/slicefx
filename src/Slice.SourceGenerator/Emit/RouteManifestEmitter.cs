@@ -123,6 +123,11 @@ internal static class RouteManifestEmitter
             return ("aspnet-only", "returns ASP.NET IResult");
         }
 
+        if (feature.RequiresReflectionValidation)
+        {
+            return ("partial", "DataAnnotations validation requires reflection in Workers");
+        }
+
         foreach (var filter in feature.GetFilterFqns())
         {
             if (!IsSliceValidatorFilter(filter))

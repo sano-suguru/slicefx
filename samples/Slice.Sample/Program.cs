@@ -8,6 +8,6 @@ builder.Services.AddSingleton<IUserStore, InMemoryUserStore>();
 
 var app = builder.Build();
 
-app.MapSlices(); // <-- ここで全Featureが自動登録される
+app.MapSlices(); // <-- Registers all features automatically
 
 app.Run();

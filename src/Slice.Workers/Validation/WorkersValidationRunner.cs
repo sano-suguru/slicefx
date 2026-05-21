@@ -167,17 +167,5 @@ public static class WorkersValidationRunner
     }
 
     private static Func<object, object?> CreateGetter(PropertyInfo property)
-    {
-        var getMethod = property.GetMethod!;
-        var helper = typeof(WorkersValidationRunner)
-            .GetMethod(nameof(CreateGetterCore), BindingFlags.NonPublic | BindingFlags.Static)!
-            .MakeGenericMethod(getMethod.DeclaringType!, property.PropertyType);
-        return (Func<object, object?>)helper.Invoke(null, [getMethod])!;
-    }
-
-    private static Func<object, object?> CreateGetterCore<TDeclaring, TValue>(MethodInfo getMethod)
-    {
-        var getter = getMethod.CreateDelegate<Func<TDeclaring, TValue>>();
-        return instance => getter((TDeclaring)instance);
-    }
+        => instance => property.GetValue(instance);
 }

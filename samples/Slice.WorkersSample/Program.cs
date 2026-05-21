@@ -61,7 +61,7 @@ static void RunProbe(WorkerApp app, string route)
         throw new InvalidOperationException("Nested generic response probe failed.");
     }
 
-    Console.WriteLine("[probe] dispatching POST /validation-fallback (should use reflection fallback)");
+    Console.WriteLine("[probe] dispatching POST /validation-fallback (should use generated validation)");
     var fallbackBody = System.Text.Encoding.UTF8.GetBytes(/*lang=json,strict*/ """{"name":"","items":[1]}""");
     var fallbackResp = app.DispatchAsync(new WorkerRequest("POST", "/validation-fallback",
         new Dictionary<string, string> { ["Content-Type"] = "application/json" }, null, fallbackBody)).GetAwaiter().GetResult();
@@ -71,7 +71,7 @@ static void RunProbe(WorkerApp app, string route)
         || !fallbackResponseBody.Contains("Name is required by custom validation.", StringComparison.Ordinal)
         || !fallbackResponseBody.Contains("minimum length", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Validation fallback probe failed.");
+        throw new InvalidOperationException("Generated validation probe failed.");
     }
 
     Console.WriteLine("[probe] dispatching POST /array-min-length (should use generated array validation)");

@@ -588,7 +588,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
     private static string? TryCreateValidationRule(IPropertySymbol property, AttributeData attribute)
     {
-        if (HasCustomErrorMessage(attribute))
+        if (HasResourceErrorMessage(attribute))
         {
             return null;
         }
@@ -606,7 +606,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 }
             }
 
-            return $"{propertyName}|Required|{(allowEmptyStrings ? "true" : "false")}";
+            var message = GetErrorMessage(attribute) ?? $"The {propertyName} field is required.";
+            return $"{propertyName}|Required|{(allowEmptyStrings ? "true" : "false")}|{EncodeValidationMessage(message)}";
         }
 
         if (attributeName == "System.ComponentModel.DataAnnotations.StringLengthAttribute"
@@ -627,7 +628,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 }
             }
 
-            return $"{propertyName}|StringLength|{minimumLength}|{maximumLength}";
+            var message = GetErrorMessage(attribute)
+                ?? $"The field {propertyName} must be a string with a minimum length of {minimumLength} and a maximum length of {maximumLength}.";
+            return $"{propertyName}|StringLength|{minimumLength}|{maximumLength}|{EncodeValidationMessage(message)}";
         }
 
         if (attributeName == "System.ComponentModel.DataAnnotations.MinLengthAttribute"
@@ -640,7 +643,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 return null;
             }
 
-            return $"{propertyName}|MinLength|{length}|{lengthMember}";
+            var message = GetErrorMessage(attribute)
+                ?? $"The field {propertyName} must be a string or array type with a minimum length of '{length}'.";
+            return $"{propertyName}|MinLength|{length}|{lengthMember}|{EncodeValidationMessage(message)}";
         }
 
         return null;
@@ -672,11 +677,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return null;
     }
 
-    private static bool HasCustomErrorMessage(AttributeData attribute)
+    private static bool HasResourceErrorMessage(AttributeData attribute)
     {
         foreach (var namedArgument in attribute.NamedArguments)
         {
-            if (namedArgument.Key is "ErrorMessage" or "ErrorMessageResourceName" or "ErrorMessageResourceType")
+            if (namedArgument.Key is "ErrorMessageResourceName" or "ErrorMessageResourceType")
             {
                 return true;
             }
@@ -684,6 +689,22 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         return false;
     }
+
+    private static string? GetErrorMessage(AttributeData attribute)
+    {
+        foreach (var namedArgument in attribute.NamedArguments)
+        {
+            if (namedArgument.Key == "ErrorMessage" && namedArgument.Value.Value is string value)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string EncodeValidationMessage(string message)
+        => Convert.ToBase64String(Encoding.UTF8.GetBytes(message));
 
     private static DiagnosticLocationModel CreateDiagnosticLocation(Location? location)
     {

@@ -122,12 +122,24 @@ internal static class WorkersRegistrationEmitter
             var skipReason = GetSkipReason(f);
             if (skipReason is not null)
             {
-                diagnostics.Add(Diagnostic.Create(
-                    SliceDiagnostics.UnsupportedReturnTypeForWorkers,
-                    location: null,
-                    f.TypeName,
-                    f.ReturnTypeFqn));
-                sb.AppendLine($"        // SLICE008: {ToSingleLineComment(f.EndpointName)} — return type '{f.ReturnTypeFqn}' not supported in Workers; skipped.");
+                if (f.ReturnsAspNetResult)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        SliceDiagnostics.UnsupportedReturnTypeForWorkers,
+                        location: null,
+                        f.TypeName,
+                        f.ReturnTypeFqn));
+                    sb.AppendLine($"        // SLICE008: {ToSingleLineComment(f.EndpointName)} — return type '{f.ReturnTypeFqn}' not supported in Workers; skipped.");
+                }
+                else
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        SliceDiagnostics.UnsupportedValidationForWorkers,
+                        f.GetDiagnosticLocation(),
+                        f.TypeName));
+                    sb.AppendLine($"        // SLICE011: {ToSingleLineComment(f.EndpointName)} — {skipReason}; skipped.");
+                }
+
                 continue;
             }
 
@@ -153,10 +165,17 @@ internal static class WorkersRegistrationEmitter
 
     private static string? GetSkipReason(FeatureModel feature)
     {
-        // Skip IResult-based returns (ASP.NET-specific)
-        return feature.ReturnsAspNetResult
-            ? "IResult is ASP.NET-specific"
-            : null;
+        if (feature.ReturnsAspNetResult)
+        {
+            return "IResult is ASP.NET-specific";
+        }
+
+        if (feature.RequiresReflectionValidation)
+        {
+            return "DataAnnotations validation requires reflection";
+        }
+
+        return null;
     }
 
     private static void EmitTableAdd(StringBuilder sb, FeatureModel f, string? workersJsonContextFqn)
@@ -201,11 +220,6 @@ internal static class WorkersRegistrationEmitter
             if (ShouldUseGeneratedValidation(f))
             {
                 sb.AppendLine($"                    var __daErrors = {ValidationMethodName(f)}({bodyParam.Name});");
-                sb.AppendLine($"                    if (__daErrors is not null) return global::Slice.Workers.SliceResult.ValidationProblem(__daErrors);");
-            }
-            else if (f.RequiresReflectionValidation)
-            {
-                sb.AppendLine($"                    var __daErrors = global::Slice.Workers.Validation.WorkersValidationRunner.Validate({bodyParam.Name});");
                 sb.AppendLine($"                    if (__daErrors is not null) return global::Slice.Workers.SliceResult.ValidationProblem(__daErrors);");
             }
 
@@ -340,6 +354,7 @@ internal static class WorkersRegistrationEmitter
             if (parts[1] == "Required")
             {
                 var allowEmptyStrings = parts.Length > 2 && parts[2] == "true";
+                var message = DecodeValidationMessage(parts, 3, $"The {propertyName} field is required.");
                 if (allowEmptyStrings)
                 {
                     sb.AppendLine($"        if ({propertyAccess} is null)");
@@ -349,22 +364,24 @@ internal static class WorkersRegistrationEmitter
                     sb.AppendLine($"        if ({propertyAccess} is null || ({propertyAccess} is string {localName}Required && {localName}Required.Length == 0))");
                 }
                 sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str($"The {propertyName} field is required.")});");
+                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
                 sb.AppendLine("        }");
             }
             else if (parts[1] == "StringLength" && parts.Length > 3)
             {
+                var message = DecodeValidationMessage(parts, 4, $"The field {propertyName} must be a string with a minimum length of {parts[2]} and a maximum length of {parts[3]}.");
                 sb.AppendLine($"        if ({propertyAccess} is string {localName}StringLength && ({localName}StringLength.Length < {parts[2]} || {localName}StringLength.Length > {parts[3]}))");
                 sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str($"The field {propertyName} must be a string with a minimum length of {parts[2]} and a maximum length of {parts[3]}.")});");
+                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
                 sb.AppendLine("        }");
             }
             else if (parts[1] == "MinLength" && parts.Length > 2)
             {
                 var lengthMember = parts.Length > 3 ? parts[3] : "Length";
+                var message = DecodeValidationMessage(parts, 4, $"The field {propertyName} must be a string or array type with a minimum length of '{parts[2]}'.");
                 sb.AppendLine($"        if ({propertyAccess} is not null && {propertyAccess}.{lengthMember} < {parts[2]})");
                 sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str($"The field {propertyName} must be a string or array type with a minimum length of '{parts[2]}'.")});");
+                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
                 sb.AppendLine("        }");
             }
         }
@@ -429,6 +446,16 @@ internal static class WorkersRegistrationEmitter
 
     private static string ValidationMethodName(FeatureModel f)
         => "__Validate_" + SanitizeIdentifier(f.FullyQualifiedTypeName);
+
+    private static string DecodeValidationMessage(string[] parts, int index, string fallback)
+    {
+        if (parts.Length <= index)
+        {
+            return fallback;
+        }
+
+        return Encoding.UTF8.GetString(Convert.FromBase64String(parts[index]));
+    }
 
     private static string SanitizeIdentifier(string value)
     {

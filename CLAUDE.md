@@ -16,7 +16,7 @@ dotnet test Slice.slnx --configuration Release --no-build --no-restore
 dotnet run --project samples/Slice.Sample        # listens on http://localhost:5099
 dotnet run --project samples/Slice.LambdaSample  # listens on http://localhost:5100 (Lambda-ready)
 dotnet run --project samples/Slice.TestHostSample # in-process HTTP demo (no server port)
-dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release  # produces .wasm component
+dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release  # Linux x64 / Windows x64 publish host
 dotnet format                                     # canonical formatter (no config file)
 ```
 
@@ -114,9 +114,9 @@ ASP.NET-independent Workers satellite (experimental). Bypasses Kestrel entirely;
 
 **In-process dispatch and IPC:** `WorkerApp.DispatchAsync(WorkerRequest)` routes requests in-process through the source-generated `WorkerRouteTable`. `WorkerApp.Run()` runs the synchronous JSON-lines stdin/stdout IPC loop used by WASI command hosts; `RunAsync()` remains available for non-WASI hosts.
 
-**WASI publish:** `samples/Slice.WorkersSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release`. The sample copies the generated component to `samples/Slice.WorkersSample/worker/slice-workers-sample.wasm`; `samples/Slice.WorkersSample/worker` then uses `@bytecodealliance/jco` and `@bytecodealliance/preview2-shim` to transpile the component for the Cloudflare shim (`npm install`, then `npm run build`).
+**WASI publish:** `samples/Slice.WorkersSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release`. With the current NativeAOT-LLVM preview packages, publish is supported from Linux x64 or Windows x64 hosts; macOS can run the in-process probe but intentionally fails publish with a clear MSBuild error. The sample copies the generated component to `samples/Slice.WorkersSample/worker/slice-workers-sample.wasm`; `samples/Slice.WorkersSample/worker` then uses `@bytecodealliance/jco` and `@bytecodealliance/preview2-shim` to transpile the component for the Cloudflare shim (`npm install`, then `npm run build`).
 
-Features returning `IResult`/`Task<IResult>` are excluded from Workers routes automatically (SLICE008 info diagnostic). `[Filter<T>]` filters other than `SliceValidatorFilter<T>` are not executed in the Workers path (they require ASP.NET's `IEndpointFilter` pipeline).
+Features returning `IResult`/`Task<IResult>` are excluded from Workers routes automatically (SLICE008 info diagnostic). Workers DataAnnotations validation is source-generated for supported `Required`, `StringLength`, and `MinLength` rules; routes that need reflection-based validation are excluded with SLICE011. `[Filter<T>]` filters other than `SliceValidatorFilter<T>` are not executed in the Workers path (they require ASP.NET's `IEndpointFilter` pipeline).
 
 ```csharp
 var builder = WorkerHost.CreateBuilder();

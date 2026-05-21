@@ -105,4 +105,15 @@ internal static class SliceDiagnostics
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a Workers route would need reflection-based DataAnnotations validation.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedValidationForWorkers = new(
+        "SLICE011",
+        "DataAnnotations validation is not supported in Workers path",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the Workers route table. Use supported validation attributes or SliceValidatorFilter<T>.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

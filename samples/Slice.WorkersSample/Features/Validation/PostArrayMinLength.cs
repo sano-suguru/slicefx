@@ -12,7 +12,9 @@ public static class PostArrayMinLength
     /// Request body containing an array that must have at least two items.
     /// </summary>
     /// <param name="Items">Items to count after validation.</param>
+#pragma warning disable IL2026 // Slice generates Workers validation for int[] MinLength without runtime reflection.
     public record Request([MinLength(2)] int[] Items);
+#pragma warning restore IL2026
 
     /// <summary>
     /// Response body returned after array validation succeeds.

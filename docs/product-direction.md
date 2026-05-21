@@ -1,6 +1,6 @@
 # Product direction
 
-Slice should stay focused on a simple product promise: Minimal API with feature files and generated contracts, not a replacement framework. Authors keep the standard ASP.NET Core model, write one explicit feature file per endpoint, and let Slice generate the surrounding API contracts and tooling from that shape. Hono and Vercel are useful references, but the public story should be Slice's own: feature-first .NET APIs with generated contracts.
+Slice should stay focused on a simple product promise: one feature file per endpoint, portable across ASP.NET, AWS Lambda, and Cloudflare Workers without changing the feature code. Authors keep the standard ASP.NET Core model, write one explicit feature file per endpoint, and let Slice generate the surrounding API contracts and tooling from that shape. Hono and Vercel are useful references, but the public story should be Slice's own: portable .NET API features with generated contracts.
 
 ## Product principles
 
@@ -11,9 +11,9 @@ Slice should stay focused on a simple product promise: Minimal API with feature 
 
 ## Primary users
 
+- **AOT, serverless, and Workers-minded teams** that want the same feature file to run on ASP.NET, Lambda, and Cloudflare Workers, with portability classified at build time rather than discovered at deploy time.
 - **Small API and product teams** that want endpoint code to stay local to the feature instead of spreading across controllers, services, validators, and mapping profiles.
 - **Blazor and .NET client teams** that want typed clients generated from server routes instead of hand-maintained route strings and DTO wiring.
-- **AOT, serverless, and Workers-minded teams** that want portability to be visible at the slice boundary while ASP.NET Core remains the primary runtime.
 - **Framework-light .NET teams** that prefer ASP.NET Core Minimal API binding and endpoint filters over mediator-style abstractions or required third-party validation stacks.
 
 ## What is already true
@@ -30,7 +30,7 @@ Slice should stay focused on a simple product promise: Minimal API with feature 
 
 ## Hono-inspired references
 
-These ideas are useful references, not the public authoring model. Slice should not lead with Hono terminology; it should lead with standard .NET APIs plus generated contracts.
+These ideas are useful references, not the public authoring model. Slice should not lead with Hono terminology; it should lead with standard .NET APIs plus generated contracts. Leading with Cloudflare Workers or Lambda portability is distinct from leading with Hono vocabulary — the former is Slice's own positioning, the latter borrows a competitor's brand.
 
 - **Small routing surface.** Keep feature registration mechanical and easy to inspect. Avoid a second fluent router unless it solves a clear .NET-specific problem.
 - **Runtime portability.** Treat Workers/fetch-style dispatch as the lightweight runtime proving ground. A portable feature should not need ASP.NET-only response types.

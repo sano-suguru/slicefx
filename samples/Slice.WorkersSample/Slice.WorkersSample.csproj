@@ -33,12 +33,21 @@
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
     <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and ('$(NETCoreSdkPortableRuntimeIdentifier)' == 'linux-x64' or '$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-x64')">
     <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-alpha.1.25162.1" />
   </ItemGroup>
 
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 
   <Target Name="PublishAfterBuild" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'" />
+
+  <Target Name="FailUnsupportedWasiPublishHost"
+          BeforeTargets="Restore;Build;Publish"
+          Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and '$(NETCoreSdkPortableRuntimeIdentifier)' != 'linux-x64' and '$(NETCoreSdkPortableRuntimeIdentifier)' != 'win-x64'">
+    <Error Text="Slice.WorkersSample WASI publish requires a NativeAOT-LLVM host package. The current componentize-dotnet preview provides packages for linux-x64 and win-x64; run this publish from one of those hosts." />
+  </Target>
 
   <Target Name="CompileSingleWasmObject" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
     <Exec Command="$(ExecCommand)" EnvironmentVariables="@(EmscriptenEnvVars)" />

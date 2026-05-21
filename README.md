@@ -1,15 +1,20 @@
 # Slice
 
-> Minimal API with feature files and generated contracts — not a replacement framework.
+> Write a .NET API feature once. Run it on ASP.NET, AWS Lambda, or Cloudflare Workers.
 
 Website: <https://sano-suguru.github.io/slice/>
 
-Slice is an experimental .NET web framework built on ASP.NET Core Minimal APIs. Author each endpoint as one explicit feature file, keep the standard ASP.NET Core programming model, and let Slice generate registrations, route metadata, compatibility reports, and typed clients around that shape.
+Slice is an experimental .NET framework for building portable APIs. Write each endpoint as one static feature file — request, response, validation, and handler together — and the source generator wires ASP.NET Core registrations, AWS Lambda hosting, or Cloudflare Workers (WASI) dispatch from the same file. Features returning plain POCOs or `Task<T>` run across all three hosts; features that use `IResult` helpers stay ASP.NET-only and are excluded from Workers routes automatically (`SLICE008`).
 
 ```bash
+# ASP.NET host
 dotnet run --project samples/Slice.Sample
-slice routes --project samples/Slice.Sample/Slice.Sample.csproj
+
+# In-process Workers dispatch — no ASP.NET needed
+dotnet run --project samples/Slice.WorkersSample -- --probe /health
 ```
+
+See [samples/Slice.WorkersSample](samples/Slice.WorkersSample/README.md) for the full Cloudflare Workers deploy path.
 
 The goal is not to be a bigger FastEndpoints or a parallel web stack. Slice is a small, generated, vertical-slice API layer for teams that want Minimal API behavior, typed clients, and portability checks without hand-maintained endpoint strings.
 
@@ -25,9 +30,9 @@ Slice is strongest when you want a small .NET API to stay understandable as it g
 
 | Team | Why Slice helps |
 | --- | --- |
+| AOT, serverless, and Workers-minded teams | The same feature file runs on ASP.NET, Lambda, and Cloudflare Workers. `slice routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only` before you ship. |
 | Small API and product teams | Each endpoint is owned as one file, so request, response, validation, filters, and handler do not drift across folders. |
 | Blazor and .NET client teams | `slice client csharp` can generate typed `HttpClient` wrappers from server features instead of hand-maintaining route strings and DTO wiring. |
-| AOT, serverless, and Workers-minded teams | `slice routes` makes portability visible early, while ASP.NET Core remains the primary runtime. |
 | Framework-light .NET teams | Slice keeps ASP.NET Core Minimal API binding and endpoint filters instead of introducing a mediator pipeline or required validation stack. |
 
 `Slice.Core` has zero NuGet package dependencies; the optional source generator lives in a separate project and uses Roslyn packages.
@@ -351,17 +356,13 @@ dotnet run --project samples/Slice.WorkersSample -- --probe /health
 # [probe] dispatching POST /echo {"message":""}  →  status=400  (DataAnnotations validation)
 ```
 
-**WASI publish / local Worker dev:**
+**WASI publish / local Worker dev / Cloudflare deploy:**
 
-```pwsh
-dotnet publish samples\Slice.WorkersSample -r wasi-wasm -c Release
-cd samples\Slice.WorkersSample\worker
-npm install
-npm run build
-npm run dev
-```
+See [`samples/Slice.WorkersSample/README.md`](samples/Slice.WorkersSample/README.md) for the full step-by-step path from `dotnet publish -r wasi-wasm` through `wrangler deploy`.
 
-The `wasi-experimental` workload (Mono-based, WASI Preview 1) is not supported in .NET 10. The sample uses [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) to emit a WASI 0.2 component, then `@bytecodealliance/jco` + `@bytecodealliance/preview2-shim` for the Cloudflare JavaScript bridge.
+The `wasi-experimental` workload (Mono-based, WASI Preview 1) is not supported in .NET 10. The sample uses [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) to emit a WASI 0.2 component, then `@bytecodealliance/jco` + `@bytecodealliance/preview2-shim` for the Cloudflare JavaScript bridge. With the current NativeAOT-LLVM preview packages, `wasi-wasm` publish is supported from Linux x64 or Windows x64 hosts; macOS can still run the in-process Workers probe.
+
+Workers DataAnnotations validation is generated for supported rules (`Required`, `StringLength`, and `MinLength` on strings, arrays, or types with a public `Count`). Routes that need reflection-based validation are excluded from the Workers route table with `SLICE011`.
 
 ### Test host pattern
 

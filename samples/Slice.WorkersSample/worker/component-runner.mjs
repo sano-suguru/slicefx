@@ -1,9 +1,43 @@
-import { _setArgs, _setStderr, _setStdin, _setStdout } from "@bytecodealliance/preview2-shim/cli";
-import { $init, run } from "./component/slice-workers-sample.js";
+import {
+  _setArgs, _setStderr, _setStdin, _setStdout,
+  environment, exit as exitNamespace, stderr as stderrNamespace,
+  stdin as stdinNamespace, stdout as stdoutNamespace,
+  terminalInput, terminalOutput, terminalStderr, terminalStdin, terminalStdout,
+} from "@bytecodealliance/preview2-shim/cli";
+import { monotonicClock, wallClock } from "@bytecodealliance/preview2-shim/clocks";
+import { preopens, types } from "@bytecodealliance/preview2-shim/filesystem";
+import { error, poll, streams } from "@bytecodealliance/preview2-shim/io";
+import { random } from "@bytecodealliance/preview2-shim/random";
+import { TcpSocket } from "./stubs/tcp.js";
+import { getCoreModule } from "./component/modules.mjs";
+import { instantiate } from "./component/slice-workers-sample.js";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const initialized = $init;
+
+const wasiImports = {
+  "../stubs/tcp.js": { TcpSocket },
+  "wasi:cli/environment": environment,
+  "wasi:cli/exit": exitNamespace,
+  "wasi:cli/stderr": stderrNamespace,
+  "wasi:cli/stdin": stdinNamespace,
+  "wasi:cli/stdout": stdoutNamespace,
+  "wasi:cli/terminal-input": terminalInput,
+  "wasi:cli/terminal-output": terminalOutput,
+  "wasi:cli/terminal-stderr": terminalStderr,
+  "wasi:cli/terminal-stdin": terminalStdin,
+  "wasi:cli/terminal-stdout": terminalStdout,
+  "wasi:clocks/monotonic-clock": monotonicClock,
+  "wasi:clocks/wall-clock": wallClock,
+  "wasi:filesystem/preopens": preopens,
+  "wasi:filesystem/types": types,
+  "wasi:io/error": error,
+  "wasi:io/poll": poll,
+  "wasi:io/streams": streams,
+  "wasi:random/random": random,
+};
+
+const initialized = instantiate(getCoreModule, wasiImports).then(component => component.run);
 
 let runQueue = Promise.resolve();
 
@@ -17,7 +51,7 @@ export function runSliceIpc(requestLine) {
 }
 
 async function runSliceIpcCore(requestLine) {
-  await initialized;
+  const run = await initialized;
 
   const stdinBytes = textEncoder.encode(requestLine);
   const stdoutChunks = [];
@@ -30,9 +64,9 @@ async function runSliceIpcCore(requestLine) {
 
   run.run();
 
-  const stderr = decodeChunks(stderrChunks);
-  if (stderr) {
-    console.error(stderr);
+  const stderrText = decodeChunks(stderrChunks);
+  if (stderrText) {
+    console.error(stderrText);
   }
 
   const line = firstLine(decodeChunks(stdoutChunks));

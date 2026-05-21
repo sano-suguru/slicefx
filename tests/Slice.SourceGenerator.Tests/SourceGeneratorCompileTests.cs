@@ -203,6 +203,80 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_emits_workers_validation_for_supported_attributes_with_custom_messages()
+    {
+        var source = """
+            using System.ComponentModel.DataAnnotations;
+            using Slice;
+
+            namespace WorkerValidationApp.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public sealed record Request(
+                    [Required(ErrorMessage = "Name is required.")]
+                    [StringLength(10, MinimumLength = 2, ErrorMessage = "Name length is invalid.")]
+                    string? Name,
+                    [MinLength(2, ErrorMessage = "At least two items are required.")]
+                    int[] Items);
+
+                public sealed record Response(string Name);
+
+                public static Response Handle(Request req) => new(req.Name!);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerValidationApp", source, includeWorkersReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
+        Assert.Contains("Name is required.", workersSource, StringComparison.Ordinal);
+        Assert.Contains("Name length is invalid.", workersSource, StringComparison.Ordinal);
+        Assert.Contains("At least two items are required.", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorkersValidationRunner.Validate", workersSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_excludes_workers_routes_that_require_reflection_validation()
+    {
+        var source = """
+            using System.ComponentModel.DataAnnotations;
+            using Slice;
+
+            namespace WorkerReflectionValidationApp.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public sealed record Request([Range(1, 10)] int Count);
+
+                public sealed record Response(int Count);
+
+                public static Response Handle(Request req) => new(req.Count);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerReflectionValidationApp", source, includeWorkersReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
+        Assert.DoesNotContain("table.Add(", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/items\"", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorkersValidationRunner.Validate", workersSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_excludes_aspnet_typed_results_from_workers_routes_and_manifest()
     {
         var source = """
