@@ -9,7 +9,8 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.Services.AddSlice();
 builder.Services.AddSingleton(TimeProvider.System);
 
-// ISliceValidator<T> implementations are registered manually (not auto-scanned).
+// ISliceValidator<T> implementations are application services, so they are registered explicitly
+// instead of auto-scanned. This keeps discovery AOT-friendly and leaves lifetime choices to the app.
 builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidator>();
 
 // Configures Lambda hosting when running in AWS Lambda; no-op locally (Kestrel handles it).

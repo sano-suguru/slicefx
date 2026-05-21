@@ -11,6 +11,9 @@ namespace Slice;
 ///   <item>Declare <c>[Filter&lt;SliceValidatorFilter&lt;Request&gt;&gt;]</c> on the feature class.</item>
 ///   <item>Register the implementation: <c>services.AddScoped&lt;ISliceValidator&lt;Request&gt;, MyValidator&gt;()</c>.</item>
 /// </list>
+/// Validator implementations are registered manually because they are application services, not
+/// Slice features. This keeps discovery explicit, avoids runtime assembly scanning, and lets the
+/// application choose lifetimes and environment-specific replacements.
 /// <see cref="DataAnnotationsValidationFilter"/> is always attached before <c>[Filter&lt;T&gt;]</c>
 /// filters. <c>SliceValidatorFilter&lt;T&gt;</c> then participates in normal declaration order with
 /// other filters. Returning <see cref="SliceValidationResult.Success"/> passes control to the

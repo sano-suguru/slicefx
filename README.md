@@ -206,6 +206,13 @@ using Slice;
 builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidator>();
 ```
 
+Manual registration is intentional. Slice generates registrations for `[Feature]` endpoints and
+`[Filter<T>]` filters, but validator implementations are application services. Keeping them explicit
+avoids runtime assembly scanning, stays trimming/AOT-friendly, and lets the application choose
+lifetimes, environment-specific registrations, test replacements, or multiple validators deliberately.
+If registrations grow, move the `AddScoped` calls into an application extension method such as
+`AddAppValidators()`.
+
 `DataAnnotationsValidationFilter` is always attached first. `SliceValidatorFilter<TRequest>` is a normal `[Filter<T>]`, so it runs in declaration order with any other feature filters.
 
 ## What works today
