@@ -136,6 +136,7 @@
             </a>
             <div class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
                 <a href="#features" class="hover:text-white transition-colors"><span class="lang-ja">特徴</span><span class="lang-en">Features</span></a>
+                <a href="#positioning" class="hover:text-white transition-colors"><span class="lang-ja">違い</span><span class="lang-en">Why Slice</span></a>
                 <a href="#code" class="hover:text-white transition-colors"><span class="lang-ja">コード例</span><span class="lang-en">Code</span></a>
                 <a href="#packages" class="hover:text-white transition-colors"><span class="lang-ja">パッケージ</span><span class="lang-en">Packages</span></a>
             </div>
@@ -210,6 +211,34 @@
                         <h3 class="text-xl font-bold mb-3"><span class="lang-ja">標準の作法をそのまま</span><span class="lang-en">Standard by default</span></h3>
                         <p class="text-slate-400 leading-relaxed"><span class="lang-ja">Minimal APIのバインディング、DI、エンドポイントフィルター、DataAnnotationsをそのまま利用できます。ASP.NET固有の<code>IResult</code>が必要な場面にも対応します。</span><span class="lang-en">Keep Minimal API binding, DI, endpoint filters, and DataAnnotations; use ASP.NET-specific <code>IResult</code> only when a slice needs it.</span></p>
                     </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="max-w-7xl mx-auto px-6 py-20" id="positioning">
+            <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 items-start">
+                <div>
+                    <p class="mb-3 text-sm font-mono text-brand-400"><span class="lang-ja">Why Slice</span><span class="lang-en">Why Slice</span></p>
+                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">標準Minimal APIのまま、周辺を生成する</span><span class="lang-en">Standard Minimal APIs, generated around the edges</span></h2>
+                    <p class="text-slate-400">
+                        <span class="lang-ja">SliceはASP.NET Coreを置き換えません。実行時はMinimal APIに寄せ、機能ファイルから登録、診断、互換性レポート、型付きクライアントを生成します。</span>
+                        <span class="lang-en">Slice does not replace ASP.NET Core. It keeps the runtime close to Minimal APIs and generates registration, diagnostics, compatibility reports, and typed clients from feature files.</span>
+                    </p>
+                </div>
+
+                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
+                    <div class="grid md:grid-cols-[180px_1fr] border-b border-slate-700">
+                        <div class="p-5 font-bold text-white bg-slate-900/50">Minimal APIs</div>
+                        <div class="p-5 text-slate-400"><span class="lang-ja">手書きの柔軟さは強い。一方で、ルート文字列、DTO、クライアント、移植性チェックは自分で同期する必要があります。</span><span class="lang-en">Great for handwritten flexibility, but route strings, DTOs, clients, and portability checks are yours to keep in sync.</span></div>
+                    </div>
+                    <div class="grid md:grid-cols-[180px_1fr] border-b border-slate-700">
+                        <div class="p-5 font-bold text-white bg-slate-900/50">FastEndpoints</div>
+                        <div class="p-5 text-slate-400"><span class="lang-ja">1機能1ファイルに近い形を提供します。Sliceは独自パイプラインではなく、生成されたMinimal API登録を選びます。</span><span class="lang-en">Provides an endpoint-per-feature shape. Slice chooses generated Minimal API registration instead of a custom endpoint pipeline.</span></div>
+                    </div>
+                    <div class="grid md:grid-cols-[180px_1fr]">
+                        <div class="p-5 font-bold text-brand-400 bg-brand-900/20">Slice</div>
+                        <div class="p-5 text-slate-300"><span class="lang-ja">機能のまとまり、<code>SLICE001</code>などのビルド時診断、<code>slice routes</code>、<code>slice client csharp</code>を同じメタデータから扱います。</span><span class="lang-en">Uses the same metadata for feature locality, build-time diagnostics such as <code>SLICE001</code>, <code>slice routes</code>, and <code>slice client csharp</code>.</span></div>
+                    </div>
                 </div>
             </div>
         </section>

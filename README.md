@@ -32,6 +32,25 @@ Slice is strongest when you want a small .NET API to stay understandable as it g
 
 `Slice.Core` has zero NuGet package dependencies; the optional source generator lives in a separate project and uses Roslyn packages.
 
+## Positioning
+
+Slice does not replace ASP.NET Core. It adds compile-time structure and tooling around Minimal APIs without introducing a second runtime model.
+
+| Framework | Authoring model | Execution model | AOT fit | Contract tooling |
+| --- | --- | --- | --- | --- |
+| ASP.NET Core MVC | Controllers and actions split by layer | Built-in MVC pipeline | Partial; controller discovery and model binding need trimming care | Not built in |
+| Minimal APIs | Flexible route declarations | Standard Minimal API pipeline | Very high | Not built in |
+| FastEndpoints | Endpoint/REPR-style classes | Custom endpoint abstraction on ASP.NET Core | High | Available through its ecosystem |
+| Slice | One feature file per endpoint | Source-generated Minimal API registrations | Very high | Built in: route manifest, `slice routes`, `slice client csharp` |
+
+Slice combines three things:
+
+1. **Feature locality with Minimal API behavior.** A feature keeps request, response, validation, filters, and handler together, but the generated code maps directly to ASP.NET Core Minimal APIs.
+2. **Build-time guardrails.** The source generator reports diagnostics such as `SLICE001` and `SLICE002` for invalid feature shape, including a missing or non-`public static` `Handle` method.
+3. **Tooling generated from the server shape.** The same feature metadata powers route inspection, portability reports for Workers-style dispatch, and typed C# clients for Blazor or other .NET clients.
+
+Slice is still pre-1.0. For large established monoliths, use Minimal APIs, MVC, or a mature endpoint framework unless Slice's generated contracts and portability checks are the reason for adopting it.
+
 ## Project status
 
 Slice is being prepared for OSS preview releases. The core API, source generator, serverless adapters, test host, and CLI exist, but the project should still be treated as experimental. Preview packages use `0.x` versions until the API is intentionally stabilized for a future `1.0`.
@@ -202,12 +221,14 @@ builder.Services.AddScoped<ISliceValidator<PostEcho.Request>, EchoRequestValidat
 | Problem Details for validation errors | ✅ |
 | OpenAPI tag inference from namespace | ✅ |
 | Zero NuGet dependencies in `Slice.Core` | ✅ |
+| Compile-time diagnostics such as `SLICE001` and `SLICE002` for invalid feature shape | ✅ |
 | Source Generator for AOT (no startup reflection) | ✅ experimental |
 | AWS Lambda adapter (`Slice.Lambda`) | ✅ experimental |
 | Test host pattern (`Slice.TestHost`) | ✅ experimental |
 | Cloudflare Workers adapter (`Slice.Workers`) | ✅ experimental (in-process dispatch; WASI publish path) |
 | CLI scaffolding (`slice new feature User`) | ✅ experimental |
 | Generated route metadata manifest | ✅ experimental |
+| Typed C# client generation (`slice client csharp`) | ✅ experimental |
 
 ## Source generator, adapters, and roadmap
 
@@ -246,7 +267,7 @@ public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
 }
 ```
 
-Result: zero reflection at startup, trimmer/AOT happy, near-zero cold start.
+Result: zero reflection at startup and a trimmer-friendly registration path.
 
 The source generator also emits route metadata for tooling and deployment experiments, including empty manifests for projects that do not define features yet. The metadata contains method, pattern, feature type, tag, endpoint name, summary, request type, return type, handler parameters, filters, and portability status (`portable`, `partial`, or `aspnet-only`). It is intentionally string-based so tooling can consume route shape without adding dependencies to `Slice.Core`.
 
@@ -370,10 +391,6 @@ slice client csharp --output SliceApiClient.g.cs
 `slice routes` first reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs` source files. The command reports whether each slice is `portable`, `partial`, or `aspnet-only` for Workers-style dispatch, and `--format json` exports the same route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
 
 `Features/<Group>/<Feature>.cs` is the recommended and scaffolded project shape, not a compiler-enforced file-system routing rule. The generator discovers `[Feature]` classes, so explicit attributes remain the source of truth.
-
----
-
-The remaining deferred items are the "if I had another afternoon" pile, not "things I'm not sure how to build." The surface area is small on purpose so these can be added without breaking changes.
 
 ## Why "Vertical Slice + AOT/serverless"?
 
