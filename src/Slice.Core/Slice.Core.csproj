@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <RootNamespace>Slice</RootNamespace>
-    <PackageId>Slice</PackageId>
+    <PackageId>Slice.Core</PackageId>
     <Description>Vertical-slice-first ASP.NET Core Minimal API framework.</Description>
     <PackageTags>slice;vertical-slice;aspnetcore;minimal-api;aot;serverless</PackageTags>
   </PropertyGroup>

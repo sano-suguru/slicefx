@@ -15,8 +15,8 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/sugu-sano/Slice</RepositoryUrl>
-    <PackageProjectUrl>https://sugu-sano.github.io/Slice/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sano-suguru/slice</RepositoryUrl>
+    <PackageProjectUrl>https://sano-suguru.github.io/slice/</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

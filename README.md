@@ -40,12 +40,19 @@ Packages are split so optional dependencies stay out of `Slice.Core`:
 
 | Package | Purpose |
 | --- | --- |
-| `Slice` | Core runtime: `[Feature]`, `[Filter<T>]`, validation attributes, and endpoint filters. |
+| `Slice.Core` | Core runtime: `[Feature]`, `[Filter<T>]`, validation attributes, and endpoint filters. |
 | `Slice.SourceGenerator` | Required AOT-friendly generated registrations for Slice features. |
 | `Slice.Lambda` | AWS Lambda hosting adapter. |
 | `Slice.TestHost` | In-process test host helpers. |
 | `Slice.Workers` | ASP.NET-independent Workers/WASI adapter. |
 | `Slice.Cli` | Local scaffolding, route inspection, compatibility reporting, and typed client generation. |
+
+Minimal ASP.NET Core apps need both the core runtime and the source generator:
+
+```bash
+dotnet add package Slice.Core --version 0.1.0-preview.1
+dotnet add package Slice.SourceGenerator --version 0.1.0-preview.1
+```
 
 ## Design principles
 

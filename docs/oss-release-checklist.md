@@ -15,10 +15,10 @@ This checklist is for deciding whether the repository is ready for a preview rel
 
 ## Pre-release gates
 
-- [ ] Confirm the root NuGet package identity before publishing anything.
+- [x] Confirm the core NuGet package identity before publishing anything.
   - `Slice` already exists on NuGet and is associated with an older unrelated package.
-  - Confirm maintainer ownership or obtain a transfer before using `Slice`.
-  - If `Slice` cannot be used, choose a new package ID strategy before publishing satellite packages.
+  - Use `Slice.Core` for the core runtime package instead of `Slice`.
+  - Keep satellite package IDs under the same prefix: `Slice.SourceGenerator`, `Slice.Lambda`, `Slice.TestHost`, `Slice.Workers`, and `Slice.Cli`.
 - [ ] Freeze the preview version and scope.
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
