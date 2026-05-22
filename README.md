@@ -14,6 +14,10 @@ Website: <https://sano-suguru.github.io/slice/>
 
 Curious about the design choices? See **[Design decisions FAQ](docs/design-decisions.md)** and **[Production readiness criteria](docs/production-readiness.md)**.
 
+### Latest benchmark results
+
+![Latest source generator benchmark results](docs/perf/latest.svg)
+
 Each endpoint is a static feature file: request, response, validation, filters, and handler stay together. The source generator turns those features into ASP.NET registrations, route metadata for tooling, Lambda handlers, or wasi:http dispatch where the handler shape is portable.
 
 ```bash

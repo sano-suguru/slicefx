@@ -7,7 +7,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  actions: write
+  contents: write
+
+concurrency:
+  group: perf
+  cancel-in-progress: false
 
 jobs:
   benchmark:
@@ -23,6 +28,16 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install chart dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install matplotlib==3.9.2
+
       - name: Restore
         run: dotnet restore tests/Slice.Benchmarks/Slice.Benchmarks.csproj
 
@@ -32,13 +47,59 @@ jobs:
       - name: Run benchmarks
         run: dotnet run -c Release --project tests/Slice.Benchmarks --no-build -- --filter '*'
 
+      - name: Capture chart metadata
+        id: chart-meta
+        run: |
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+          echo "measured_at=$(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate benchmark chart
+        run: >
+          python tests/Slice.Benchmarks/render-perf-chart.py
+          --results-dir BenchmarkDotNet.Artifacts/results
+          --gates tests/Slice.Benchmarks/gates.json
+          --output docs/perf/latest.svg
+          --history-dir docs/perf/history
+          --run-date "${{ steps.chart-meta.outputs.date }}"
+          --measured-at "${{ steps.chart-meta.outputs.measured_at }}"
+          --commit-sha "${{ steps.chart-meta.outputs.short_sha }}"
+
       - name: Upload BenchmarkDotNet artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: BenchmarkDotNet.Artifacts/
+          path: |
+            BenchmarkDotNet.Artifacts/
+            docs/perf/latest.svg
+            docs/perf/history/${{ steps.chart-meta.outputs.date }}.svg
           if-no-files-found: warn
 
       - name: Check perf gates
         run: bash tests/Slice.Benchmarks/check-gates.sh tests/Slice.Benchmarks/gates.json BenchmarkDotNet.Artifacts/results
+
+      - name: Detect chart changes
+        id: chart-changes
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if [ -z "$(git status --porcelain -- docs/perf)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit benchmark chart
+        if: github.ref == 'refs/heads/main' && steps.chart-changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/perf/latest.svg "docs/perf/history/${{ steps.chart-meta.outputs.date }}.svg"
+          git commit -m "chore(perf): update benchmark chart ${{ steps.chart-meta.outputs.date }} [skip ci]"
+          git push
+
+      - name: Publish benchmark chart
+        if: github.ref == 'refs/heads/main' && steps.chart-changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref main

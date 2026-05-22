@@ -28,6 +28,10 @@ Measured on Apple M1 (8 cores, macOS 26.4.1, .NET SDK 10.0.300, BenchmarkDotNet 
 | ColdRun          | 200          | 6.73 ms | 5.57 MB |
 | WarmRun_NoOpEdit | 200          | 9.08 ms | 4.68 MB |
 
+The table above is the local Apple M1 baseline. The chart below is generated from BenchmarkDotNet JSON and uses `tests/Slice.Benchmarks/gates.json` for the dotted gate lines; after the nightly perf workflow runs on `main`, it reflects the latest GitHub Actions Ubuntu x64 measurement. The SVG caption identifies the actual measurement host.
+
+![Latest GitHub Actions source generator benchmark chart](perf/latest.svg)
+
 Reproduce with `dotnet run -c Release --project tests/Slice.Benchmarks --no-build -- --filter "*"`.
 
 ### Gate values (derived from baseline)
