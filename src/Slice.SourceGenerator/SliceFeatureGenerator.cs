@@ -52,6 +52,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (c, _) =>
                 c.GetTypeByMetadataName("Slice.Wasi.Routing.WasiRouteTable") is not null);
 
+        // Only emit Lambda per-feature code when the satellite is referenced and the assembly opts in.
+        var lambdaPerFunctionOptions = context.CompilationProvider
+            .Select(static (c, _) => FindLambdaPerFunctionOptions(c))
+            .WithTrackingName("SliceLambdaPerFunctionOptions");
+
         var referencedModules = context.CompilationProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
             .Select(static (pair, _) => FindReferencedSliceModules(pair.Left, pair.Right))
@@ -75,16 +80,24 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (pair, _) => pair.Right ? FindWasiJsonContext(pair.Left.Left, pair.Left.Right) : null)
             .WithTrackingName("SliceWasiJsonContext");
 
+        var lambdaJsonContextFqn = validModels
+            .Combine(context.CompilationProvider)
+            .Combine(lambdaPerFunctionOptions)
+            .Select(static (pair, _) => pair.Right.Enabled ? FindLambdaJsonContext(pair.Left.Left, pair.Left.Right) : null)
+            .WithTrackingName("SliceLambdaJsonContext");
+
         context.RegisterSourceOutput(
             validModels.Combine(assemblyName)
                 .Combine(hasAspNetRef)
                 .Combine(hasWasiRef)
                 .Combine(referencedModules)
                 .Combine(emitExtensions)
-                .Combine(wasiJsonContextFqn),
+                .Combine(wasiJsonContextFqn)
+                .Combine(lambdaPerFunctionOptions)
+                .Combine(lambdaJsonContextFqn),
             static (spc, pair) =>
             {
-                var ((((((models, asmName), emitAspNet), emitWasi), referencedModules), emitExtensions), wasiJsonContextFqn) = pair;
+                var ((((((((models, asmName), emitAspNet), emitWasi), referencedModules), emitExtensions), wasiJsonContextFqn), lambdaOptions), lambdaJsonContextFqn) = pair;
 
                 var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
                 foreach (var diagnostic in duplicateDiagnostics)
@@ -102,7 +115,16 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     spc.ReportDiagnostic(diagnostic);
                 }
 
-                var manifestSource = RouteManifestEmitter.Emit(models, asmName);
+                foreach (var diagnostic in lambdaOptions.Diagnostics)
+                {
+                    spc.ReportDiagnostic(diagnostic);
+                }
+
+                var manifestSource = RouteManifestEmitter.Emit(
+                    models,
+                    asmName,
+                    lambdaOptions.Enabled,
+                    lambdaJsonContextFqn);
                 spc.AddSource(
                     $"{asmName}.SliceRouteManifest.g.cs",
                     Microsoft.CodeAnalysis.Text.SourceText.From(manifestSource, Encoding.UTF8));
@@ -113,6 +135,23 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     spc.AddSource(
                         $"{asmName}.SliceRegistrations.g.cs",
                         Microsoft.CodeAnalysis.Text.SourceText.From(source, Encoding.UTF8));
+                }
+
+                if (lambdaOptions.Enabled)
+                {
+                    var (lambdaSource, lambdaDiagnostics) = LambdaPerFunctionEmitter.Emit(
+                        models,
+                        asmName,
+                        lambdaJsonContextFqn,
+                        lambdaOptions.StartupTypeFqn);
+                    foreach (var d in lambdaDiagnostics)
+                    {
+                        spc.ReportDiagnostic(d);
+                    }
+
+                    spc.AddSource(
+                        $"{asmName}.SliceLambdaPerFunctionHandlers.g.cs",
+                        Microsoft.CodeAnalysis.Text.SourceText.From(lambdaSource, Encoding.UTF8));
                 }
 
                 if (!emitWasi)
@@ -162,6 +201,70 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return compilation.Options.OutputKind == OutputKind.DynamicallyLinkedLibrary
             ? SliceGenerationRole.Feature
             : SliceGenerationRole.Host;
+    }
+
+    private static LambdaPerFunctionOptions FindLambdaPerFunctionOptions(Compilation compilation)
+    {
+        if (compilation.GetTypeByMetadataName("Slice.Lambda.PerFunction.LambdaInvocationContext") is null)
+        {
+            return new LambdaPerFunctionOptions(false, null, []);
+        }
+
+        var attributeType = compilation.GetTypeByMetadataName("Slice.Lambda.PerFunction.LambdaPerFunctionAttribute");
+        if (attributeType is null)
+        {
+            return new LambdaPerFunctionOptions(false, null, []);
+        }
+
+        var startupInterface = compilation.GetTypeByMetadataName("Slice.Lambda.PerFunction.ILambdaPerFunctionStartup");
+
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (!IsAttribute(attribute.AttributeClass, attributeType, "Slice.Lambda.PerFunction.LambdaPerFunctionAttribute"))
+            {
+                continue;
+            }
+
+            string? startupTypeFqn = null;
+            if (attribute.ConstructorArguments.Length > 0
+                && attribute.ConstructorArguments[0].Value is INamedTypeSymbol startupType)
+            {
+                var diagnostic = ValidateLambdaPerFunctionStartupType(startupType, startupInterface);
+                if (diagnostic is not null)
+                {
+                    return new LambdaPerFunctionOptions(true, null, [diagnostic]);
+                }
+
+                startupTypeFqn = startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+
+            return new LambdaPerFunctionOptions(true, startupTypeFqn, []);
+        }
+
+        return new LambdaPerFunctionOptions(false, null, []);
+    }
+
+    private static Diagnostic? ValidateLambdaPerFunctionStartupType(
+        INamedTypeSymbol startupType,
+        INamedTypeSymbol? startupInterface)
+    {
+        var implementsStartup = startupInterface is not null
+                                && startupType.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, startupInterface));
+        var hasPublicParameterlessCtor = startupType.InstanceConstructors.Any(static ctor =>
+            ctor.DeclaredAccessibility == Accessibility.Public && ctor.Parameters.Length == 0);
+        if (startupType.TypeKind == TypeKind.Class
+            && !startupType.IsAbstract
+            && implementsStartup
+            && hasPublicParameterlessCtor)
+        {
+            return null;
+        }
+
+        var location = startupType.Locations.Length > 0 ? startupType.Locations[0] : null;
+        return Diagnostic.Create(
+            SliceDiagnostics.InvalidLambdaPerFeatureStartupType,
+            location,
+            startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
     private static ImmutableArray<ReferencedSliceModule> FindReferencedSliceModules(
@@ -746,6 +849,35 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
             var rootNamespace = typeName.Substring(0, featuresIndex);
             var candidate = rootNamespace + ".WasiJsonContext";
+            var candidateType = compilation.GetTypeByMetadataName(candidate);
+            if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
+            {
+                return "global::" + candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? FindLambdaJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
+    {
+        var jsonContextType = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
+        foreach (var model in models)
+        {
+            var typeName = model.FullyQualifiedTypeName;
+            if (typeName.StartsWith("global::", StringComparison.Ordinal))
+            {
+                typeName = typeName.Substring("global::".Length);
+            }
+
+            var featuresIndex = typeName.IndexOf(".Features.", StringComparison.Ordinal);
+            if (featuresIndex < 0)
+            {
+                continue;
+            }
+
+            var rootNamespace = typeName.Substring(0, featuresIndex);
+            var candidate = rootNamespace + ".LambdaJsonContext";
             var candidateType = compilation.GetTypeByMetadataName(candidate);
             if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
             {

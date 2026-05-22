@@ -25,7 +25,12 @@ public sealed class SliceFeatureRouteAttribute(
         string? portability,
         string? portabilityReason,
         string? serializedFilterTypes,
-        string? serializedParameters)
+        string? serializedParameters,
+        string? lambdaPerFeatureStatus,
+        string? lambdaPerFeatureReason,
+        string? lambdaPerFeatureHandlerAssembly,
+        string? lambdaPerFeatureHandlerType,
+        string? lambdaPerFeatureHandlerMethod)
         : this(endpointName, featureType, httpMethod, pattern)
     {
         Tag = tag;
@@ -36,6 +41,11 @@ public sealed class SliceFeatureRouteAttribute(
         PortabilityReason = portabilityReason;
         SerializedFilterTypes = serializedFilterTypes;
         SerializedParameters = serializedParameters;
+        LambdaPerFeatureStatus = lambdaPerFeatureStatus;
+        LambdaPerFeatureReason = lambdaPerFeatureReason;
+        LambdaPerFeatureHandlerAssembly = lambdaPerFeatureHandlerAssembly;
+        LambdaPerFeatureHandlerType = lambdaPerFeatureHandlerType;
+        LambdaPerFeatureHandlerMethod = lambdaPerFeatureHandlerMethod;
     }
 
     /// <summary>
@@ -97,4 +107,29 @@ public sealed class SliceFeatureRouteAttribute(
     /// Gets newline-separated handler parameters serialized as <c>Type|Name</c>.
     /// </summary>
     public string? SerializedParameters { get; }
+
+    /// <summary>
+    /// Gets the Lambda per-feature eligibility status.
+    /// </summary>
+    public string? LambdaPerFeatureStatus { get; }
+
+    /// <summary>
+    /// Gets the reason for the Lambda per-feature eligibility status when one exists.
+    /// </summary>
+    public string? LambdaPerFeatureReason { get; }
+
+    /// <summary>
+    /// Gets the assembly that contains the generated Lambda per-feature handler when emitted.
+    /// </summary>
+    public string? LambdaPerFeatureHandlerAssembly { get; }
+
+    /// <summary>
+    /// Gets the generated Lambda per-feature handler type when emitted.
+    /// </summary>
+    public string? LambdaPerFeatureHandlerType { get; }
+
+    /// <summary>
+    /// Gets the generated Lambda per-feature handler method when emitted.
+    /// </summary>
+    public string? LambdaPerFeatureHandlerMethod { get; }
 }

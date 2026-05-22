@@ -116,4 +116,70 @@ internal static class SliceDiagnostics
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a feature return type cannot be used by Lambda per-feature handlers.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaPerFeature = new(
+        "SLICE012",
+        "Return type not supported in Lambda per-feature path",
+        "Feature '{0}': return type '{1}' is ASP.NET-specific and will be excluded from Lambda per-feature handlers. Use a POCO, Task<T>, or ValueTask<T> return type.",
+        Category,
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a feature uses endpoint filters unsupported by Lambda per-feature handlers.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedFilterForLambdaPerFeature = new(
+        "SLICE013",
+        "Endpoint filter not supported in Lambda per-feature path",
+        "Feature '{0}' uses non-validator endpoint filters and will be excluded from Lambda per-feature handlers",
+        Category,
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a Lambda per-feature route is missing source-generated JSON metadata.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingLambdaJsonContext = new(
+        "SLICE014",
+        "Lambda JSON source-generation context not found",
+        "Feature '{0}' needs JSON body or response metadata but no LambdaJsonContext was found and will be excluded from Lambda per-feature handlers. Add a source-generated LambdaJsonContext for AOT-safe JSON.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a route or query parameter type is unsupported by Lambda per-feature binding.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedParameterForLambdaPerFeature = new(
+        "SLICE015",
+        "Parameter type not supported in Lambda per-feature path",
+        "Feature '{0}': parameter '{1}' of type '{2}' cannot be bound by Lambda per-feature handlers and the feature will be excluded",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a Lambda per-feature route would need reflection-based DataAnnotations validation.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedValidationForLambdaPerFeature = new(
+        "SLICE016",
+        "DataAnnotations validation is not supported in Lambda per-feature path",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda per-feature handlers. Use supported validation attributes or SliceValidatorFilter<T>.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a Lambda per-feature startup type cannot be constructed by generated handlers.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidLambdaPerFeatureStartupType = new(
+        "SLICE017",
+        "Lambda per-feature startup type is invalid",
+        "Lambda per-feature startup type '{0}' must implement ILambdaPerFunctionStartup and define a public parameterless constructor",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

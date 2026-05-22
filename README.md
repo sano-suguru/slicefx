@@ -1,10 +1,10 @@
 # Slice
 
-> Write a .NET API feature once. Run it on ASP.NET, AWS Lambda, or Cloudflare Workers.
+> Write a .NET API feature once. Run it on ASP.NET-hosted apps, serverless functions, or WASI hosts.
 
 Website: <https://sano-suguru.github.io/slice/>
 
-Slice is an experimental .NET framework for building portable APIs. Write each endpoint as one static feature file — request, response, validation, and handler together — and the source generator wires ASP.NET Core registrations, AWS Lambda hosting, or Cloudflare Workers (WASI) dispatch from the same file. Features returning plain POCOs or `Task<T>` run across all three hosts; features that use `IResult` helpers stay ASP.NET-only and are excluded from WASI routes automatically (`SLICE008`).
+Slice is an experimental .NET framework for building portable APIs. Write each endpoint as one static feature file — request, response, validation, and handler together — and the source generator wires ASP.NET Core registrations, Lambda handlers, or wasi:http dispatch from the same file. Features returning plain POCOs or `Task<T>` can run across portable hosts; features that use `IResult` helpers stay ASP.NET-only and are excluded from WASI routes automatically (`SLICE008`).
 
 ```bash
 # ASP.NET host
@@ -14,7 +14,7 @@ dotnet run --project samples/Slice.Sample
 dotnet publish samples/Slice.WasiSample -r wasi-wasm -c Release
 ```
 
-See [samples/Slice.WasiSample](samples/Slice.WasiSample/README.md) for the full Cloudflare Workers deploy path.
+See [samples/Slice.WasiSample](samples/Slice.WasiSample/README.md) for the full WASI deploy path, including Fermyon Cloud / Spin and Cloudflare Workers.
 
 The goal is not to be a bigger FastEndpoints or a parallel web stack. Slice is a small, generated, vertical-slice API layer for teams that want Minimal API behavior, typed clients, and portability checks without hand-maintained endpoint strings.
 
@@ -30,7 +30,7 @@ Slice is strongest when you want a small .NET API to stay understandable as it g
 
 | Team | Why Slice helps |
 | --- | --- |
-| AOT, serverless, and Workers-minded teams | The same feature file runs on ASP.NET, Lambda, and Cloudflare Workers. `slice routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only` before you ship. |
+| AOT, serverless, and WASI-minded teams | The same feature file can run across ASP.NET-hosted apps, function hosts, and wasi:http hosts. `slice routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only` before you ship. |
 | Small API and product teams | Each endpoint is owned as one file, so request, response, validation, filters, and handler do not drift across folders. |
 | Blazor and .NET client teams | `slice client csharp` can generate typed `HttpClient` wrappers from server features instead of hand-maintaining route strings and DTO wiring. |
 | Framework-light .NET teams | Slice keeps ASP.NET Core Minimal API binding and endpoint filters instead of introducing a mediator pipeline or required validation stack. |
@@ -236,8 +236,9 @@ If registrations grow, move the `AddScoped` calls into an application extension 
 | Compile-time diagnostics such as `SLICE001` and `SLICE002` for invalid feature shape | ✅ |
 | Source Generator for AOT (no startup reflection) | ✅ experimental |
 | AWS Lambda adapter (`Slice.Lambda`) | ✅ experimental |
+| Lambda per-feature handlers (`Slice.Lambda.PerFunction`) | ✅ experimental (HTTP API v2 MVP) |
 | Test host pattern (`Slice.TestHost`) | ✅ experimental |
-| Cloudflare WASI adapter (`Slice.Wasi`) | ✅ experimental (in-process dispatch; WASI publish path) |
+| WASI adapter (`Slice.Wasi`) | ✅ experimental (in-process dispatch; Spin and Cloudflare deploy paths) |
 | CLI scaffolding (`slice new feature User`) | ✅ experimental |
 | Generated route metadata manifest | ✅ experimental |
 | Typed C# client generation (`slice client csharp`) | ✅ experimental |
@@ -323,7 +324,7 @@ await app.RunOnLambdaAsync();
 
 Deploy the sample with the Lambda .NET tooling (`dotnet lambda package`) for the target runtime identifier, such as `linux-x64` or `linux-arm64`.
 
-### Cloudflare WASI adapter (experimental)
+### WASI adapter (experimental)
 
 **Status:** In-process dispatch and componentize-dotnet WASI publish are implemented experimentally, with a reference app in `samples/Slice.WasiSample`.
 
@@ -374,7 +375,7 @@ spin plugins install cloud --yes
 spin cloud deploy
 ```
 
-See [`samples/Slice.WasiSample/README.md`](samples/Slice.WasiSample/README.md) for the full step-by-step path from `dotnet publish -r wasi-wasm` through `wrangler deploy`.
+See [`samples/Slice.WasiSample/README.md`](samples/Slice.WasiSample/README.md) for the full step-by-step path. Spin deploy is the native wasi:http path; Cloudflare Workers uses the generated JavaScript bridge.
 
 The `wasi-experimental` workload (Mono-based, WASI Preview 1) is not supported in .NET 10. The sample uses [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) to emit a WASI 0.2 component, then `@bytecodealliance/jco` + `@bytecodealliance/preview2-shim` for the Cloudflare JavaScript bridge. With the current NativeAOT-LLVM preview packages, native `wasi-wasm` publish is supported from Linux x64 or Windows x64 hosts; macOS should publish through Docker with `--platform linux/amd64`.
 
@@ -411,6 +412,8 @@ slice routes
 slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
 slice manifest aws-lambda --output template.yaml
+slice manifest aws-lambda --mode per-feature --output template.yaml
+slice package aws-lambda --mode per-feature --output artifacts/aws-lambda
 ```
 
 `slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. Generated templates return a nested `Response` record by default; `POST`, `PUT`, and `PATCH` templates also include an empty `Request`.
@@ -419,7 +422,9 @@ slice manifest aws-lambda --output template.yaml
 
 `slice routes` first reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs` source files. The command reports whether each slice is `portable`, `partial`, or `aspnet-only` for WASI-style dispatch, and `--format json` exports the same route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
 
-`slice manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml` for the current hosted Lambda model. By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted Slice app and one API Gateway `HttpApi` event per `[Feature]`. It is not yet independent handler or binary output per feature; `--mode per-feature` is reserved for that future path. All features are included — `aspnet-only` routes work correctly with `Slice.Lambda`'s ASP.NET Core hosting. ASP.NET route constraints (`{id:guid}`) are automatically stripped to API Gateway syntax (`{id}`). The default runtime is `provided.al2023` (NativeAOT / self-contained), which uses `bootstrap` as the handler. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
+`slice manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml`. By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted Slice app and one API Gateway `HttpApi` event per `[Feature]`; all features are included because `aspnet-only` routes work with `Slice.Lambda`'s ASP.NET Core hosting. `--mode per-feature` emits one `AWS::Serverless::Function` per eligible generated `Slice.Lambda.PerFunction` handler and excludes unsupported routes with clear reasons. ASP.NET route constraints (`{id:guid}`) are automatically stripped to API Gateway syntax (`{id}`). The default runtime is `provided.al2023`; use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
+
+`Slice.Lambda.PerFunction` is an HTTP API v2-only MVP. Opt in with `[assembly: LambdaPerFunction]` (or `[assembly: LambdaPerFunction(typeof(MyStartup))]` for DI registration) and provide a source-generated `LambdaJsonContext` in the app root namespace for AOT-safe JSON body/response metadata. Supported handlers use route params, query params, a nested JSON `Request`, DI services, `CancellationToken`, and POCO / `Task<T>` / `ValueTask<T>` responses. Unsupported routes include `IResult`, non-validator endpoint filters, reflection-only validation, unsupported route parameter types, and JSON body/response routes without `LambdaJsonContext`; the generator reports `SLICE012`-`SLICE017` and the CLI repeats the exclusion reason. `slice package aws-lambda --mode per-feature` creates a publish output and `slice-lambda-package.json` describing the generated handlers; the manifest records the publish directory as the artifact-relative `publish` path. The MVP may point multiple functions at the same publish artifact; true NativeAOT binary-per-feature packaging remains a future optimization.
 
 `Features/<Group>/<Feature>.cs` is the recommended and scaffolded project shape, not a compiler-enforced file-system routing rule. The generator discovers `[Feature]` classes, so explicit attributes remain the source of truth.
 
@@ -427,7 +432,7 @@ slice manifest aws-lambda --output template.yaml
 
 Slice is not trying to make file-system routing mandatory or hide the route contract. The useful idea is smaller and more .NET-native: a feature file should produce explicit route metadata, compatibility signals, and eventually a path toward per-feature deployment without changing the authoring model.
 
-Today, that means generated registrations, route manifests, portability reporting, typed clients, WASI dispatch, and a SAM template generator. It does not yet mean one generated Lambda handler, one NativeAOT binary, or one WASM component per feature.
+Today, that means generated registrations, route manifests, portability reporting, typed clients, WASI dispatch, hosted Lambda manifests, and an HTTP API v2 per-feature Lambda MVP. It does not yet mean one NativeAOT binary or one WASM component per feature.
 
 ## Why "Vertical Slice + AOT/serverless"?
 
@@ -440,9 +445,9 @@ If you align the slice boundary with the function boundary, you get:
 
 - **Smaller per-function AOT binaries** — trimming is more effective because each function only references what it actually uses.
 - **Faster cold starts** — less code to load and JIT (or none, with AOT).
-- **Same app shape, multiple deployment modes** — run as a Kestrel server in development, host the same app on AWS Lambda today, and keep the path open for finer-grained function-per-feature deployment later.
+- **Same app shape, multiple deployment modes** — run as a Kestrel server in development, host the same app as a serverless function, or opt into HTTP API v2 per-feature handlers.
 
-Slice's static-handler shape is designed to make the function-per-feature mapping straightforward, even though the current Lambda adapter hosts the ASP.NET Core app as a Lambda entry point. The near-term deployment direction is full-app deployment plus generated route metadata first; function-per-feature build output should be evaluated on top of that manifest without changing the feature authoring model.
+Slice's static-handler shape makes the function-per-feature mapping straightforward while keeping the hosted ASP.NET Core Lambda adapter available as the default path. The next deployment step is improving packaging from shared per-feature handler artifacts toward true NativeAOT binary-per-feature output without changing the feature authoring model.
 
 ## Build & run
 

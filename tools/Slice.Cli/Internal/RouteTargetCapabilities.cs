@@ -17,6 +17,11 @@ internal static class RouteTargetCapabilities
 
     private static RouteCapability ClassifyLambdaPerFeature(SliceRouteInfo route)
     {
+        if (!string.IsNullOrWhiteSpace(route.LambdaPerFeatureStatus))
+        {
+            return new RouteCapability(route.LambdaPerFeatureStatus, route.LambdaPerFeatureReason);
+        }
+
         if (string.IsNullOrWhiteSpace(route.ReturnType))
         {
             return new RouteCapability(Unknown, "Handle method not found");
@@ -28,18 +33,8 @@ internal static class RouteTargetCapabilities
             return new RouteCapability(Ineligible, route.PortabilityReason ?? "returns ASP.NET IResult");
         }
 
-        if (route.Filters.Any(static filter => !IsSliceValidatorFilter(filter)))
-        {
-            return new RouteCapability(Ineligible, "non-validator endpoint filters require the ASP.NET endpoint filter pipeline");
-        }
-
-        return new RouteCapability(Eligible, null);
+        return RouteCatalog.ClassifyLambdaPerFeature(route.ReturnType, route.Filters, route.Parameters, route.Pattern);
     }
-
-    private static bool IsSliceValidatorFilter(string filter)
-        => filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal)
-           || filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal)
-           || filter.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal);
 }
 
 internal sealed record RouteCapabilities(

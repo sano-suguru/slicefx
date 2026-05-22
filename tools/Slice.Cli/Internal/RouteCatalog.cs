@@ -8,11 +8,34 @@ internal static partial class RouteCatalog
     internal const string PortabilityPartial = "partial";
     internal const string PortabilityAspNetOnly = "aspnet-only";
     internal const string PortabilityUnknown = "unknown";
+    internal const string LambdaEligible = "eligible";
+    internal const string LambdaIneligible = "ineligible";
+    internal const string LambdaUnknown = "unknown";
+
+    private static readonly HashSet<string> s_simpleTypes = new(StringComparer.Ordinal)
+    {
+        "string", "Guid",
+        "int", "long", "short", "uint", "ulong", "ushort",
+        "bool", "double", "float", "decimal", "byte", "char",
+        "DateTime", "DateTimeOffset", "DateOnly", "TimeOnly", "TimeSpan", "Uri",
+        "System.String", "System.Guid",
+        "System.Int32", "System.Int64", "System.Int16",
+        "System.UInt32", "System.UInt64", "System.UInt16",
+        "System.Boolean", "System.Double", "System.Single",
+        "System.Decimal", "System.Byte", "System.Char",
+        "System.DateTime", "System.DateTimeOffset",
+        "System.DateOnly", "System.TimeOnly", "System.TimeSpan", "System.Uri",
+    };
 
     internal static SliceRouteInfo[] Discover(ProjectContext ctx)
+        => DiscoverDetailed(ctx).Routes;
+
+    internal static RouteCatalogDiscovery DiscoverDetailed(ProjectContext ctx)
     {
         var generatedRoutes = GeneratedRouteCatalog.Discover(ctx);
-        return generatedRoutes.Found ? generatedRoutes.Routes : DiscoverFromSource(ctx);
+        return generatedRoutes.Found
+            ? new RouteCatalogDiscovery(generatedRoutes.Routes, HasGeneratedMetadata: true, generatedRoutes.HasLambdaPerFunctionHandlers)
+            : new RouteCatalogDiscovery(DiscoverFromSource(ctx), HasGeneratedMetadata: false, HasLambdaPerFunctionHandlers: false);
     }
 
     private static SliceRouteInfo[] DiscoverFromSource(ProjectContext ctx)
@@ -63,6 +86,7 @@ internal static partial class RouteCatalog
                 .ToArray();
             var (portability, portabilityReason) = ClassifyPortability(returnType, filters);
             var featureName = classMatch.Groups["class"].Value;
+            var lambda = ClassifyLambdaPerFeature(returnType, filters, parameters, parts[1]);
 
             yield return new SliceRouteInfo(
                 parts[0].ToUpperInvariant(),
@@ -77,7 +101,9 @@ internal static partial class RouteCatalog
                 portability,
                 portabilityReason,
                 filters,
-                parameters);
+                parameters,
+                lambda.Status,
+                lambda.Reason);
         }
     }
 
@@ -194,6 +220,111 @@ internal static partial class RouteCatalog
             : (PortabilityPortable, null);
     }
 
+    internal static RouteCapability ClassifyLambdaPerFeature(
+        string returnType,
+        string[] filters,
+        SliceRouteParameter[] parameters,
+        string pattern)
+    {
+        if (returnType.Length == 0)
+        {
+            return new RouteCapability(LambdaUnknown, "Handle method not found");
+        }
+
+        if (returnType.Contains("IResult", StringComparison.Ordinal))
+        {
+            return new RouteCapability(LambdaIneligible, "returns ASP.NET IResult");
+        }
+
+        if (filters.Any(static filter => !IsSliceValidatorFilter(filter)))
+        {
+            return new RouteCapability(LambdaIneligible, "non-validator endpoint filters require the ASP.NET endpoint filter pipeline");
+        }
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.Type is "CancellationToken" or "System.Threading.CancellationToken"
+                || parameter.Type == "Request"
+                || parameter.Type.EndsWith(".Request", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (IsRouteParam(parameter.Name, pattern)
+                && !IsSimpleType(parameter.Type))
+            {
+                return new RouteCapability(
+                    LambdaIneligible,
+                    $"route parameter '{parameter.Name}' has unsupported type '{parameter.Type}'");
+            }
+        }
+
+        return new RouteCapability(LambdaEligible, null);
+    }
+
+    private static bool IsSliceValidatorFilter(string filter)
+        => (filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal) &&
+            filter.EndsWith('>'))
+           || filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal)
+           || filter.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal);
+
+    private static bool IsSimpleType(string type)
+        => s_simpleTypes.Contains(type)
+           || (type.EndsWith('?') && s_simpleTypes.Contains(type[..^1]))
+           || IsNullableType(type);
+
+    private static bool IsNullableType(string type)
+    {
+        const string nullablePrefix = "System.Nullable<";
+        if (!type.StartsWith(nullablePrefix, StringComparison.Ordinal)
+            || !type.EndsWith('>'))
+        {
+            return false;
+        }
+
+        return s_simpleTypes.Contains(type[nullablePrefix.Length..^1]);
+    }
+
+    private static bool IsRouteParam(string name, string pattern)
+    {
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            if (pattern[i] != '{')
+            {
+                continue;
+            }
+
+            if (i + 1 < pattern.Length && pattern[i + 1] == '{')
+            {
+                i++;
+                continue;
+            }
+
+            var end = pattern.IndexOf('}', i + 1);
+            if (end < 0)
+            {
+                return false;
+            }
+
+            var parameterName = NormalizeRouteParameterName(pattern[(i + 1)..end]);
+            if (string.Equals(parameterName, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            i = end;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeRouteParameterName(string token)
+    {
+        token = token.TrimStart('*');
+        var terminator = token.IndexOfAny([':', '?', '=']);
+        return terminator >= 0 ? token[..terminator] : token;
+    }
+
     private static string ReadClassAttributeBlock(string source, int classIndex)
     {
         var blockStart = 0;
@@ -245,9 +376,26 @@ internal sealed record SliceRouteInfo(
     string Portability,
     string? PortabilityReason,
     string[] Filters,
-    SliceRouteParameter[] Parameters)
+    SliceRouteParameter[] Parameters,
+    string? LambdaPerFeatureStatus = null,
+    string? LambdaPerFeatureReason = null,
+    string? SourceAssemblyName = null,
+    string? LambdaPerFeatureHandlerType = null,
+    string? LambdaPerFeatureHandlerMethod = null)
 {
     internal string FeatureType => $"{Namespace}.{FeatureName}";
+
+    internal string? LambdaPerFeatureHandler
+        => SourceAssemblyName is null ||
+           LambdaPerFeatureHandlerType is null ||
+           LambdaPerFeatureHandlerMethod is null
+            ? null
+            : $"{SourceAssemblyName}::{LambdaPerFeatureHandlerType}::{LambdaPerFeatureHandlerMethod}";
 }
 
 internal sealed record SliceRouteParameter(string Type, string Name);
+
+internal sealed record RouteCatalogDiscovery(
+    SliceRouteInfo[] Routes,
+    bool HasGeneratedMetadata,
+    bool HasLambdaPerFunctionHandlers);

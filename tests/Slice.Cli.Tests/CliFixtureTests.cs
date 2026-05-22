@@ -577,7 +577,7 @@ public class CliFixtureTests
     }
 
     [Fact]
-    public async Task Manifest_aws_lambda_per_feature_mode_fails_until_supported()
+    public async Task Manifest_aws_lambda_per_feature_mode_emits_eligible_functions_and_exclusions()
     {
         using var fixture = CliProjectFixture.Create(
             "lambda-per-feature-app",
@@ -589,9 +589,37 @@ public class CliFixtureTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
               </ItemGroup>
             </Project>
+            """);
+        fixture.WriteFeature(
+            "LambdaSetup.cs",
+            """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Slice.Lambda.PerFunction;
+
+            [assembly: LambdaPerFunction]
+
+            namespace Lambda.PerFeature.App;
+
+            public sealed class LambdaJsonContext : JsonSerializerContext
+            {
+                public static LambdaJsonContext Default { get; } = new();
+
+                private LambdaJsonContext()
+                    : base(null)
+                {
+                }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
             """);
         fixture.WriteFeature(
             "Features/Health/GetHealth.cs",
@@ -599,6 +627,137 @@ public class CliFixtureTests
             using Slice;
 
             namespace Lambda.PerFeature.App.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Health/GetFilteredHealth.cs",
+            """
+            using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Http;
+            using Slice;
+
+            namespace Lambda.PerFeature.App.Features.Health;
+
+            [Feature("GET /health/filtered")]
+            [Filter<AuditFilter>]
+            public static class GetFilteredHealth
+            {
+                public static string Handle() => "ok";
+            }
+
+            public sealed class AuditFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "per-feature"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var yaml = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("Per-feature mode: each eligible [Feature] becomes an independent Lambda function.", yaml);
+        Assert.Contains("HealthGetHealthFunction:", yaml);
+        Assert.Contains("HealthGetHealthEvent:", yaml);
+        Assert.Contains("Handler: 'lambda-per-feature-app::Slice.lambda_per_feature_app_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
+        Assert.Contains("Path: '/health'", yaml);
+        Assert.DoesNotContain("HealthGetFilteredHealthFunction:", yaml);
+        Assert.Contains("# - Health.GetFilteredHealth: non-validator endpoint filters require the ASP.NET endpoint filter pipeline", yaml);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_per_feature_uses_referenced_feature_assembly_handlers()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "host-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Host.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="FeatureLib/feature-lib.csproj" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+              <ItemGroup>
+                <Compile Remove="FeatureLib/**/*.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "FeatureLib/feature-lib.csproj",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <AssemblyName>feature-lib</AssemblyName>
+                <RootNamespace>Feature.Lib</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "FeatureLib/LambdaSetup.cs",
+            """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Slice.Lambda.PerFunction;
+
+            [assembly: LambdaPerFunction]
+
+            namespace Feature.Lib;
+
+            public sealed class Marker;
+
+            public sealed class LambdaJsonContext : JsonSerializerContext
+            {
+                public static LambdaJsonContext Default { get; } = new();
+
+                private LambdaJsonContext()
+                    : base(null)
+                {
+                }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """);
+        fixture.WriteFeature(
+            "UseFeatureLib.cs",
+            """
+            namespace Host.App;
+
+            public sealed class UseFeatureLib
+            {
+                private Feature.Lib.Marker _marker = new();
+            }
+            """);
+        fixture.WriteFeature(
+            "FeatureLib/Features/Health/GetHealth.cs",
+            """
+            using Slice;
+
+            namespace Feature.Lib.Features.Health;
 
             [Feature("GET /health")]
             public static class GetHealth
@@ -614,8 +773,89 @@ public class CliFixtureTests
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "per-feature"])
             .InvokeAsync();
 
-        Assert.Equal(1, exitCode);
-        Assert.False(File.Exists(outputFile));
+        Assert.Equal(0, exitCode);
+        var yaml = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("Handler: 'feature-lib::Slice.feature_lib_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
+        Assert.DoesNotContain("Handler: 'host-app::Slice.host_app_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_per_feature_writes_artifact_manifest()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "lambda-package-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Lambda.Package.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "LambdaSetup.cs",
+            """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Slice.Lambda.PerFunction;
+
+            [assembly: LambdaPerFunction]
+
+            namespace Lambda.Package.App;
+
+            public sealed class LambdaJsonContext : JsonSerializerContext
+            {
+                public static LambdaJsonContext Default { get; } = new();
+
+                private LambdaJsonContext()
+                    : base(null)
+                {
+                }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Health/GetHealth.cs",
+            """
+            using Slice;
+
+            namespace Lambda.Package.App.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
+        var exitCode = await PackageAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "per-feature", "--skip-publish"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var manifestPath = Path.Combine(outputDir, "slice-lambda-package.json");
+        Assert.True(File.Exists(manifestPath));
+
+        var json = await File.ReadAllTextAsync(manifestPath);
+        Assert.Contains("\"mode\": \"per-feature\"", json);
+        Assert.Contains("\"publishDirectory\": \"publish\"", json);
+        Assert.Contains("\"endpointName\": \"Health.GetHealth\"", json);
+        Assert.Contains("lambda-package-app::Slice.lambda_package_app_SliceLambdaPerFunctionHandlers::Health_GetHealth", json);
+        Assert.DoesNotContain(outputDir, json, StringComparison.Ordinal);
     }
 
     [Fact]

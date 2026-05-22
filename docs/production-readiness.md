@@ -70,7 +70,7 @@ Not yet measured in `Slice.Benchmarks`. Future candidate. Today, the manual prox
 
 | Project shape | Recommendation |
 |---|---|
-| Serverless (AWS Lambda / Cloudflare Workers) microservices | **Recommended** |
+| Serverless / WASI microservices | **Recommended** |
 | Full-stack C# (Blazor / .NET client) with typed-client needs | **Recommended** (`slice client csharp` for type safety) |
 | Small-to-medium web API (< 50 endpoints) | **Acceptable** |
 | Large internal monolith (> 200 endpoints, complex domain) | **PoC required** — decide after measuring with phase 0 benchmarks |

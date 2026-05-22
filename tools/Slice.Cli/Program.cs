@@ -18,11 +18,17 @@ var manifestCmd = new Command("manifest", "Generate deployment manifests from Sl
     ManifestAwsLambdaCommand.Build()
 };
 
+var packageCmd = new Command("package", "Publish/package Slice deployment artifacts.")
+{
+    PackageAwsLambdaCommand.Build()
+};
+
 var root = new RootCommand("Slice CLI — vertical slice scaffolding.")
 {
     newCmd,
     clientCmd,
     manifestCmd,
+    packageCmd,
     ListRoutesCommand.Build()
 };
 
