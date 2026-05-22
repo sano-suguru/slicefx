@@ -31,15 +31,15 @@ Satellite projects (`Slice.SourceGenerator`, `Slice.Lambda`, `Slice.TestHost`, `
 
 Three reasons, in order of importance:
 
-1. **No per-request reflection, no startup-time reflection.** Anything that runs at request time must avoid reflection; the source generator emits the registration code, so `AddSlice()` and `MapSlices()` contain only direct method calls. The result is AOT-friendly (works under Native AOT publish without trim warnings) and avoids startup cost that scales with assembly count.
-2. **Convention violations surface at compile time.** The generator emits 17 categories of diagnostics (SLICE001–017) — missing `Handle` method, ambiguous overloads, non-public handler, invalid filter type, unsupported WASI body binding, missing JsonContext for AOT, duplicate endpoint names across aggregated modules, and so on. A reflection-based scanner would either silently skip these cases or throw at startup.
+1. **Generated route discovery and dispatch avoid reflection.** Anything that runs at request time must avoid reflection; the source generator emits the route registration and dispatch code, so `AddSlice()` and `MapSlices()` contain direct method calls instead of assembly scanning. DataAnnotations validation still builds its ASP.NET validation plan at endpoint-build time. The generated path stays AOT-friendly and avoids route-discovery startup cost that scales with assembly count.
+2. **Convention violations surface at compile time.** The generator emits 16 categories of diagnostics (SLICE001–006 and SLICE008–017) — missing `Handle` method, ambiguous overloads, non-public handler, invalid filter type, unsupported WASI body binding, missing JsonContext for AOT, duplicate endpoint names across aggregated modules, and so on. A reflection-based scanner would either silently skip these cases or throw at startup.
 3. **Tooling reuse.** The same generator emits a route manifest (`{Asm}_SliceRouteManifest.g.cs`) consumed by `slice routes` and `slice client csharp`. Reflection would require runtime introspection of a running app to produce the same output.
 
 Implementation lives in `src/Slice.SourceGenerator/`. The pipeline is incremental — see "Why incremental?" below.
 
-## Why an *incremental* generator? Doesn't every generator support that?
+## Why `IIncrementalGenerator`?
 
-Yes, but the [`IIncrementalGenerator`](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview) API only avoids re-running on every keystroke if you wire it up correctly. Slice does:
+The [`IIncrementalGenerator`](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview) API only avoids re-running work on every keystroke if the pipeline is wired with cacheable inputs. Slice does:
 
 - Uses `WithTrackingName` on every pipeline stage so cache behavior is testable.
 - Reduces the `Compilation` to small, equatable record types **before** the final `RegisterSourceOutput` action, preventing cache busts when unrelated parts of the compilation change.
@@ -63,19 +63,18 @@ Instead, filters are scoped services. Configure them through constructor DI by b
 
 ## Why are some features classified `aspnet-only` and excluded from WASI?
 
-Three diagnostics drive the classification (`portable` / `partial` / `aspnet-only`):
+WASI exclusions and route-manifest portability use the same vocabulary, but they are checked at different layers:
 
-- **SLICE008**: Feature returns `IResult` / `Task<IResult>`. `IResult` is an ASP.NET-specific abstraction; WASI dispatch has no equivalent, so these features are correctly excluded.
-- **SLICE009**: A body-binding route needs `WasiJsonContext` for AOT-safe deserialization on the WASI path. Without it, the route can't be added to `WasiRouteTable`.
-- **SLICE011**: The route uses a DataAnnotations attribute (e.g., `Range`, `RegularExpression`) whose WASI implementation falls back to reflection. WASI excludes these to keep the route table reflection-free.
+- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-based DataAnnotations validation (SLICE011) or non-validator endpoint filters prevent full WASI behavior.
+- **WASI route table emission**: body-binding routes additionally need `WasiJsonContext` for AOT-safe deserialization. Without it, SLICE009 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
 
-The classification is exposed in the route manifest, surfaced by `slice routes`, and consumed by both `slice client csharp` and the WASI source-generator path. The same vocabulary keeps tooling and runtime aligned.
+The manifest classification is surfaced by `slice routes` and consumed by `slice client csharp`; the WASI source-generator path applies its own route-table eligibility checks using the same portability vocabulary where applicable.
 
 ## Why no CLI flags for "generate everything"? Why opt-in adapters?
 
 Each satellite (`Slice.Lambda`, `Slice.TestHost`, `Slice.Wasi`) brings its own NuGet dependencies. Forcing them on every consumer would erode the zero-dep value of `Slice.Core` and pull in transitive packages that AOT publishers don't want. Opt-in by package reference keeps the dependency graph honest: if you reference `Slice.Wasi`, the WASI generator path activates; otherwise, the WASI emitter is skipped entirely and produces no output.
 
-This is why the source generator emits up to three separate files (`{Asm}_SliceRegistrations.g.cs`, `{Asm}_SliceWasiRegistrations.g.cs`, `{Asm}_SliceRouteManifest.g.cs`) instead of one combined output.
+This is why the source generator emits separate files for each active surface (`{Asm}_SliceRegistrations.g.cs`, `{Asm}_SliceWasiRegistrations.g.cs`, `{Asm}_SliceRouteManifest.g.cs`, and `{Asm}.SliceLambdaPerFunctionHandlers.g.cs` when Lambda per-feature handlers are enabled) instead of one combined output.
 
 ## Why does the warm-run benchmark report slower than cold-run?
 

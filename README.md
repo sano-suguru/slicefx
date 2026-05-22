@@ -10,11 +10,11 @@
 
 Website: <https://sano-suguru.github.io/slice/>
 
-**Slice** is an experimental .NET framework where one file is one feature. A Roslyn **incremental** source generator turns `[Feature]` classes into AOT-safe `AddSlice()` / `MapSlices()` calls, route manifests, and typed clients, surfacing **17 categories of compile-time diagnostics (SLICE001–017)** so convention violations never reach runtime. `Slice.Core` is zero-dependency by construction (enforced by both an MSBuild target and CI), and a nightly perf workflow gates source-generator throughput against published baselines.
+**Slice** is an experimental .NET framework where one file is one feature. A Roslyn **incremental** source generator turns `[Feature]` classes into AOT-safe `AddSlice()` / `MapSlices()` calls and route manifests consumed by `slice client csharp`, surfacing **16 categories of compile-time diagnostics (SLICE001–006 and SLICE008–017)** so convention violations never reach runtime. `Slice.Core` is zero-dependency by construction (enforced by both an MSBuild target and CI), and a nightly perf workflow gates source-generator throughput against published baselines.
 
 Curious about the design choices? See **[Design decisions FAQ](docs/design-decisions.md)** and **[Production readiness criteria](docs/production-readiness.md)**.
 
-Each endpoint is a static feature file: request, response, validation, filters, and handler stay together. The source generator turns those features into ASP.NET registrations, route metadata, typed clients, Lambda handlers, or wasi:http dispatch where the handler shape is portable.
+Each endpoint is a static feature file: request, response, validation, filters, and handler stay together. The source generator turns those features into ASP.NET registrations, route metadata for tooling, Lambda handlers, or wasi:http dispatch where the handler shape is portable.
 
 ```bash
 dotnet run --project samples/Slice.Sample
