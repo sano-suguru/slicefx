@@ -607,7 +607,7 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
                 <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">設計の意思決定と運用基準</span><span class="lang-en">Design decisions and operating criteria</span></h2>
                 <p class="text-slate-400 max-w-3xl mx-auto"><span class="lang-ja">Slice がどんな原則で動いていて、どこまで実運用に近いかをまとめたドキュメント群です。</span><span class="lang-en">How Slice is built, what invariants it defends, and where it sits on the path to production readiness.</span></p>
             </div>
-            <div class="grid md:grid-cols-3 gap-6">
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <a href="https://github.com/sano-suguru/slice/blob/main/docs/design-decisions.md" class="glass-panel interactive-card p-6 rounded-xl block">
                     <div class="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center mb-4 text-brand-400 border border-slate-700"><i data-lucide="lightbulb"></i></div>
                     <h3 class="font-bold mb-2"><span class="lang-ja">設計判断 FAQ</span><span class="lang-en">Design decisions FAQ</span></h3>
@@ -625,6 +625,12 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
                     <h3 class="font-bold mb-2"><span class="lang-ja">プロダクション準備</span><span class="lang-en">Production readiness</span></h3>
                     <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">6 つの強み保全インバリアント、ベンチマーク基準値、毎晩実行される perf ゲート、採用マトリクス。</span><span class="lang-en">Six strength-preservation invariants, benchmark baselines, nightly perf gates, and the adoption matrix.</span></p>
                     <p class="mt-4 text-xs font-bold text-brand-400"><span class="lang-ja">GitHub で読む</span><span class="lang-en">Read on GitHub</span></p>
+                </a>
+                <a href="perf/latest.svg" class="glass-panel interactive-card p-6 rounded-xl block">
+                    <div class="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center mb-4 text-orange-400 border border-slate-700"><i data-lucide="line-chart"></i></div>
+                    <h3 class="font-bold mb-2"><span class="lang-ja">最新ベンチ結果</span><span class="lang-en">Latest benchmark chart</span></h3>
+                    <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">毎晩の GitHub Actions perf 実行から生成される、ソースジェネレータの ColdRun / WarmRun_NoOpEdit SVG チャート。</span><span class="lang-en">An SVG chart generated from the nightly GitHub Actions perf run for source-generator ColdRun and WarmRun_NoOpEdit timings.</span></p>
+                    <p class="mt-4 text-xs font-bold text-brand-400"><span class="lang-ja">SVG を開く</span><span class="lang-en">Open SVG</span></p>
                 </a>
             </div>
             <div class="mt-8 text-center text-sm text-slate-500">
