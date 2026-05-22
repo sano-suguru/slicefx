@@ -383,6 +383,39 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_omits_lambda_per_feature_metadata_when_handlers_are_not_emitted()
+    {
+        var source = """
+            using Slice;
+
+            namespace NoLambdaHandlersApp.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateHostCompilation("NoLambdaHandlersApp", source);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        var compactManifestSource = manifestSource
+            .Replace(" ", "", StringComparison.Ordinal)
+            .Replace("\r", "", StringComparison.Ordinal)
+            .Replace("\n", "", StringComparison.Ordinal);
+        Assert.Contains("string? LambdaPerFeatureStatus", manifestSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"eligible\"", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("null,null,null,null,null)]", compactManifestSource, StringComparison.Ordinal);
+        Assert.Contains("null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_classifies_lambda_catch_all_route_parameters_as_route_values()
     {
         var source = """

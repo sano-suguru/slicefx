@@ -67,9 +67,11 @@ internal static class RouteManifestEmitter
         foreach (var feature in features)
         {
             var (portability, portabilityReason) = ClassifyPortability(feature);
-            var lambda = ClassifyLambdaPerFeature(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextFqn);
+            var (lambdaStatus, lambdaReason, lambdaHandlerAssembly, lambdaHandlerType, lambdaHandlerMethod) =
+                GetEmittedLambdaMetadata(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextFqn);
+
             sb.AppendLine(
-                $"[assembly: global::Slice.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(TrimGlobalPrefix(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(TrimGlobalPrefix(feature.ReturnTypeFqn))}, {CSharpLiteral.String(portability)}, {CSharpNullableStringLiteral(portabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))}, {CSharpLiteral.String(lambda.Status)}, {CSharpNullableStringLiteral(lambda.Reason)}, {CSharpNullableStringLiteral(lambda.HandlerAssembly)}, {CSharpNullableStringLiteral(lambda.HandlerType)}, {CSharpNullableStringLiteral(lambda.HandlerMethod)})]");
+                $"[assembly: global::Slice.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(TrimGlobalPrefix(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(TrimGlobalPrefix(feature.ReturnTypeFqn))}, {CSharpLiteral.String(portability)}, {CSharpNullableStringLiteral(portabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))}, {CSharpNullableStringLiteral(lambdaStatus)}, {CSharpNullableStringLiteral(lambdaReason)}, {CSharpNullableStringLiteral(lambdaHandlerAssembly)}, {CSharpNullableStringLiteral(lambdaHandlerType)}, {CSharpNullableStringLiteral(lambdaHandlerMethod)})]");
         }
     }
 
@@ -90,7 +92,7 @@ internal static class RouteManifestEmitter
         sb.AppendLine("        bool IsWasiCompatible,");
         sb.AppendLine("        string Portability,");
         sb.AppendLine("        string? PortabilityReason,");
-        sb.AppendLine("        string LambdaPerFeatureStatus,");
+        sb.AppendLine("        string? LambdaPerFeatureStatus,");
         sb.AppendLine("        string? LambdaPerFeatureReason,");
         sb.AppendLine("        string? LambdaPerFeatureHandlerAssembly,");
         sb.AppendLine("        string? LambdaPerFeatureHandlerType,");
@@ -110,7 +112,9 @@ internal static class RouteManifestEmitter
         foreach (var feature in features)
         {
             var (portability, portabilityReason) = ClassifyPortability(feature);
-            var lambda = ClassifyLambdaPerFeature(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextFqn);
+            var (lambdaStatus, lambdaReason, lambdaHandlerAssembly, lambdaHandlerType, lambdaHandlerMethod) =
+                GetEmittedLambdaMetadata(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextFqn);
+
             sb.AppendLine("        new SliceRouteDescriptor(");
             sb.AppendLine($"            {CSharpLiteral.String(feature.HttpMethod)},");
             sb.AppendLine($"            {CSharpLiteral.String(feature.Pattern)},");
@@ -123,11 +127,11 @@ internal static class RouteManifestEmitter
             sb.AppendLine($"            {BoolLiteral(portability == "portable")},");
             sb.AppendLine($"            {CSharpLiteral.String(portability)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(portabilityReason)},");
-            sb.AppendLine($"            {CSharpLiteral.String(lambda.Status)},");
-            sb.AppendLine($"            {CSharpNullableStringLiteral(lambda.Reason)},");
-            sb.AppendLine($"            {CSharpNullableStringLiteral(lambda.HandlerAssembly)},");
-            sb.AppendLine($"            {CSharpNullableStringLiteral(lambda.HandlerType)},");
-            sb.AppendLine($"            {CSharpNullableStringLiteral(lambda.HandlerMethod)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(lambdaStatus)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(lambdaReason)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(lambdaHandlerAssembly)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(lambdaHandlerType)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(lambdaHandlerMethod)},");
             sb.AppendLine($"            {FilterTypesLiteral(feature)}),");
         }
         sb.AppendLine("    ];");
@@ -184,6 +188,21 @@ internal static class RouteManifestEmitter
         => filter.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal)
            || filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal)
            || filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal);
+
+    private static (string? Status, string? Reason, string? HandlerAssembly, string? HandlerType, string? HandlerMethod) GetEmittedLambdaMetadata(
+        FeatureModel feature,
+        string assemblyName,
+        bool emitLambdaPerFunctionHandlers,
+        string? lambdaJsonContextFqn)
+    {
+        if (!emitLambdaPerFunctionHandlers)
+        {
+            return (null, null, null, null, null);
+        }
+
+        var lambda = ClassifyLambdaPerFeature(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextFqn);
+        return (lambda.Status, lambda.Reason, lambda.HandlerAssembly, lambda.HandlerType, lambda.HandlerMethod);
+    }
 
     internal static LambdaPerFeatureEligibility ClassifyLambdaPerFeature(
         FeatureModel feature,
