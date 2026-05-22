@@ -16,11 +16,11 @@ dotnet test Slice.slnx --configuration Release --no-build --no-restore
 dotnet run --project samples/Slice.Sample        # listens on http://localhost:5099
 dotnet run --project samples/Slice.LambdaSample  # listens on http://localhost:5100 (Lambda-ready)
 dotnet run --project samples/Slice.TestHostSample # in-process HTTP demo (no server port)
-dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release  # Linux x64 / Windows x64 publish host
+dotnet publish samples/Slice.WasiSample -r wasi-wasm -c Release  # Linux x64 / Windows x64, or Docker linux/amd64 on macOS
 dotnet format                                     # canonical formatter (no config file)
 ```
 
-xUnit tests live under `tests/`: `Slice.Core.Tests`, `Slice.SourceGenerator.Tests`, `Slice.Workers.Tests`, and `Slice.Cli.Tests`. CI runs `dotnet test Slice.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test Slice.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
+xUnit tests live under `tests/`: `Slice.Core.Tests`, `Slice.SourceGenerator.Tests`, `Slice.Wasi.Tests`, and `Slice.Cli.Tests`. CI runs `dotnet test Slice.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test Slice.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
 
 ```bash
 curl http://localhost:5099/health
@@ -31,11 +31,11 @@ curl -X DELETE http://localhost:5099/users/{id} -H "X-API-Key: secret"
 
 ## Hard constraints
 
-- **Slice.Core stays zero-dependency.** `src/Slice.Core/Slice.Core.csproj` must never gain a `<PackageReference>`. Enforced in two places: an MSBuild target `ValidateSliceCorePackageReferences` in `Directory.Build.targets` that fails the build locally, and a PowerShell step in `.github/workflows/ci.yml` that fails CI. The only allowed reference is `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Satellite projects (`src/Slice.SourceGenerator`, `src/Slice.Lambda`, `src/Slice.TestHost`, `src/Slice.Workers`, `tools/Slice.Cli`, and their samples) restore from nuget.org normally.
+- **Slice.Core stays zero-dependency.** `src/Slice.Core/Slice.Core.csproj` must never gain a `<PackageReference>`. Enforced in two places: an MSBuild target `ValidateSliceCorePackageReferences` in `Directory.Build.targets` that fails the build locally, and a PowerShell step in `.github/workflows/ci.yml` that fails CI. The only allowed reference is `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Satellite projects (`src/Slice.SourceGenerator`, `src/Slice.Lambda`, `src/Slice.TestHost`, `src/Slice.Wasi`, `tools/Slice.Cli`, and their samples) restore from nuget.org normally.
 - **No new framework abstractions.** Slice intentionally avoids `IPipelineBehavior`, `IMediator`, etc. Cross-cutting concerns reuse ASP.NET Core's `IEndpointFilter`.
 - **No per-request reflection.** Anything that runs per-request must avoid reflection. The source generator emits `AddSlice` / `MapSlices` — the sole registration path — which avoids startup reflection entirely (AOT-friendly).
 - **`WebApplication.CreateSlimBuilder` is intentional** (trimming-friendly host). Do not switch to `CreateBuilder` without reason.
-- **Experimental satellite scope.** Source generator, AWS Lambda adapter, TestHost, fluent validator (`ISliceValidator<T>`), CLI scaffolding, and Cloudflare Workers adapter (`Slice.Workers`) are all implemented experimentally. `Slice.Workers` provides in-process dispatch, stdin/stdout IPC, and a componentize-dotnet WASI publish path for Cloudflare Workers. Do not use the `wasi-experimental` Mono workload for this codebase.
+- **Experimental satellite scope.** Source generator, AWS Lambda adapter, TestHost, fluent validator (`ISliceValidator<T>`), CLI scaffolding, and Cloudflare WASI adapter (`Slice.Wasi`) are all implemented experimentally. `Slice.Wasi` provides in-process dispatch and a componentize-dotnet WASI publish path targeting `wasi:http/incoming-handler@0.2.0` — deployable to Cloudflare Workers (via jco) and Fermyon Cloud / Spin (natively). Do not use the `wasi-experimental` Mono workload for this codebase.
 - **Style is CI-enforced.** `.editorconfig` mandates file-scoped namespaces, `var` usage, 4-space indent (2 for JSON/YAML), final newline, LF line endings. Several IDE diagnostics (IDE0005, IDE0055, IDE0060, IDE0161, IDE0300/0301/0305/0306) are elevated to warning. CI's `dotnet format --severity info` will fail on any violation.
 
 ## Authoring a feature (the pattern all samples follow)
@@ -108,18 +108,18 @@ first, and only if it passes does the `[Filter<T>]` chain continue. Put
 filters run before or after custom validation. Note: `Program.cs` (top-level statements) runs in
 the global namespace — add `using Slice;` to access `ISliceValidator<T>` directly.
 
-### Slice.Workers (`src/Slice.Workers/`)
+### Slice.Wasi (`src/Slice.Wasi/`)
 
-ASP.NET-independent Workers satellite (experimental). Bypasses Kestrel entirely; the source generator emits a second output file (`<Asm>.SliceWorkersRegistrations.g.cs`) containing `RegisterWorkerRoutes(WorkerRouteTable)` and `AddSlice(WorkerHostBuilder)`. Emitted only when `Slice.Workers.Routing.WorkerRouteTable` is present in the compilation, so existing projects are unaffected.
+ASP.NET-independent WASI satellite (experimental). Bypasses Kestrel entirely; the source generator emits a second output file (`<Asm>.SliceWasiRegistrations.g.cs`) containing `RegisterWasiRoutes(WasiRouteTable)` and `AddSlice(WasiHostBuilder)`. Emitted only when `Slice.Wasi.Routing.WasiRouteTable` is present in the compilation, so existing projects are unaffected.
 
-**In-process dispatch and IPC:** `WorkerApp.DispatchAsync(WorkerRequest)` routes requests in-process through the source-generated `WorkerRouteTable`. `WorkerApp.Run()` runs the synchronous JSON-lines stdin/stdout IPC loop used by WASI command hosts; `RunAsync()` remains available for non-WASI hosts.
+**In-process dispatch:** `WasiApp.DispatchAsync(WasiRequest)` routes requests in-process through the source-generated `WasiRouteTable`. (`WasiApp.Run()` / `RunAsync()` have been removed; they were a JSON-lines CLI IPC mechanism superseded by the wasi:http approach.)
 
-**WASI publish:** `samples/Slice.WorkersSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WorkersSample -r wasi-wasm -c Release`. With the current NativeAOT-LLVM preview packages, publish is supported from Linux x64 or Windows x64 hosts; macOS can run the in-process probe but intentionally fails publish with a clear MSBuild error. The sample copies the generated component to `samples/Slice.WorkersSample/worker/slice-workers-sample.wasm`; `samples/Slice.WorkersSample/worker` then uses `@bytecodealliance/jco` and `@bytecodealliance/preview2-shim` to transpile the component for the Cloudflare shim (`npm install`, then `npm run build`).
+**WASI publish:** `samples/Slice.WasiSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WasiSample -r wasi-wasm -c Release`. The component exports `wasi:http/incoming-handler@0.2.0` — the standard WASI HTTP interface. With the current NativeAOT-LLVM preview packages, native publish is supported from Linux x64 or Windows x64 hosts; macOS should publish through a Linux x64 Docker container such as `docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work mcr.microsoft.com/dotnet/sdk:10.0 dotnet publish samples/Slice.WasiSample -r wasi-wasm -c Release`. The CopyWasiWasmComponent target copies the generated component to `samples/Slice.WasiSample/dist/slice-wasi-sample.wasm`. For Cloudflare Workers: `samples/Slice.WasiSample/dist` uses `@bytecodealliance/jco` to transpile the component and `shim.mjs` to bridge Cloudflare's `fetch(Request)` to the wasi:http handler (`npm install`, then `npm run transpile`). For Fermyon Cloud / Spin: deploy `spin.toml` + `dist/slice-wasi-sample.wasm` directly — Spin natively understands `wasi:http/incoming-handler`.
 
-Features returning `IResult`/`Task<IResult>` are excluded from Workers routes automatically (SLICE008 info diagnostic). Workers DataAnnotations validation is source-generated for supported `Required`, `StringLength`, and `MinLength` rules; routes that need reflection-based validation are excluded with SLICE011. `[Filter<T>]` filters other than `SliceValidatorFilter<T>` are not executed in the Workers path (they require ASP.NET's `IEndpointFilter` pipeline).
+Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE008 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE009. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, and `MinLength` rules; routes that need reflection-based validation are excluded with SLICE011. `[Filter<T>]` filters other than `SliceValidatorFilter<T>` are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline).
 
 ```csharp
-var builder = WorkerHost.CreateBuilder();
+var builder = WasiHost.CreateBuilder();
 builder.AddSlice();                       // source-generated route wiring
 builder.Services.AddSingleton(TimeProvider.System);
 var app = builder.Build();
@@ -170,7 +170,7 @@ Local .NET tool (`dotnet-tools.json` at the repo root) exposing the `slice` comm
 - `slice routes [--format table|json]` — lists every feature in the project plus its **portability classification** (`portable` / `partial` / `aspnet-only`). Reads feature source files directly.
 - `slice client csharp --output <path>` — generates a typed C# client from the same manifest.
 
-Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and excluded from Workers routes (matches diagnostic SLICE008).
+Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and excluded from WASI routes (matches diagnostic SLICE008).
 
 ## Startup pipeline
 
@@ -178,7 +178,7 @@ Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and ex
 
 `AddSlice()` / `MapSlices()` are generated extension methods emitted into the `Slice` namespace for host projects. Feature assemblies also emit public non-extension module helpers and assembly markers so host generators can aggregate referenced feature assemblies without runtime scanning and validate endpoint-name uniqueness across aggregated modules. `SliceAggregateReferences=false` disables referenced module aggregation; `SliceReferencedAssemblies` allow-lists referenced assembly simple names. `AddSlice()` registers every filter referenced by `[Filter<T>]` as a scoped service. `MapSlices()` maps each `[Feature]` class: calls `endpoints.MapMethods(pattern, [method], delegate)`, attaches `DataAnnotationsValidationFilter`, then each `[Filter<T>]` in declaration order, then sets tag/summary/name.
 
-The source generator emits up to three files per assembly: `{AsmName}_SliceRegistrations.g.cs` (ASP.NET registrations, when `Microsoft.AspNetCore.Http.IResult` is referenced), `{AsmName}_SliceWorkersRegistrations.g.cs` (Workers registrations, only when `Slice.Workers.Routing.WorkerRouteTable` is referenced), and `{AsmName}_SliceRouteManifest.g.cs` — a `SliceRouteDescriptor` record plus `GetSliceRoutesGenerated()` consumed by tooling. The manifest includes the shared portability vocabulary (`portable`, `partial`, `aspnet-only`) and is emitted regardless of which hosting path is referenced. Emitter source: `src/Slice.SourceGenerator/Emit/`.
+The source generator emits up to three files per assembly: `{AsmName}_SliceRegistrations.g.cs` (ASP.NET registrations, when `Microsoft.AspNetCore.Http.IResult` is referenced), `{AsmName}_SliceWasiRegistrations.g.cs` (WASI registrations, only when `Slice.Wasi.Routing.WasiRouteTable` is referenced), and `{AsmName}_SliceRouteManifest.g.cs` — a `SliceRouteDescriptor` record plus `GetSliceRoutesGenerated()` consumed by tooling. The manifest includes the shared portability vocabulary (`portable`, `partial`, `aspnet-only`) and is emitted regardless of which hosting path is referenced. Emitter source: `src/Slice.SourceGenerator/Emit/`.
 
 ## Repo layout
 
@@ -193,11 +193,11 @@ src/Slice.Core/           # the framework: FeatureAttribute, FilterAttribute,
 src/Slice.SourceGenerator/# Roslyn generator emitting AddSlice/MapSlices into namespace Slice
 src/Slice.Lambda/         # AWS Lambda hosting adapter over Amazon.Lambda.AspNetCoreServer.Hosting
 src/Slice.TestHost/       # in-process test host wrapper over Microsoft.AspNetCore.Mvc.Testing
-src/Slice.Workers/        # Cloudflare Workers / WASI adapter (ASP.NET-independent)
-                          # WorkerHost, WorkerApp, WorkerRouteTable, SliceResult
+src/Slice.Wasi/           # WASI / wasi:http adapter (ASP.NET-independent)
+                          # WasiHost, WasiApp, WasiRouteTable, SliceResult
 tools/Slice.Cli/          # .NET tool: slice new feature|filter, slice routes, slice client csharp
 tests/                    # xUnit: Slice.Core.Tests, Slice.SourceGenerator.Tests,
-                          # Slice.Workers.Tests, Slice.Cli.Tests
+                          # Slice.Wasi.Tests, Slice.Cli.Tests
 docs/                     # published to GitHub Pages via .github/workflows/pages.yml
 README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, LICENSE
 samples/Slice.Sample/
@@ -208,9 +208,13 @@ samples/Slice.Sample/
   Services/               # demo IUserStore / InMemoryUserStore
 samples/Slice.LambdaSample/   # Lambda-ready sample: AddSlice → UseSliceLambda → MapSlices → RunOnLambdaAsync
 samples/Slice.TestHostSample/ # in-process HTTP demo against Slice.Sample
-samples/Slice.WorkersSample/  # Workers/WASI sample: WorkerHost.CreateBuilder → AddSlice → RunAsync
+samples/Slice.WasiSample/  # WASI sample: WasiHost.CreateBuilder → AddSlice → DispatchAsync
   Features/               # Health (GET /health) and Echo (POST /echo)
-  worker/                 # P2: dev-server.mjs (wasmtime bridge); P3: shim.mjs + wrangler.toml
+  IncomingHandlerImpl.cs  # wasi:http/incoming-handler → WasiApp.DispatchAsync bridge
+  spin.toml               # Fermyon Cloud / Spin deployment manifest
+  dist/                   # build output + Cloudflare Workers deployment glue
+    shim.mjs              # Cloudflare fetch(Request) → wasi:http bridge
+    stubs/tcp.js,udp.js   # ABI-level socket stubs (unused by app; Cloudflare has no Node socket APIs)
 ```
 
 Mixed-language comments are acceptable (the sample contains a Japanese comment in `Program.cs`).

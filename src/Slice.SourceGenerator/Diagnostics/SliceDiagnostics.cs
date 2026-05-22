@@ -73,25 +73,25 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a feature return type cannot be used by the Workers route table.
+    /// Diagnostic reported when a feature return type cannot be used by the WASI route table.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnsupportedReturnTypeForWorkers = new(
+    public static readonly DiagnosticDescriptor UnsupportedReturnTypeForWasi = new(
         "SLICE008",
-        "Return type not supported in Workers path",
-        "Feature '{0}': return type '{1}' is ASP.NET-specific and will be excluded from the Workers route table. Use 'WorkerResponse' or a POCO return type.",
+        "Return type not supported in WASI path",
+        "Feature '{0}': return type '{1}' is ASP.NET-specific and will be excluded from the WASI route table. Use 'WasiResponse' or a POCO return type.",
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when Workers body binding falls back to reflection-based JSON.
+    /// Diagnostic reported when a WASI body route is missing source-generated JSON metadata.
     /// </summary>
-    public static readonly DiagnosticDescriptor MissingWorkersJsonContext = new(
+    public static readonly DiagnosticDescriptor MissingWasiJsonContext = new(
         "SLICE009",
-        "Workers JSON source-generation context not found",
-        "Feature '{0}' has a request body but no WorkerJsonContext was found, so Workers body binding will use reflection-based JSON deserialization",
+        "WASI JSON source-generation context not found",
+        "Feature '{0}' has a request body but no WasiJsonContext was found and will be excluded from the WASI route table. Add a source-generated WasiJsonContext for AOT-safe body binding.",
         Category,
-        DiagnosticSeverity.Info,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     /// <summary>
@@ -107,12 +107,12 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a Workers route would need reflection-based DataAnnotations validation.
+    /// Diagnostic reported when a WASI route would need reflection-based DataAnnotations validation.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnsupportedValidationForWorkers = new(
+    public static readonly DiagnosticDescriptor UnsupportedValidationForWasi = new(
         "SLICE011",
-        "DataAnnotations validation is not supported in Workers path",
-        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the Workers route table. Use supported validation attributes or SliceValidatorFilter<T>.",
+        "DataAnnotations validation is not supported in WASI path",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the WASI route table. Use supported validation attributes or SliceValidatorFilter<T>.",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

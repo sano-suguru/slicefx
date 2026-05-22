@@ -1,7 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Slice.Workers;
+using Slice.Wasi;
 
 namespace Slice.SourceGenerator.Tests;
 
@@ -108,7 +108,7 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using Slice;
-            using Slice.Workers;
+            using Slice.Wasi;
 
             namespace WorkerHostApp.Features.Health
             {
@@ -125,14 +125,14 @@ public class SourceGeneratorCompileTests
                 {
                     public static void Configure()
                     {
-                        var builder = WorkerHost.CreateBuilder();
+                        var builder = WasiHost.CreateBuilder();
                         builder.AddSlice();
                     }
                 }
             }
             """;
 
-        var compilation = CreateHostCompilation("WorkerHostApp", source, includeWorkersReference: true);
+        var compilation = CreateHostCompilation("WorkerHostApp", source, includeWasiReference: true);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
@@ -143,8 +143,8 @@ public class SourceGeneratorCompileTests
 
         var generatedSource = string.Join(Environment.NewLine, runResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.Contains("namespace Slice;", generatedSource, StringComparison.Ordinal);
-        Assert.Contains("WorkerHostBuilder AddSliceWorkerRoutes(", generatedSource, StringComparison.Ordinal);
-        Assert.Contains("WorkerHostBuilder AddSlice(", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("WasiHostBuilder AddSliceWasiRoutes(", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("WasiHostBuilder AddSlice(", generatedSource, StringComparison.Ordinal);
         Assert.DoesNotContain("AddSliceGenerated", generatedSource, StringComparison.Ordinal);
     }
 
@@ -163,7 +163,7 @@ public class SourceGeneratorCompileTests
             }
             """;
 
-        var compilation = CreateHostCompilation("WorkerEscapingApp", source, includeWorkersReference: true);
+        var compilation = CreateHostCompilation("WorkerEscapingApp", source, includeWasiReference: true);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
@@ -191,11 +191,11 @@ public class SourceGeneratorCompileTests
             }
             """;
 
-        var compilation = CreateHostCompilation("WorkerRouteApp", source, includeWorkersReference: true);
+        var compilation = CreateHostCompilation("WorkerRouteApp", source, includeWasiReference: true);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
-        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+        var workersSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var id)", workersSource, StringComparison.Ordinal);
@@ -206,32 +206,54 @@ public class SourceGeneratorCompileTests
     public void Generator_emits_workers_validation_for_supported_attributes_with_custom_messages()
     {
         var source = """
+            using System;
             using System.ComponentModel.DataAnnotations;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
             using Slice;
 
-            namespace WorkerValidationApp.Features.Items;
-
-            [Feature("POST /items")]
-            public static class CreateItem
+            namespace WorkerValidationApp
             {
-                public sealed record Request(
-                    [Required(ErrorMessage = "Name is required.")]
-                    [StringLength(10, MinimumLength = 2, ErrorMessage = "Name length is invalid.")]
-                    string? Name,
-                    [MinLength(2, ErrorMessage = "At least two items are required.")]
-                    int[] Items);
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
 
-                public sealed record Response(string Name);
+                    private WasiJsonContext()
+                        : base(null)
+                    {
+                    }
 
-                public static Response Handle(Request req) => new(req.Name!);
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace WorkerValidationApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public sealed record Request(
+                        [Required(ErrorMessage = "Name is required.")]
+                        [StringLength(10, MinimumLength = 2, ErrorMessage = "Name length is invalid.")]
+                        string? Name,
+                        [MinLength(2, ErrorMessage = "At least two items are required.")]
+                        int[] Items);
+
+                    public sealed record Response(string Name);
+
+                    public static Response Handle(Request req) => new(req.Name!);
+                }
             }
             """;
 
-        var compilation = CreateHostCompilation("WorkerValidationApp", source, includeWorkersReference: true);
+        var compilation = CreateHostCompilation("WorkerValidationApp", source, includeWasiReference: true);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+        var workersSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -239,7 +261,93 @@ public class SourceGeneratorCompileTests
         Assert.Contains("Name is required.", workersSource, StringComparison.Ordinal);
         Assert.Contains("Name length is invalid.", workersSource, StringComparison.Ordinal);
         Assert.Contains("At least two items are required.", workersSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("WorkersValidationRunner.Validate", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("WasiValidationRunner.Validate", workersSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_excludes_workers_body_routes_without_wasi_json_context()
+    {
+        var source = """
+            using Slice;
+
+            namespace WorkerMissingJsonContextApp.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public sealed record Request(string Name);
+
+                public sealed record Response(string Name);
+
+                public static Response Handle(Request req) => new(req.Name);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerMissingJsonContextApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var workersSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE009" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        Assert.DoesNotContain("table.Add(", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/items\"", workersSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_resolves_wasi_slice_validators_as_required_services()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Slice;
+
+            namespace WorkerValidatorApp
+            {
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+
+                    private WasiJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace WorkerValidatorApp.Features.Items
+            {
+                [Feature("POST /items")]
+                [Filter<SliceValidatorFilter<Request>>]
+                public static class CreateItem
+                {
+                    public sealed record Request(string Name);
+
+                    public sealed record Response(string Name);
+
+                    public static Response Handle(Request req) => new(req.Name);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WorkerValidatorApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var workersSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("ServiceProviderServiceExtensions.GetRequiredService<global::Slice.ISliceValidator<global::WorkerValidatorApp.Features.Items.CreateItem.Request>>(ctx.Services)", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetService(typeof(global::Slice.ISliceValidator", workersSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -262,18 +370,18 @@ public class SourceGeneratorCompileTests
             }
             """;
 
-        var compilation = CreateHostCompilation("WorkerReflectionValidationApp", source, includeWorkersReference: true);
+        var compilation = CreateHostCompilation("WorkerReflectionValidationApp", source, includeWasiReference: true);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+        var workersSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
         Assert.DoesNotContain("table.Add(", workersSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/items\"", workersSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("WorkersValidationRunner.Validate", workersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("WasiValidationRunner.Validate", workersSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -330,12 +438,12 @@ public class SourceGeneratorCompileTests
             }
             """;
 
-        var compilation = CreateHostCompilation("WorkerTypedResultsApp", source, includeWorkersReference: true);
+        var compilation = CreateHostCompilation("WorkerTypedResultsApp", source, includeWasiReference: true);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
-        var workersSource = GetGeneratedSource(driver, "SliceWorkersRegistrations.g.cs");
+        var workersSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -756,14 +864,14 @@ public class SourceGeneratorCompileTests
     private static CSharpCompilation CreateHostCompilation(
         string assemblyName,
         string source,
-        bool includeWorkersReference = false,
+        bool includeWasiReference = false,
         IEnumerable<MetadataReference>? extraReferences = null)
         => CreateCompilation(
             assemblyName,
             source,
             outputKind: OutputKind.ConsoleApplication,
             includeEntryPoint: true,
-            includeWorkersReference,
+            includeWasiReference,
             extraReferences);
 
     private static CSharpCompilation CreateCompilation(
@@ -771,7 +879,7 @@ public class SourceGeneratorCompileTests
         string source,
         OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary,
         bool includeEntryPoint = false,
-        bool includeWorkersReference = false,
+        bool includeWasiReference = false,
         IEnumerable<MetadataReference>? extraReferences = null)
     {
         var syntaxTrees = new List<SyntaxTree>
@@ -791,17 +899,17 @@ public class SourceGeneratorCompileTests
         var references = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))
             ?.Split(Path.PathSeparator)
             .Where(path => path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
-                           && (includeWorkersReference
-                               || !string.Equals(Path.GetFileName(path), "Slice.Workers.dll", StringComparison.OrdinalIgnoreCase)))
+                           && (includeWasiReference
+                               || !string.Equals(Path.GetFileName(path), "Slice.Wasi.dll", StringComparison.OrdinalIgnoreCase)))
             .Select(static path => MetadataReference.CreateFromFile(path))
             .Cast<MetadataReference>()
             .ToList()
             ?? [];
 
         references.Add(MetadataReference.CreateFromFile(typeof(FeatureAttribute).Assembly.Location));
-        if (includeWorkersReference)
+        if (includeWasiReference)
         {
-            references.Add(MetadataReference.CreateFromFile(typeof(WorkerHost).Assembly.Location));
+            references.Add(MetadataReference.CreateFromFile(typeof(WasiHost).Assembly.Location));
         }
 
         if (extraReferences is not null)

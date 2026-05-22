@@ -8,7 +8,7 @@ SLICE003 | Slice | Error | InvalidRouteFormat
 SLICE004 | Slice | Error | DuplicateEndpointName
 SLICE005 | Slice | Error | AmbiguousHandleMethod
 SLICE006 | Slice | Info | TagInferenceFallback
-SLICE008 | Slice | Info | UnsupportedReturnTypeForWorkers
-SLICE009 | Slice | Info | MissingWorkersJsonContext
+SLICE008 | Slice | Info | UnsupportedReturnTypeForWasi
+SLICE009 | Slice | Warning | MissingWasiJsonContext
 SLICE010 | Slice | Warning | FilterOrderViolation
-SLICE011 | Slice | Warning | UnsupportedValidationForWorkers
+SLICE011 | Slice | Warning | UnsupportedValidationForWasi

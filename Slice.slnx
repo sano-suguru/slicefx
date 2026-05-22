@@ -8,20 +8,20 @@
     <Project Path="samples/Slice.LambdaSample/Slice.LambdaSample.csproj" />
     <Project Path="samples/Slice.Sample/Slice.Sample.csproj" />
     <Project Path="samples/Slice.TestHostSample/Slice.TestHostSample.csproj" />
-    <Project Path="samples/Slice.WorkersSample/Slice.WorkersSample.csproj" />
+    <Project Path="samples/Slice.WasiSample/Slice.WasiSample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Slice.Core/Slice.Core.csproj" />
     <Project Path="src/Slice.Lambda/Slice.Lambda.csproj" />
     <Project Path="src/Slice.SourceGenerator/Slice.SourceGenerator.csproj" />
     <Project Path="src/Slice.TestHost/Slice.TestHost.csproj" />
-    <Project Path="src/Slice.Workers/Slice.Workers.csproj" />
+    <Project Path="src/Slice.Wasi/Slice.Wasi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Slice.Core.Tests/Slice.Core.Tests.csproj" />
     <Project Path="tests/Slice.Cli.Tests/Slice.Cli.Tests.csproj" />
     <Project Path="tests/Slice.SourceGenerator.Tests/Slice.SourceGenerator.Tests.csproj" />
-    <Project Path="tests/Slice.Workers.Tests/Slice.Workers.Tests.csproj" />
+    <Project Path="tests/Slice.Wasi.Tests/Slice.Wasi.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Slice.Cli/Slice.Cli.csproj" />

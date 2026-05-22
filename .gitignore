@@ -5,9 +5,10 @@
 [Dd]ebug/
 artifacts/
 nupkg/
-samples/Slice.WorkersSample/worker/*.wasm
-samples/Slice.WorkersSample/worker/component/
-samples/Slice.WorkersSample/worker/node_modules/
+samples/Slice.WasiSample/dist/*.wasm
+samples/Slice.WasiSample/dist/component/
+samples/Slice.WasiSample/dist/node_modules/
+samples/Slice.WasiSample/dist/.wrangler/
 *.nupkg
 *.snupkg
 

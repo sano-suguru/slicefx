@@ -71,8 +71,8 @@ See `samples/Slice.Sample/Features/Users/GetUser.cs`.
 ## Recommended patterns
 
 1. **Default: direct response.**
-2. **Reach for `IResult` when 404 / 401 / etc. are required**, accepting that the endpoint is no longer Workers-portable (or switch to `WorkerResponse`).
-3. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** Note that `Generator_excludes_aspnet_typed_results_from_workers_routes_and_manifest` (in `SourceGeneratorCompileTests.cs`) confirms that `TypedResults` returns are still classified as `aspnet-only` and excluded from Workers routes.
+2. **Reach for `IResult` when 404 / 401 / etc. are required**, accepting that the endpoint is no longer Workers-portable (or switch to `WasiResponse`).
+3. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** Note that `Generator_excludes_aspnet_typed_results_from_workers_routes_and_manifest` (in `SourceGeneratorCompileTests.cs`) confirms that `TypedResults` returns are still classified as `aspnet-only` and excluded from WASI routes.
 
 ## When SLICE008 appears
 

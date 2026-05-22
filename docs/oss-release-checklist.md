@@ -18,14 +18,14 @@ This checklist is for deciding whether the repository is ready for a preview rel
 - [x] Confirm the core NuGet package identity before publishing anything.
   - `Slice` already exists on NuGet and is associated with an older unrelated package.
   - Use `Slice.Core` for the core runtime package instead of `Slice`.
-  - Keep satellite package IDs under the same prefix: `Slice.SourceGenerator`, `Slice.Lambda`, `Slice.TestHost`, `Slice.Workers`, and `Slice.Cli`.
+  - Keep satellite package IDs under the same prefix: `Slice.SourceGenerator`, `Slice.Lambda`, `Slice.TestHost`, `Slice.Wasi`, and `Slice.Cli`.
 - [ ] Freeze the preview version and scope.
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
 - [ ] Review public API names before the first package push.
   - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`DataAnnotationsValidationFilter`, `ISliceValidator<T>`, `SliceValidatorFilter<T>`).
-  - Generated API (emitted by `Slice.SourceGenerator`): `AddSlice`, `MapSlices`, route manifest (`GetSliceRoutesGenerated`), cross-assembly module helpers, Workers registrations (`AddSlice(WorkerHostBuilder)`, `RegisterWorkerRoutes`).
-  - Workers API: `WorkerHost`, `WorkerApp`, `WorkerRequest`, `WorkerResponse`, `SliceResult`, `WorkerRouteTable`.
+  - Generated API (emitted by `Slice.SourceGenerator`): `AddSlice`, `MapSlices`, route manifest (`GetSliceRoutesGenerated`), cross-assembly module helpers, WASI registrations (`AddSlice(WasiHostBuilder)`, `RegisterWasiRoutes`).
+  - WASI API: `WasiHost`, `WasiApp`, `WasiRequest`, `WasiResponse`, `SliceResult`, `WasiRouteTable`.
   - CLI API: `slice new feature`, `slice new filter`, `slice routes`, `slice client csharp`.
 - [ ] Align docs and samples with the preview scope.
   - `README.md` quick start and status table.
@@ -51,7 +51,7 @@ dotnet pack src\Slice.Core\Slice.Core.csproj --configuration Release --no-build
 dotnet pack src\Slice.SourceGenerator\Slice.SourceGenerator.csproj --configuration Release --no-build
 dotnet pack src\Slice.Lambda\Slice.Lambda.csproj --configuration Release --no-build
 dotnet pack src\Slice.TestHost\Slice.TestHost.csproj --configuration Release --no-build
-dotnet pack src\Slice.Workers\Slice.Workers.csproj --configuration Release --no-build
+dotnet pack src\Slice.Wasi\Slice.Wasi.csproj --configuration Release --no-build
 dotnet pack tools\Slice.Cli\Slice.Cli.csproj --configuration Release --no-build
 ```
 
@@ -72,7 +72,7 @@ curl.exe -X POST http://localhost:5099/users -H "Content-Type: application/json"
 curl.exe -X POST http://localhost:5099/users -H "Content-Type: application/json" -d "{\"name\":\"\",\"email\":\"not-an-email\"}"
 
 dotnet run --project samples\Slice.TestHostSample
-dotnet run --project samples\Slice.WorkersSample -- --probe /health
+dotnet build samples\Slice.WasiSample  # Library — no entry point; build verifies compilation
 dotnet run --project tools\Slice.Cli -- routes --project samples\Slice.Sample\Slice.Sample.csproj
 dotnet run --project tools\Slice.Cli -- client csharp --project samples\Slice.Sample\Slice.Sample.csproj --output <temp-file> --force
 ```
@@ -81,7 +81,7 @@ dotnet run --project tools\Slice.Cli -- client csharp --project samples\Slice.Sa
 - [ ] Main sample can create a user.
 - [ ] Main sample returns validation Problem Details for invalid input.
 - [ ] TestHost sample runs successfully.
-- [ ] Workers sample probe runs successfully.
+- [ ] WASI sample dispatch runs successfully.
 - [ ] CLI route listing and C# client generation work against the sample project.
 - [ ] Lambda sample still starts locally on Kestrel if checked.
 

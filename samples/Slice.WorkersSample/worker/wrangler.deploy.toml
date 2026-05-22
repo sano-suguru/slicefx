@@ -1,9 +1,0 @@
-name = "slice-workers-sample"
-main = "shim.mjs"
-compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
-
-[[rules]]
-type = "CompiledWasm"
-globs = ["component/*.wasm"]
-fallthrough = true

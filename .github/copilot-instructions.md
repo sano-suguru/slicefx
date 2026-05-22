@@ -33,8 +33,7 @@ Other runnable samples:
 ```pwsh
 dotnet run --project samples\Slice.LambdaSample       # local Kestrel run, Lambda-ready
 dotnet run --project samples\Slice.TestHostSample     # in-process HTTP demo
-dotnet run --project samples\Slice.WorkersSample -- --probe /health
-dotnet publish samples\Slice.WorkersSample -r wasi-wasm -c Release  # Linux x64 / Windows x64 publish host
+dotnet publish samples\Slice.WasiSample -r wasi-wasm -c Release  # Linux x64 / Windows x64, or Docker linux/amd64 on macOS
 ```
 
 CI also packs every library/tool project. Before finishing framework changes, verify `src\Slice.Core\Slice.Core.csproj` still has no `<PackageReference>` entries.
@@ -47,8 +46,8 @@ Slice is an experimental vertical-slice-first web framework on ASP.NET Core Mini
 - `src\Slice.SourceGenerator` is the sole registration path. It discovers `[Feature]` classes, validates route/handler shape with `SLICE###` diagnostics, emits `AddSlice`/`MapSlices` extension methods into the `Slice` namespace, and emits route manifests consumed by tooling.
 - Generated and runtime endpoint registration order is significant: map method, attach `DataAnnotationsValidationFilter`, attach `[Filter<T>]` filters in declaration order, then apply tags, endpoint name, and summary.
 - Feature assemblies emit module markers so host generators can aggregate referenced Slice modules without runtime scanning. `SliceAggregateReferences=false` disables aggregation; `SliceReferencedAssemblies` allow-lists referenced assembly simple names.
-- `src\Slice.Lambda`, `src\Slice.TestHost`, and `src\Slice.Workers` are satellite libraries that keep optional hosting/testing dependencies out of `Slice.Core`.
-- `src\Slice.Workers` bypasses ASP.NET/Kestrel and dispatches through a generated `WorkerRouteTable`. The generator only emits Workers registrations when `Slice.Workers.Routing.WorkerRouteTable` is referenced, excludes ASP.NET-specific `IResult` routes with `SLICE008`, and excludes routes needing reflection-based DataAnnotations validation with `SLICE011`.
+- `src\Slice.Lambda`, `src\Slice.TestHost`, and `src\Slice.Wasi` are satellite libraries that keep optional hosting/testing dependencies out of `Slice.Core`.
+- `src\Slice.Wasi` bypasses ASP.NET/Kestrel and dispatches through a generated `WasiRouteTable`. The generator only emits WASI registrations when `Slice.Wasi.Routing.WasiRouteTable` is referenced, excludes ASP.NET-specific `IResult` routes with `SLICE008`, body-binding routes missing `WasiJsonContext` with `SLICE009`, and routes needing reflection-based DataAnnotations validation with `SLICE011`.
 - `tools\Slice.Cli` is the local `slice` scaffolding/tooling app. It reads generated route metadata when available, falls back to scanning `Features/**/*.cs`, lists portability (`portable`, `partial`, `aspnet-only`), generates typed C# clients, and can generate AWS Lambda SAM manifests.
 - `samples\Slice.Sample` is the canonical app shape for ASP.NET features; the Lambda, TestHost, and Workers samples show adapter-specific bootstrapping.
 
@@ -64,6 +63,6 @@ Slice is an experimental vertical-slice-first web framework on ASP.NET Core Mini
 - Keep per-request paths reflection-free. The generated `AddSlice`/`MapSlices` avoid all startup reflection; never re-introduce reflection-based scanning.
 - `WebApplication.CreateSlimBuilder` is intentional in samples because the framework is trimming/AOT oriented.
 - Do not introduce mediator-style abstractions (`IMediator`, `IPipelineBehavior`, etc.); cross-cutting behavior should use endpoint filters.
-- Workers features should return `WorkerResponse`, `SliceResult`, POCOs, `Task<T>`, or `ValueTask<T>`, not `IResult`. Non-validator `[Filter<T>]` filters do not run in the Workers path. Body-binding Workers routes should provide a source-generated JSON context, and Workers DataAnnotations should stay within generated rules (`Required`, `StringLength`, supported `MinLength`) to avoid `SLICE011`.
+- WASI features should return `WasiResponse`, `SliceResult`, POCOs, `Task<T>`, or `ValueTask<T>`, not `IResult`. Non-validator `[Filter<T>]` filters do not run in the WASI path. Body-binding WASI routes must provide a source-generated `WasiJsonContext` to avoid `SLICE009`, and WASI DataAnnotations should stay within generated rules (`Required`, `StringLength`, supported `MinLength`) to avoid `SLICE011`.
 - If changing registration, validation, filters, metadata, or diagnostics, update the relevant source generator emitter in `src\Slice.SourceGenerator\Emit\`.
 - `Program.cs` files use top-level statements and may need `using Slice;` for `ISliceValidator<T>` because top-level statements are in the global namespace.

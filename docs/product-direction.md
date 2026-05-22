@@ -23,19 +23,19 @@ Slice should stay focused on a simple product promise: one feature file per endp
 - Cross-cutting behavior uses existing ASP.NET Core `IEndpointFilter`s through `[Filter<T>]`.
 - The source generator emits registration code for AOT-friendly startup.
 - The source generator emits route metadata for tooling and deployment experiments.
-- `Slice.Workers` proves that the same feature shape can run outside ASP.NET when the handler signature and return type are portable.
-- `slice routes` reports whether discovered features are `portable`, `partial`, or `aspnet-only` for Workers-style dispatch, and can export route metadata as JSON.
+- `Slice.Wasi` proves that the same feature shape can run outside ASP.NET when the handler signature and return type are portable.
+- `slice routes` reports whether discovered features are `portable`, `partial`, or `aspnet-only` for WASI-style dispatch, and can export route metadata as JSON.
 - `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, giving Blazor and other .NET clients a Hono RPC-like starting point.
-- `Slice.Lambda`, `Slice.TestHost`, Workers, and the CLI are satellite packages so optional dependencies stay out of `Slice.Core`.
+- `Slice.Lambda`, `Slice.TestHost`, WASI, and the CLI are satellite packages so optional dependencies stay out of `Slice.Core`.
 
 ## Hono-inspired references
 
 These ideas are useful references, not the public authoring model. Slice should not lead with Hono terminology; it should lead with standard .NET APIs plus generated contracts. Leading with Cloudflare Workers or Lambda portability is distinct from leading with Hono vocabulary — the former is Slice's own positioning, the latter borrows a competitor's brand.
 
 - **Small routing surface.** Keep feature registration mechanical and easy to inspect. Avoid a second fluent router unless it solves a clear .NET-specific problem.
-- **Runtime portability.** Treat Workers/fetch-style dispatch as the lightweight runtime proving ground. A portable feature should not need ASP.NET-only response types.
-- **Middleware at the edge of the feature.** Keep using endpoint filters instead of inventing a mediator pipeline. Workers can support only the filter concepts that make sense without ASP.NET.
-- **Simple request/response primitives.** `WorkerRequest`, `WorkerResponse`, `SliceResult`, POCOs, `Task<T>`, and `ValueTask<T>` should remain the portable path.
+- **Runtime portability.** Treat WASI/fetch-style dispatch as the lightweight runtime proving ground. A portable feature should not need ASP.NET-only response types.
+- **Middleware at the edge of the feature.** Keep using endpoint filters instead of inventing a mediator pipeline. WASI can support only the filter concepts that make sense without ASP.NET.
+- **Simple request/response primitives.** `WasiRequest`, `WasiResponse`, `SliceResult`, POCOs, `Task<T>`, and `ValueTask<T>` should remain the portable path.
 - **Typed clients from routes.** Hono's RPC story turns server routes into client types. Slice should answer that in .NET by generating C# typed clients for Blazor/.NET consumers, and later TypeScript clients for browser/edge consumers.
 
 ## Vercel-inspired references
@@ -44,7 +44,7 @@ These ideas are useful deployment references, but function-per-feature output re
 
 - **Convention-first project shape.** `Features/<Group>/<Feature>.cs` should stay easy to scaffold and navigate.
 - **Generated route metadata.** The source generator is the natural place to emit a route manifest for tooling, docs, compatibility checks, and future deployment output.
-- **Deploy target awareness.** Tooling should be able to explain whether a feature is ASP.NET-only, Workers-compatible, or potentially function-per-feature compatible.
+- **Deploy target awareness.** Tooling should be able to explain whether a feature is ASP.NET-only, WASI-compatible, or potentially function-per-feature compatible.
 - **One slice as a deployment boundary.** Function-per-feature deployment is a design goal, but not the current Lambda behavior. Today Lambda hosts the ASP.NET app as one entry point.
 
 ## Generated route metadata
@@ -71,7 +71,7 @@ slice client csharp --output SliceApiClient.g.cs
 
 `slice routes` makes portability visible at the slice boundary:
 
-- `portable` means the route avoids ASP.NET-specific return types and can be considered for Workers-style dispatch.
+- `portable` means the route avoids ASP.NET-specific return types and can be considered for WASI-style dispatch.
 - `partial` means the route shape is portable, but some attached behavior such as non-validator endpoint filters is ASP.NET-only today.
 - `aspnet-only` means the route intentionally depends on ASP.NET concepts such as `IResult`.
 
@@ -88,7 +88,7 @@ slice client csharp --output SliceApiClient.g.cs
 
 ## Portable feature guidance
 
-Prefer POCO response records when a feature should stay visible to route metadata, typed clients, and Workers-style portability:
+Prefer POCO response records when a feature should stay visible to route metadata, typed clients, and WASI-style portability:
 
 ```csharp
 [Feature("POST /users")]
@@ -119,13 +119,13 @@ public static class GetUser
 }
 ```
 
-For Workers-specific responses, use `SliceResult` or `WorkerResponse`. The generator currently excludes ASP.NET-specific `IResult` features from Workers route tables with `SLICE008`.
+For WASI-specific responses, use `SliceResult` or `WasiResponse`. The generator currently excludes ASP.NET-specific `IResult` features from WASI route tables with `SLICE008`.
 
-## Workers/fetch-style direction
+## WASI/fetch-style direction
 
-`Slice.Workers` is the active experiment for a Hono-like fetch runtime. Its minimal dispatch surface is `WorkerRequest` in and `WorkerResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; non-validator ASP.NET endpoint filters should not be assumed to run in Workers.
+`Slice.Wasi` is the active experiment for a Hono-like fetch runtime. Its minimal dispatch surface is `WasiRequest` in and `WasiResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; non-validator ASP.NET endpoint filters should not be assumed to run in the WASI path.
 
-Near-term Workers work should focus on better manifest-driven compatibility reporting and source-generated JSON/validation coverage before introducing another public routing API.
+Near-term WASI work should focus on better manifest-driven compatibility reporting and source-generated JSON/validation coverage before introducing another public routing API.
 
 ## Deployment direction
 
@@ -133,14 +133,14 @@ Near-term Workers work should focus on better manifest-driven compatibility repo
 
 Phase 2 (separate Lambda handler classes per feature, emitted by the source generator into a new `Slice.Lambda.PerFunction` satellite) remains a design goal, building on the stable manifest. Phase 3 (separate NativeAOT binaries per feature for smaller cold-start footprint) is long-term.
 
-Cloudflare Workers function-per-feature deployment (one WASM component per feature) requires per-feature NativeAOT compilation and is blocked on `componentize-dotnet` multi-component build support. The current Slice.Workers model (one WASM component, all routes dispatched in-process) is the practical deployment target until that tooling matures.
+Cloudflare WASI function-per-feature deployment (one WASM component per feature) requires per-feature NativeAOT compilation and is blocked on `componentize-dotnet` multi-component build support. The current Slice.WASI model (one WASM component, all routes dispatched in-process) is the practical deployment target until that tooling matures.
 
-Even when the build tooling matures, the benefit of per-feature Workers deployment is less clear than for Lambda: Cloudflare Workers are edge functions with negligible cold-start latency, no per-function memory or timeout configuration, and no per-route scaling or billing isolation. The main remaining benefit would be independent deployment per feature (deploying one route without affecting others). That benefit alone may not justify the build complexity unless `componentize-dotnet` makes per-feature compilation straightforward.
+Even when the build tooling matures, the benefit of per-feature WASI deployment is less clear than for Lambda: Cloudflare Workers are edge functions with negligible cold-start latency, no per-function memory or timeout configuration, and no per-route scaling or billing isolation. The main remaining benefit would be independent deployment per feature (deploying one route without affecting others). That benefit alone may not justify the build complexity unless `componentize-dotnet` makes per-feature compilation straightforward.
 
 ## Next implementation direction
 
 1. ~~Continue converging CLI route discovery on the source-generated route manifest.~~ ✅ Done.
 2. Extend typed client generation from C# first to TypeScript once the route metadata is rich enough.
 3. Add manifest-driven deployment checks where they provide clear feedback.
-4. Keep Workers/fetch-style dispatch focused on `WorkerRequest` -> `WorkerResponse`.
+4. Keep WASI/fetch-style dispatch focused on `WasiRequest` -> `WasiResponse`.
 5. ~~Revisit function-per-feature build output after the manifest shape is stable.~~ ✅ Done (Lambda Phase 1: `slice manifest aws-lambda`). Lambda Phase 2 (source-generated per-feature handlers) is the next step.

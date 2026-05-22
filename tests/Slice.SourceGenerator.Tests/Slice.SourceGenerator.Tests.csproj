@@ -25,7 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Slice.Core\Slice.Core.csproj" />
     <ProjectReference Include="..\..\src\Slice.SourceGenerator\Slice.SourceGenerator.csproj" />
-    <ProjectReference Include="..\..\src\Slice.Workers\Slice.Workers.csproj" />
+    <ProjectReference Include="..\..\src\Slice.Wasi\Slice.Wasi.csproj" />
   </ItemGroup>
 
 </Project>

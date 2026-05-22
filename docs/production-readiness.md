@@ -78,5 +78,5 @@ Not yet measured in `Slice.Benchmarks`. Future candidate. Today, the manual prox
 
 ## Known constraints (beyond gate values)
 
-- DataAnnotations attributes such as `Range`, `RegularExpression`, and `EmailAddress` fall back to reflection on the **Workers path**. The ASP.NET path was always reflection-based, so this is invisible there.
+- DataAnnotations attributes such as `Range`, `RegularExpression`, and `EmailAddress` fall back to reflection on the **WASI path**. The ASP.NET path was always reflection-based, so this is invisible there.
 - `[Filter<T>]` takes a type parameter only (configuration arrives through constructor DI). This is an intentional constraint that protects strength-preservation principle #1. See `docs/patterns/filter-configuration.md`.

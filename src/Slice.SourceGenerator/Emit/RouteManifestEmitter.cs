@@ -62,7 +62,7 @@ internal static class RouteManifestEmitter
         sb.AppendLine("        string? Summary,");
         sb.AppendLine("        string? RequestType,");
         sb.AppendLine("        string ReturnType,");
-        sb.AppendLine("        bool IsWorkersCompatible,");
+        sb.AppendLine("        bool IsWasiCompatible,");
         sb.AppendLine("        string Portability,");
         sb.AppendLine("        string? PortabilityReason,");
         sb.AppendLine("        global::System.Collections.Generic.IReadOnlyList<string> FilterTypes);");
@@ -125,14 +125,14 @@ internal static class RouteManifestEmitter
 
         if (feature.RequiresReflectionValidation)
         {
-            return ("partial", "DataAnnotations validation requires reflection in Workers");
+            return ("partial", "DataAnnotations validation requires reflection in the WASI path");
         }
 
         foreach (var filter in feature.GetFilterFqns())
         {
             if (!IsSliceValidatorFilter(filter))
             {
-                return ("partial", "non-validator endpoint filters do not run in Workers");
+                return ("partial", "non-validator endpoint filters do not run in the WASI path");
             }
         }
 

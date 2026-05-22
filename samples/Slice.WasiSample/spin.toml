@@ -1,0 +1,13 @@
+spin_manifest_version = 2
+
+[application]
+name = "slice-wasi-sample"
+version = "0.1.0"
+description = "Slice WASI sample running on Fermyon Cloud (wasi:http/incoming-handler)"
+
+[[trigger.http]]
+route = "/..."
+component = "slice-wasi-sample"
+
+[component.slice-wasi-sample]
+source = "dist/slice-wasi-sample.wasm"

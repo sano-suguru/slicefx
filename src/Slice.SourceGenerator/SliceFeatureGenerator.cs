@@ -47,10 +47,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (c, _) =>
                 c.GetTypeByMetadataName("Microsoft.AspNetCore.Http.IResult") is not null);
 
-        // Only emit Workers code when Slice.Workers is referenced by the target project.
-        var hasWorkersRef = context.CompilationProvider
+        // Only emit WASI code when Slice.Wasi is referenced by the target project.
+        var hasWasiRef = context.CompilationProvider
             .Select(static (c, _) =>
-                c.GetTypeByMetadataName("Slice.Workers.Routing.WorkerRouteTable") is not null);
+                c.GetTypeByMetadataName("Slice.Wasi.Routing.WasiRouteTable") is not null);
 
         var referencedModules = context.CompilationProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
@@ -69,22 +69,22 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             })
             .WithTrackingName("SliceEmitExtensions");
 
-        var workersJsonContextFqn = validModels
+        var wasiJsonContextFqn = validModels
             .Combine(context.CompilationProvider)
-            .Combine(hasWorkersRef)
-            .Select(static (pair, _) => pair.Right ? FindWorkersJsonContext(pair.Left.Left, pair.Left.Right) : null)
-            .WithTrackingName("SliceWorkersJsonContext");
+            .Combine(hasWasiRef)
+            .Select(static (pair, _) => pair.Right ? FindWasiJsonContext(pair.Left.Left, pair.Left.Right) : null)
+            .WithTrackingName("SliceWasiJsonContext");
 
         context.RegisterSourceOutput(
             validModels.Combine(assemblyName)
                 .Combine(hasAspNetRef)
-                .Combine(hasWorkersRef)
+                .Combine(hasWasiRef)
                 .Combine(referencedModules)
                 .Combine(emitExtensions)
-                .Combine(workersJsonContextFqn),
+                .Combine(wasiJsonContextFqn),
             static (spc, pair) =>
             {
-                var ((((((models, asmName), emitAspNet), emitWorkers), referencedModules), emitExtensions), workersJsonContextFqn) = pair;
+                var ((((((models, asmName), emitAspNet), emitWasi), referencedModules), emitExtensions), wasiJsonContextFqn) = pair;
 
                 var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
                 foreach (var diagnostic in duplicateDiagnostics)
@@ -115,25 +115,25 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                         Microsoft.CodeAnalysis.Text.SourceText.From(source, Encoding.UTF8));
                 }
 
-                if (!emitWorkers)
+                if (!emitWasi)
                 {
                     return;
                 }
 
-                var (workersSource, workersDiagnostics) = WorkersRegistrationEmitter.Emit(
+                var (wasiSource, wasiDiagnostics) = WasiRegistrationEmitter.Emit(
                     models,
                     asmName,
-                    workersJsonContextFqn,
+                    wasiJsonContextFqn,
                     referencedModules,
                     emitExtensions);
-                foreach (var d in workersDiagnostics)
+                foreach (var d in wasiDiagnostics)
                 {
                     spc.ReportDiagnostic(d);
                 }
 
                 spc.AddSource(
-                    $"{asmName}.SliceWorkersRegistrations.g.cs",
-                    Microsoft.CodeAnalysis.Text.SourceText.From(workersSource, Encoding.UTF8));
+                    $"{asmName}.SliceWasiRegistrations.g.cs",
+                    Microsoft.CodeAnalysis.Text.SourceText.From(wasiSource, Encoding.UTF8));
             });
     }
 
@@ -205,8 +205,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     routes,
                     HasPublicStaticMethod(registrationType, "AddSliceServices"),
                     HasPublicStaticMethod(registrationType, "MapSliceRoutes"),
-                    HasPublicStaticMethod(registrationType, "AddSliceWorkerRoutes")
-                        && HasPublicStaticMethod(registrationType, "RegisterWorkerRoutes"));
+                    HasPublicStaticMethod(registrationType, "AddSliceWasiRoutes")
+                        && HasPublicStaticMethod(registrationType, "RegisterWasiRoutes"));
 
                 builder.Add(module);
             }
@@ -724,10 +724,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             lineSpan.EndLinePosition.Character);
     }
 
-    // Looks up WorkerJsonContext by namespace convention only. Slice.Workers projects
-    // should place it at <RootNamespace>.WorkerJsonContext; SLICE009 surfaces a clear
-    // info diagnostic when the conventional location turns up nothing.
-    private static string? FindWorkersJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
+    // Looks up WasiJsonContext by namespace convention only. Slice.Wasi projects
+    // should place it at <RootNamespace>.WasiJsonContext; SLICE009 excludes body
+    // routes when the conventional location turns up nothing.
+    private static string? FindWasiJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
     {
         var jsonContextType = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
         foreach (var model in models)
@@ -745,7 +745,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
 
             var rootNamespace = typeName.Substring(0, featuresIndex);
-            var candidate = rootNamespace + ".WorkerJsonContext";
+            var candidate = rootNamespace + ".WasiJsonContext";
             var candidateType = compilation.GetTypeByMetadataName(candidate);
             if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
             {

@@ -190,7 +190,7 @@ internal static partial class RouteCatalog
             !filter.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal));
 
         return hasAspNetFilter
-            ? (PortabilityPartial, "non-validator endpoint filters do not run in Workers")
+            ? (PortabilityPartial, "non-validator endpoint filters do not run in the WASI path")
             : (PortabilityPortable, null);
     }
 

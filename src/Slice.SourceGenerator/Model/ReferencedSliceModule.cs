@@ -8,7 +8,7 @@ internal sealed record ReferencedSliceModule(
     ImmutableArray<ReferencedSliceRoute> Routes,
     bool HasAspNetServices,
     bool HasAspNetRoutes,
-    bool HasWorkerRoutes);
+    bool HasWasiRoutes);
 
 internal sealed record ReferencedSliceRoute(
     string AssemblyName,

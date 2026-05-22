@@ -1,0 +1,23 @@
+namespace Slice.WasiSample.Features.Health;
+
+/// <summary>
+/// Provides a lightweight WASI health check.
+/// </summary>
+[Feature("GET /health", Summary = "WASI health check")]
+public static class GetHealth
+{
+    /// <summary>
+    /// Health payload returned by the WASI sample.
+    /// </summary>
+    /// <param name="Status">Current health status, for example <c>ok</c>.</param>
+    /// <param name="Timestamp">UTC time provided by the sample TimeProvider service.</param>
+    public record Response(string Status, DateTimeOffset Timestamp);
+
+    /// <summary>
+    /// Returns the current health state for in-process probes.
+    /// </summary>
+    /// <param name="timeProvider">Clock service resolved from the wasi:http host.</param>
+    /// <returns>The health response payload.</returns>
+    public static Response Handle(TimeProvider timeProvider)
+        => new("ok", timeProvider.GetUtcNow());
+}
