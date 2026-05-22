@@ -8,20 +8,6 @@ namespace Slice.Cli.Commands;
 
 internal static partial class GenerateCSharpClientCommand
 {
-    private static readonly HashSet<string> SimpleParameterTypes =
-    [
-        "string", "Guid",
-        "int", "long", "short", "uint", "ulong", "ushort",
-        "bool", "double", "float", "decimal", "byte",
-        "DateTime", "DateTimeOffset", "DateOnly", "TimeOnly", "TimeSpan",
-        "System.Guid", "System.String",
-        "System.Int32", "System.Int64", "System.Int16",
-        "System.UInt32", "System.UInt64", "System.UInt16",
-        "System.Boolean", "System.Double", "System.Single", "System.Decimal",
-        "System.Byte", "System.DateTime", "System.DateTimeOffset",
-        "System.DateOnly", "System.TimeOnly", "System.TimeSpan",
-    ];
-
     internal static Command Build()
     {
         var projectOpt = SharedOptions.CreateProject();
@@ -120,7 +106,7 @@ internal static partial class GenerateCSharpClientCommand
             .ToArray();
         var groupNames = groups.ToDictionary(
             static group => group.Key,
-            static group => ToPascalIdentifier(group.Key, "Default"),
+            static group => ClientGenerationHelpers.ToPascalIdentifier(group.Key, "Default"),
             StringComparer.Ordinal);
 
         var sb = new StringBuilder();
@@ -138,7 +124,7 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {@namespace};");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"public sealed class {className}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"public partial class {className}");
         sb.AppendLine("{");
         sb.AppendLine("    private readonly HttpClient _http;");
         sb.AppendLine();
@@ -148,10 +134,19 @@ internal static partial class GenerateCSharpClientCommand
         foreach (var group in groups)
         {
             var groupName = groupNames[group.Key];
-            sb.AppendLine(CultureInfo.InvariantCulture, $"        {groupName} = new {groupName}Client(_http);");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        {groupName} = new {groupName}Client(_http, PrepareRequest);");
         }
 
         sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public {className}(HttpMessageHandler handler) : this(new HttpClient(handler)) {{ }}");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public static {className} Create(IHttpClientFactory factory, string? name = null)");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"        => new(factory.CreateClient(name ?? nameof({className})));");
+        sb.AppendLine();
+        sb.AppendLine("    partial void OnRequestPreparing(HttpRequestMessage request);");
+        sb.AppendLine();
+        sb.AppendLine("    private void PrepareRequest(HttpRequestMessage request) => OnRequestPreparing(request);");
         sb.AppendLine();
         foreach (var group in groups)
         {
@@ -182,9 +177,13 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine(CultureInfo.InvariantCulture, $"    public sealed class {groupName}Client");
         sb.AppendLine("    {");
         sb.AppendLine("        private readonly HttpClient _http;");
+        sb.AppendLine("        private readonly Action<HttpRequestMessage> _prepareRequest;");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"        internal {groupName}Client(HttpClient http)");
-        sb.AppendLine("            => _http = http;");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"        internal {groupName}Client(HttpClient http, Action<HttpRequestMessage> prepareRequest)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            _http = http;");
+        sb.AppendLine("            _prepareRequest = prepareRequest;");
+        sb.AppendLine("        }");
 
         foreach (var route in routes)
         {
@@ -197,10 +196,10 @@ internal static partial class GenerateCSharpClientCommand
 
     private static void EmitRouteMethod(StringBuilder sb, string outerClassName, SliceRouteInfo route)
     {
-        var responseType = ToClientType(route, UnwrapReturnType(route.ReturnType));
-        var bodyParameter = FindBodyParameter(route);
-        var routeParameters = FindRouteParameters(route);
-        var queryParameters = FindQueryParameters(route, routeParameters, bodyParameter);
+        var responseType = ToClientType(route, ClientGenerationHelpers.UnwrapReturnType(route.ReturnType));
+        var bodyParameter = ClientGenerationHelpers.FindBodyParameter(route);
+        var routeParameters = ClientGenerationHelpers.FindRouteParameters(route);
+        var queryParameters = ClientGenerationHelpers.FindQueryParameters(route, routeParameters, bodyParameter);
         var methodParameters = routeParameters
             .Concat(queryParameters)
             .Select(static parameter => $"{parameter.Type} {parameter.Name}")
@@ -221,7 +220,11 @@ internal static partial class GenerateCSharpClientCommand
 
         if (route.Method == "GET" && bodyParameter is null && responseType != "void")
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"            return await _http.GetFromJsonAsync<{responseType}>(__url, cancellationToken).ConfigureAwait(false)");
+            sb.AppendLine("            using var __message = new HttpRequestMessage(HttpMethod.Get, __url);");
+            sb.AppendLine("            _prepareRequest(__message);");
+            sb.AppendLine("            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);");
+            sb.AppendLine("            __response.EnsureSuccessStatusCode();");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync<{responseType}>(cancellationToken).ConfigureAwait(false)");
             sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
             sb.AppendLine("        }");
             return;
@@ -233,6 +236,7 @@ internal static partial class GenerateCSharpClientCommand
             sb.AppendLine(CultureInfo.InvariantCulture, $"            __message.Content = JsonContent.Create({bodyParameter.Name});");
         }
 
+        sb.AppendLine("            _prepareRequest(__message);");
         sb.AppendLine("            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);");
         sb.AppendLine("            __response.EnsureSuccessStatusCode();");
 
@@ -257,7 +261,7 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("            var __query = new List<string>();");
         foreach (var parameter in queryParameters)
         {
-            if (NormalizeParameterType(parameter.Type).EndsWith("[]", StringComparison.Ordinal))
+            if (ClientGenerationHelpers.NormalizeParameterType(parameter.Type).EndsWith("[]", StringComparison.Ordinal))
             {
                 sb.AppendLine(CultureInfo.InvariantCulture, $"            if ({parameter.Name} is not null)");
                 sb.AppendLine("            {");
@@ -284,7 +288,7 @@ internal static partial class GenerateCSharpClientCommand
             StringComparer.OrdinalIgnoreCase);
         var sb = new StringBuilder("$\"");
         var index = 0;
-        foreach (Match match in RouteParameterRegex().Matches(pattern))
+        foreach (Match match in ClientGenerationHelpers.RouteParameterRegex().Matches(pattern))
         {
             sb.Append(EscapeInterpolatedText(pattern[index..match.Index]));
             var routeName = match.Groups["name"].Value;
@@ -300,101 +304,6 @@ internal static partial class GenerateCSharpClientCommand
         sb.Append(EscapeInterpolatedText(pattern[index..]));
         sb.Append('"');
         return sb.ToString();
-    }
-
-    private static SliceRouteParameter? FindBodyParameter(SliceRouteInfo route)
-    {
-        if (route.RequestType is null)
-        {
-            return null;
-        }
-
-        return route.Parameters.FirstOrDefault(parameter => parameter.Type == route.RequestType);
-    }
-
-    private static SliceRouteParameter[] FindRouteParameters(SliceRouteInfo route)
-    {
-        var parameters = RouteParameterRegex().Matches(route.Pattern)
-            .Select(static match => match.Groups["name"].Value)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return [.. route.Parameters
-            .Where(parameter => parameters.Contains(parameter.Name))
-        ];
-    }
-
-    private static SliceRouteParameter[] FindQueryParameters(
-        SliceRouteInfo route,
-        SliceRouteParameter[] routeParameters,
-        SliceRouteParameter? bodyParameter)
-    {
-        var routeParameterNames = routeParameters
-            .Select(static parameter => parameter.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        return [.. route.Parameters
-            .Where(parameter => !routeParameterNames.Contains(parameter.Name))
-            .Where(parameter => bodyParameter is null || parameter.Name != bodyParameter.Name)
-            .Where(static parameter => parameter.Type is not ("CancellationToken" or "System.Threading.CancellationToken"))
-            .Where(static parameter => IsSupportedQueryParameterType(parameter.Type))
-        ];
-    }
-
-    private static bool IsSupportedQueryParameterType(string type)
-    {
-        var normalized = NormalizeParameterType(type);
-        if (normalized.EndsWith("[]", StringComparison.Ordinal))
-        {
-            normalized = normalized[..^2];
-        }
-
-        return SimpleParameterTypes.Contains(normalized);
-    }
-
-    private static string NormalizeParameterType(string type)
-    {
-        var normalized = RouteCatalog.NormalizeWhitespace(type);
-        if (normalized.StartsWith("global::", StringComparison.Ordinal))
-        {
-            normalized = normalized["global::".Length..];
-        }
-
-        if (normalized.EndsWith('?'))
-        {
-            normalized = normalized[..^1];
-        }
-
-        const string nullablePrefix = "System.Nullable<";
-        if (normalized.StartsWith(nullablePrefix, StringComparison.Ordinal) && normalized.EndsWith('>'))
-        {
-            normalized = normalized[nullablePrefix.Length..^1];
-        }
-
-        return normalized;
-    }
-
-    private static string UnwrapReturnType(string returnType)
-    {
-        returnType = RouteCatalog.NormalizeWhitespace(returnType);
-        return TryUnwrapGeneric(returnType, "Task", out var taskType) ||
-               TryUnwrapGeneric(returnType, "System.Threading.Tasks.Task", out taskType) ||
-               TryUnwrapGeneric(returnType, "ValueTask", out taskType) ||
-               TryUnwrapGeneric(returnType, "System.Threading.Tasks.ValueTask", out taskType)
-            ? taskType
-            : returnType is "Task" or "System.Threading.Tasks.Task" or "ValueTask" or "System.Threading.Tasks.ValueTask" ? "void" : returnType;
-    }
-
-    private static bool TryUnwrapGeneric(string type, string wrapper, out string inner)
-    {
-        var prefix = wrapper + "<";
-        if (type.StartsWith(prefix, StringComparison.Ordinal) && type.EndsWith('>'))
-        {
-            inner = type[prefix.Length..^1];
-            return true;
-        }
-
-        inner = "";
-        return false;
     }
 
     private static string ToClientType(SliceRouteInfo route, string type)
@@ -447,31 +356,6 @@ internal static partial class GenerateCSharpClientCommand
         return false;
     }
 
-    private static string ToPascalIdentifier(string value, string fallback)
-    {
-        var parts = IdentifierSeparatorRegex().Split(value)
-            .Where(static part => part.Length > 0)
-            .ToArray();
-        if (parts.Length == 0)
-        {
-            return fallback;
-        }
-
-        var sb = new StringBuilder();
-        foreach (var part in parts)
-        {
-            var normalized = char.ToUpperInvariant(part[0]) + part[1..];
-            sb.Append(normalized);
-        }
-
-        if (sb.Length == 0 || !(char.IsLetter(sb[0]) || sb[0] == '_'))
-        {
-            sb.Insert(0, fallback);
-        }
-
-        return sb.ToString();
-    }
-
     private static string EscapeInterpolatedText(string value)
     {
         return value
@@ -487,9 +371,4 @@ internal static partial class GenerateCSharpClientCommand
     private static bool IsIdentifierPart(char value)
         => value == '_' || char.IsLetterOrDigit(value);
 
-    [GeneratedRegex(@"\{(?<name>[A-Za-z_][A-Za-z0-9_]*)(?::[^}]+)?\}")]
-    private static partial Regex RouteParameterRegex();
-
-    [GeneratedRegex(@"[^A-Za-z0-9_]+")]
-    private static partial Regex IdentifierSeparatorRegex();
 }

@@ -264,6 +264,351 @@ public class CliFixtureTests
     }
 
     [Fact]
+    public async Task Csharp_client_emits_extensibility_hooks()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "extensibility-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Extensibility.Client.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace Extensibility.Client.App.Features.Items;
+
+            [Feature("GET /items/{id:int}")]
+            public static class GetItem
+            {
+                public static Task<Response> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+
+                public sealed record Response(int Id);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("public partial class SliceApiClient", client);
+        Assert.Contains("public SliceApiClient(HttpMessageHandler handler)", client);
+        Assert.Contains("public static SliceApiClient Create(IHttpClientFactory factory", client);
+        Assert.Contains("partial void OnRequestPreparing(HttpRequestMessage request)", client);
+        Assert.Contains("_prepareRequest(__message)", client);
+    }
+
+    [Fact]
+    public async Task Typescript_client_generates_fetch_client_for_portable_routes()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "typescript-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TypeScript.Client.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.Client.App.Features.Items;
+
+            [Feature("GET /items/{id:int}")]
+            public static class GetItem
+            {
+                public static Task<Response> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new Response(id, "Widget"));
+
+                public sealed record Response(int Id, string Name);
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Items/CreateItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.Client.App.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public record Request(string Name);
+                public record Response(int Id, string Name);
+
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1, req.Name));
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var exitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("export class SliceApiClient", client);
+        Assert.Contains("export class ItemsClient", client);
+        Assert.Contains("async getItemAsync(", client);
+        Assert.Contains("async createItemAsync(", client);
+        Assert.Contains("encodeURIComponent(String(id))", client);
+        Assert.Contains("JSON.stringify(body)", client);
+    }
+
+    [Fact]
+    public async Task Typescript_client_handles_request_edge_cases()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "typescript-request-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TypeScript.Request.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.Request.App.Features.Items;
+
+            [Feature("GET /items/`/{id:int}")]
+            public static class GetItem
+            {
+                public static Task<Response> Handle(int id, string? search, string[]? tags, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+
+                public sealed record Response(int Id);
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Items/CreateItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.Request.App.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public record Request(string Name);
+                public record Response(int Id);
+
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1));
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var exitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("let url = `${this.baseUrl}/items/\\`/${encodeURIComponent(String(id))}`;", client);
+        Assert.Contains("if (search != null) params.set('search', String(search));", client);
+        Assert.Contains("if (tags != null) for (const v of tags) params.append('tags', String(v));", client);
+        Assert.Contains("signal: signal ?? this.init?.signal", client);
+        Assert.Contains("const headers = new Headers(this.init?.headers);", client);
+        Assert.Contains("headers.set('Content-Type', 'application/json');", client);
+        Assert.Contains("const text = await response.text();", client);
+        Assert.Contains("returned an empty response body", client);
+    }
+
+    [Fact]
+    public async Task Typescript_client_generates_recursive_unique_dto_schemas()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "typescript-schema-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TypeScript.Schema.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Users/Get.cs",
+            """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.Schema.App.Features.Users;
+
+            [Feature("GET /users")]
+            public static class Get
+            {
+                public static Task<Response> Handle(CancellationToken ct)
+                    => Task.FromResult(new Response([], [], new Dictionary<string, User>()));
+
+                public sealed record User(string Name);
+
+                public sealed record Response(User[] Items, IReadOnlyList<User> Recent, Dictionary<string, User> ById);
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Orders/Get.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.Schema.App.Features.Orders;
+
+            [Feature("GET /orders")]
+            public static class Get
+            {
+                public static Task<Response> Handle(CancellationToken ct)
+                    => Task.FromResult(new Response(new User(1)));
+
+                public sealed record User(int Id);
+
+                public sealed record Response(User User);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var exitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("export interface GetResponse", client);
+        Assert.Contains("export interface UsersGetResponse", client);
+        Assert.Contains("readonly items: UsersGetUser[];", client);
+        Assert.Contains("readonly recent: UsersGetUser[];", client);
+        Assert.Contains("readonly byId: Record<string, UsersGetUser>;", client);
+        Assert.DoesNotContain("unknown[]", client);
+    }
+
+    [Fact]
+    public async Task Typescript_client_excludes_aspnet_only_routes()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "typescript-aspnet-only-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TypeScript.AspNet.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.AspNet.App.Features.Items;
+
+            [Feature("GET /items/{id:int}")]
+            public static class GetItem
+            {
+                public static Task<Response> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+
+                public sealed record Response(int Id);
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Items/DeleteItem.cs",
+            """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace TypeScript.AspNet.App.Features.Items;
+
+            [Feature("DELETE /items/{id:int}")]
+            public static class DeleteItem
+            {
+                public static Task<IResult> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(Results.NoContent());
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var exitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile);
+
+        Assert.Contains("getItemAsync", client);
+        Assert.DoesNotContain("deleteItemAsync", client);
+    }
+
+    [Fact]
     public async Task Manifest_aws_lambda_generates_hosted_sam_template_with_one_function_and_route_events()
     {
         using var fixture = CliProjectFixture.Create(

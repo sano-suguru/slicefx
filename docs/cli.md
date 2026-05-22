@@ -14,6 +14,7 @@ slice routes
 slice routes --format json
 
 slice client csharp --output SliceApiClient.g.cs
+slice client typescript --output slice-api-client.ts
 
 slice manifest aws-lambda --output template.yaml
 slice manifest aws-lambda --mode per-feature --output template.yaml
@@ -57,6 +58,23 @@ The command reports each route's portability:
 ## Typed C# client
 
 `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes. This is useful for Blazor and other .NET clients that should not hand-maintain endpoint strings and DTO wiring.
+
+The generated class is `public partial class` so it can be extended in a sibling file. Two extension points are available: a `public {ClassName}(HttpMessageHandler handler)` constructor overload for injecting `DelegatingHandler` chains (Polly, auth headers, telemetry), and a `partial void OnRequestPreparing(HttpRequestMessage request)` hook that runs before every outgoing request. A `public static {ClassName} Create(IHttpClientFactory factory, string? name = null)` factory method integrates with `IHttpClientFactory` registrations.
+
+## Typed TypeScript client
+
+`slice client typescript` generates a zero-dependency `fetch`-based TypeScript client for portable and partial routes. TypeScript interfaces are emitted for request and response record shapes where property information is available in the built project output.
+
+The generated code requires only the global `fetch` API and runs in browsers, Cloudflare Workers, Node.js 18+, and Deno. The generated class accepts a `baseUrl` string and an optional `RequestInit` for default headers or credentials:
+
+```typescript
+const client = new SliceApiClient("https://api.example.com", {
+  headers: { Authorization: `Bearer ${token}` }
+});
+const item = await client.items.getItemAsync(42);
+```
+
+`aspnet-only` routes are excluded from generated TypeScript and C# clients. Use a standard OpenAPI toolchain or a manual ASP.NET-specific client for those endpoints.
 
 ## AWS Lambda artifacts
 

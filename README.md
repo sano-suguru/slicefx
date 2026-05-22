@@ -18,13 +18,18 @@ curl http://localhost:5099/health
 | AOT, serverless, and WASI-minded teams | One feature shape can target ASP.NET-hosted apps, Lambda, and wasi:http hosts when the signature is portable. |
 | Small API and product teams | Endpoint code stays local instead of spreading across controllers, services, validators, and mapping profiles. |
 | Blazor and .NET client teams | `slice client csharp` generates typed `HttpClient` wrappers from server routes. |
+| TypeScript / browser / edge teams | `slice client typescript` generates a zero-dependency `fetch` client from the same route manifest. |
 | Framework-light .NET teams | Slice keeps Minimal API binding, DI, endpoint filters, DataAnnotations, and `IResult` instead of introducing a mediator stack. |
 
 Slice is not a replacement for ASP.NET Core. It is a generated vertical-slice layer around Minimal APIs for teams that want explicit feature files, generated contracts, and portability checks.
 
+Slice compiles down to standard `WebApplication.MapMethods` calls — removing the source generator reference and expanding the generated output in place is the full exit path. For teams already on FastEndpoints or similar, Slice fills a different niche: compile-time portability classification across ASP.NET, Lambda, and wasi:http, not a richer filter and pipeline ecosystem.
+
 ## Project status
 
 Slice is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
+
+WASI support (`Slice.Wasi`) depends on [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet), a preview package targeting the WASI Preview 2 / `wasi:http@0.2` interface. Native WASI publish requires Linux x64 or Windows x64; macOS requires a Docker cross-build. The WASI toolchain is actively evolving and may introduce breaking changes between preview releases. Treat any project targeting `Slice.Wasi` as experimental until the upstream tooling stabilizes.
 
 | Package | Purpose |
 | --- | --- |
@@ -124,11 +129,28 @@ Read more:
 | Route metadata manifest | Experimental |
 | `slice routes` portability classification | Experimental |
 | `slice client csharp` typed client generation | Experimental |
+| `slice client typescript` typed fetch client generation | Experimental |
 | AWS SAM manifest generation | Experimental |
 | ASP.NET-hosted Lambda adapter | Experimental |
 | Per-feature Lambda handlers | Experimental HTTP API v2 MVP |
 | TestHost helper | Experimental |
 | WASI adapter | Experimental in-process wasi:http dispatch |
+
+## Portability
+
+The source generator classifies each feature endpoint at build time. `slice routes` reports the result; the same data drives typed-client generation, WASI route tables, and Lambda per-feature eligibility.
+
+| Class | Meaning |
+| --- | --- |
+| `portable` | Returns a plain record or void. Eligible for typed-client generation, WASI dispatch, and per-feature Lambda. |
+| `partial` | Portable handler shape, but attached non-validator filters are ASP.NET-only today. |
+| `aspnet-only` | Returns `IResult` or uses ASP.NET-specific behavior. The full Minimal API feature set is available. |
+
+Mixing all three classes in the same project is the expected pattern. `aspnet-only` features are standard Minimal API endpoints with the complete ASP.NET ecosystem available — they are not penalized or degraded. The classification tells tooling where a feature can run, not whether it is well-written.
+
+## OpenAPI
+
+Slice endpoints work with ASP.NET Core's standard OpenAPI support out of the box — add `Microsoft.AspNetCore.OpenApi` and call `app.MapOpenApi()` after `app.MapSlices()`. The Slice route manifest is a separate build-time artifact for portability classification and client generation; it complements rather than replaces the OpenAPI document.
 
 ## Tooling and adapters
 
@@ -138,6 +160,7 @@ Read more:
 | CLI commands | [docs/cli.md](docs/cli.md) |
 | Lambda hosting and per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | WASI deploy path | [samples/Slice.WasiSample/README.md](samples/Slice.WasiSample/README.md) |
+| Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |
 | Product direction | [docs/product-direction.md](docs/product-direction.md) |
 | Production readiness | [docs/production-readiness.md](docs/production-readiness.md) |
 

@@ -10,7 +10,8 @@ var newCmd = new Command("new", "Scaffold a new Slice file.")
 
 var clientCmd = new Command("client", "Generate typed clients from Slice feature routes.")
 {
-    GenerateCSharpClientCommand.Build()
+    GenerateCSharpClientCommand.Build(),
+    GenerateTypeScriptClientCommand.Build()
 };
 
 var manifestCmd = new Command("manifest", "Generate deployment manifests from Slice feature routes.")
