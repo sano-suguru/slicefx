@@ -312,6 +312,7 @@
                     <a href="#positioning" class="nav-link hover:text-white"><span class="lang-ja">選ばれる理由</span><span class="lang-en">Why Slice</span></a>
                     <a href="#code" class="nav-link hover:text-white"><span class="lang-ja">コード例</span><span class="lang-en">Code</span></a>
                     <a href="#packages" class="nav-link hover:text-white"><span class="lang-ja">パッケージ</span><span class="lang-en">Packages</span></a>
+                    <a href="#engineering" class="nav-link hover:text-white"><span class="lang-ja">技術詳細</span><span class="lang-en">Engineering</span></a>
                 </div>
                 <div class="flex items-center gap-3 sm:gap-4">
                     <button id="langToggle" class="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700 hover:bg-slate-700" type="button" aria-label="Switch language to Japanese" aria-live="polite">
@@ -331,6 +332,7 @@
                 <a href="#positioning" class="nav-link shrink-0 bg-slate-800/60 hover:text-white"><span class="lang-ja">選ばれる理由</span><span class="lang-en">Why Slice</span></a>
                 <a href="#code" class="nav-link shrink-0 bg-slate-800/60 hover:text-white"><span class="lang-ja">コード例</span><span class="lang-en">Code</span></a>
                 <a href="#packages" class="nav-link shrink-0 bg-slate-800/60 hover:text-white"><span class="lang-ja">パッケージ</span><span class="lang-en">Packages</span></a>
+                <a href="#engineering" class="nav-link shrink-0 bg-slate-800/60 hover:text-white"><span class="lang-ja">技術詳細</span><span class="lang-en">Engineering</span></a>
             </div>
         </div>
     </nav>
@@ -596,6 +598,35 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
                     <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.TestHost</h3><p class="text-sm text-slate-400"><span class="lang-ja">Slice アプリをインプロセスで HTTP テストするためのヘルパーです。</span><span class="lang-en">In-process HTTP testing helpers for Slice apps.</span></p></div>
                     <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400"><span class="lang-ja"><code data-kind="command">slice</code> コマンドで、スキャフォールディング、ルート確認、互換性レポート、型付きクライアント生成を実行できます。</span><span class="lang-en">Scaffolding, route inspection, compatibility reports, and typed client generation through the <code data-kind="command">slice</code> command.</span></p></div>
                 </div>
+            </div>
+        </section>
+
+        <section class="max-w-5xl mx-auto px-6 py-24" id="engineering">
+            <div class="text-center mb-12">
+                <p class="mb-3 text-sm font-mono text-brand-400"><span class="lang-ja">技術詳細</span><span class="lang-en">Engineering deep dives</span></p>
+                <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">設計の意思決定と運用基準</span><span class="lang-en">Design decisions and operating criteria</span></h2>
+                <p class="text-slate-400 max-w-3xl mx-auto"><span class="lang-ja">Slice がどんな原則で動いていて、どこまで実運用に近いかをまとめたドキュメント群です。</span><span class="lang-en">How Slice is built, what invariants it defends, and where it sits on the path to production readiness.</span></p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-6">
+                <a href="https://github.com/sano-suguru/slice/blob/main/docs/design-decisions.md" class="glass-panel interactive-card p-6 rounded-xl block">
+                    <div class="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center mb-4 text-brand-400 border border-slate-700"><i data-lucide="lightbulb"></i></div>
+                    <h3 class="font-bold mb-2"><span class="lang-ja">設計判断 FAQ</span><span class="lang-en">Design decisions FAQ</span></h3>
+                    <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">なぜ <code>IMediator</code> を入れないか、なぜ <code>CreateSlimBuilder</code> か、なぜインクリメンタル生成か。よく聞かれる設計判断をまとめています。</span><span class="lang-en">Why no <code>IMediator</code>, why <code>CreateSlimBuilder</code>, why an incremental generator. Frequently asked design questions, answered.</span></p>
+                </a>
+                <a href="https://github.com/sano-suguru/slice/blob/main/docs/source-generator.md" class="glass-panel interactive-card p-6 rounded-xl block">
+                    <div class="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center mb-4 text-cyan-400 border border-slate-700"><i data-lucide="cpu"></i></div>
+                    <h3 class="font-bold mb-2"><span class="lang-ja">ソースジェネレータ</span><span class="lang-en">Source generator</span></h3>
+                    <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">17 種のコンパイル時診断 (SLICE001–017)、ルートマニフェストのスキーマ、インクリメンタルキャッシュの仕組み。</span><span class="lang-en">17 compile-time diagnostics (SLICE001–017), the route manifest schema, and the incremental cache shape.</span></p>
+                </a>
+                <a href="https://github.com/sano-suguru/slice/blob/main/docs/production-readiness.md" class="glass-panel interactive-card p-6 rounded-xl block">
+                    <div class="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center mb-4 text-emerald-400 border border-slate-700"><i data-lucide="gauge"></i></div>
+                    <h3 class="font-bold mb-2"><span class="lang-ja">プロダクション準備</span><span class="lang-en">Production readiness</span></h3>
+                    <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">6 つの強み保全インバリアント、ベンチマーク基準値、毎晩実行される perf ゲート、採用マトリクス。</span><span class="lang-en">Six strength-preservation invariants, benchmark baselines, nightly perf gates, and the adoption matrix.</span></p>
+                </a>
+            </div>
+            <div class="mt-8 text-center text-sm text-slate-500">
+                <span class="lang-ja"><a href="https://github.com/sano-suguru/slice/blob/main/docs/cli.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">CLI コマンド</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/lambda.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Lambda ホスティング</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/product-direction.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">プロダクト方針</a></span>
+                <span class="lang-en"><a href="https://github.com/sano-suguru/slice/blob/main/docs/cli.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">CLI commands</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/lambda.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Lambda hosting</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/product-direction.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Product direction</a></span>
             </div>
         </section>
     </main>

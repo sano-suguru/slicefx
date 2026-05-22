@@ -1,10 +1,20 @@
 # Slice
 
-> Write a .NET API feature once. Run it on ASP.NET-hosted apps, serverless functions, or WASI hosts.
+[![CI](https://github.com/sano-suguru/slice/actions/workflows/ci.yml/badge.svg)](https://github.com/sano-suguru/slice/actions/workflows/ci.yml)
+[![Perf (nightly)](https://github.com/sano-suguru/slice/actions/workflows/perf.yml/badge.svg)](https://github.com/sano-suguru/slice/actions/workflows/perf.yml)
+[![Pages](https://github.com/sano-suguru/slice/actions/workflows/pages.yml/badge.svg)](https://github.com/sano-suguru/slice/actions/workflows/pages.yml)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> Write a .NET API feature once. Run it on ASP.NET-hosted apps, AWS Lambda, or wasi:http hosts (Cloudflare Workers, Fermyon Spin).
 
 Website: <https://sano-suguru.github.io/slice/>
 
-Slice is an experimental .NET framework for building portable APIs on top of ASP.NET Core Minimal APIs. Each endpoint is a static feature file: request, response, validation, filters, and handler stay together. The source generator turns those features into ASP.NET registrations, route metadata, typed clients, Lambda handlers, or wasi:http dispatch where the handler shape is portable.
+**Slice** is an experimental .NET framework where one file is one feature. A Roslyn **incremental** source generator turns `[Feature]` classes into AOT-safe `AddSlice()` / `MapSlices()` calls, route manifests, and typed clients, surfacing **17 categories of compile-time diagnostics (SLICE001–017)** so convention violations never reach runtime. `Slice.Core` is zero-dependency by construction (enforced by both an MSBuild target and CI), and a nightly perf workflow gates source-generator throughput against published baselines.
+
+Curious about the design choices? See **[Design decisions FAQ](docs/design-decisions.md)** and **[Production readiness criteria](docs/production-readiness.md)**.
+
+Each endpoint is a static feature file: request, response, validation, filters, and handler stay together. The source generator turns those features into ASP.NET registrations, route metadata, typed clients, Lambda handlers, or wasi:http dispatch where the handler shape is portable.
 
 ```bash
 dotnet run --project samples/Slice.Sample
@@ -161,6 +171,7 @@ Slice endpoints work with ASP.NET Core's standard OpenAPI support out of the box
 | Lambda hosting and per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | WASI deploy path | [samples/Slice.WasiSample/README.md](samples/Slice.WasiSample/README.md) |
 | Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |
+| Design decisions FAQ | [docs/design-decisions.md](docs/design-decisions.md) |
 | Product direction | [docs/product-direction.md](docs/product-direction.md) |
 | Production readiness | [docs/production-readiness.md](docs/production-readiness.md) |
 
