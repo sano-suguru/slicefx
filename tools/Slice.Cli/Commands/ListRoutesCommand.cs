@@ -101,7 +101,8 @@ internal static partial class ListRoutesCommand
             route.ReturnType,
             route.Portability,
             route.PortabilityReason,
-            route.Filters));
+            route.Filters,
+            RouteTargetCapabilities.Classify(route)));
 
         var json = JsonSerializer.Serialize(jsonRoutes, JsonOptions);
         Console.WriteLine(json);
@@ -134,5 +135,6 @@ internal static partial class ListRoutesCommand
         string ReturnType,
         string Portability,
         string? PortabilityReason,
-        string[] Filters);
+        string[] Filters,
+        RouteCapabilities Capabilities);
 }

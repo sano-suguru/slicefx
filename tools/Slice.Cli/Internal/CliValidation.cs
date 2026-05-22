@@ -106,6 +106,25 @@ internal static class CliValidation
             : normalized.StartsWith('/') ? normalized : "/" + normalized;
     }
 
+    internal static string RequireKebabIdentifier(string value, string argumentName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new CliException($"{argumentName} is required.");
+        }
+
+        var identifier = RequireNoSurroundingWhitespace(value, argumentName);
+        if (identifier.Length == 0
+            || identifier[0] is '-'
+            || identifier[^1] is '-'
+            || identifier.Any(static ch => !(char.IsAsciiLetterOrDigit(ch) || ch is '-')))
+        {
+            throw new CliException($"{argumentName} must contain only ASCII letters, digits, and hyphens, and must not start or end with a hyphen.");
+        }
+
+        return identifier.ToLowerInvariant();
+    }
+
     private static string RequireIdentifier(string value, string argumentName)
     {
         if (string.IsNullOrWhiteSpace(value))

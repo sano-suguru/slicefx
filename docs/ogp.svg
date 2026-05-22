@@ -1,0 +1,123 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="rgba(148,163,184,0.07)" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="glow1" cx="20%" cy="0%" r="50%">
+      <stop offset="0%" stop-color="rgba(37,99,235,0.22)"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="90%" cy="15%" r="45%">
+      <stop offset="0%" stop-color="rgba(20,184,166,0.14)"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="headline1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#67e8f9"/>
+    </linearGradient>
+    <linearGradient id="headline2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="100%" stop-color="#6ee7b7"/>
+    </linearGradient>
+    <linearGradient id="headline3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.5)"/>
+    </filter>
+    <clipPath id="codeClip">
+      <rect x="680" y="140" width="480" height="340" rx="14"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#020617"/>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Logo mark -->
+  <rect x="72" y="68" width="52" height="52" rx="11" fill="url(#logoGrad)" filter="url(#shadow)"/>
+  <text x="98" y="105" font-family="Arial Black, Arial, sans-serif" font-size="32" font-weight="900" text-anchor="middle" fill="white">S</text>
+
+  <!-- Brand + badge -->
+  <text x="138" y="105" font-family="Arial Black, Arial, sans-serif" font-size="34" font-weight="900" fill="white">Slice</text>
+  <rect x="248" y="82" width="136" height="28" rx="14" fill="rgba(30,58,138,0.55)" stroke="rgba(59,130,246,0.32)" stroke-width="1"/>
+  <text x="316" y="101" font-family="Courier New, monospace" font-size="13" text-anchor="middle" fill="#93c5fd">experimental</text>
+
+  <!-- Tagline badge -->
+  <rect x="72" y="158" width="330" height="32" rx="16" fill="rgba(30,58,138,0.4)" stroke="rgba(59,130,246,0.28)" stroke-width="1"/>
+  <circle cx="96" cy="174" r="5" fill="#34d399"/>
+  <text x="112" y="179" font-family="Courier New, monospace" font-size="13" fill="#60a5fa">Feature-first .NET APIs</text>
+
+  <!-- Main headlines -->
+  <text x="72" y="290" font-family="Arial Black, Arial, sans-serif" font-size="78" font-weight="900" fill="url(#headline1)">One file.</text>
+  <text x="72" y="380" font-family="Arial Black, Arial, sans-serif" font-size="78" font-weight="900" fill="url(#headline2)">One feature.</text>
+  <text x="72" y="458" font-family="Arial Black, Arial, sans-serif" font-size="52" font-weight="900" fill="url(#headline3)">Generated contracts.</text>
+
+  <!-- Metrics pills -->
+  <rect x="72" y="490" width="200" height="28" rx="14" fill="rgba(15,23,42,0.72)" stroke="rgba(51,65,85,0.9)" stroke-width="1"/>
+  <circle cx="92" cy="504" r="4" fill="#60a5fa"/>
+  <text x="106" y="509" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">Source-generated</text>
+
+  <rect x="284" y="490" width="176" height="28" rx="14" fill="rgba(15,23,42,0.72)" stroke="rgba(51,65,85,0.9)" stroke-width="1"/>
+  <circle cx="304" cy="504" r="4" fill="#34d399"/>
+  <text x="318" y="509" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">Zero reflection</text>
+
+  <rect x="472" y="490" width="170" height="28" rx="14" fill="rgba(15,23,42,0.72)" stroke="rgba(51,65,85,0.9)" stroke-width="1"/>
+  <circle cx="492" cy="504" r="4" fill="#22d3ee"/>
+  <text x="506" y="509" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">Zero NuGet deps</text>
+
+  <!-- Code card -->
+  <rect x="680" y="140" width="480" height="340" rx="14" fill="rgba(30,41,59,0.82)" stroke="rgba(255,255,255,0.09)" stroke-width="1" filter="url(#shadow)"/>
+  <!-- Code card header -->
+  <rect x="680" y="140" width="480" height="44" rx="14" fill="#1e293b"/>
+  <rect x="680" y="168" width="480" height="16" fill="#1e293b"/>
+  <circle cx="708" cy="162" r="6" fill="rgba(239,68,68,0.75)"/>
+  <circle cx="730" cy="162" r="6" fill="rgba(234,179,8,0.75)"/>
+  <circle cx="752" cy="162" r="6" fill="rgba(34,197,94,0.75)"/>
+  <text x="855" y="167" font-family="Courier New, monospace" font-size="12" text-anchor="middle" fill="#64748b">CreateUser.cs</text>
+
+  <!-- Code lines -->
+  <text x="706" y="210" font-family="Courier New, monospace" font-size="13.5" fill="#c084fc">[Feature(</text>
+  <text x="792" y="210" font-family="Courier New, monospace" font-size="13.5" fill="#fbbf24">"POST /users"</text>
+  <text x="902" y="210" font-family="Courier New, monospace" font-size="13.5" fill="#c084fc">)]</text>
+
+  <text x="706" y="234" font-family="Courier New, monospace" font-size="13.5" fill="#60a5fa">public static class </text>
+  <text x="861" y="234" font-family="Courier New, monospace" font-size="13.5" fill="#6ee7b7">CreateUser</text>
+
+  <text x="706" y="258" font-family="Courier New, monospace" font-size="13.5" fill="#f8fafc">{</text>
+
+  <text x="724" y="284" font-family="Courier New, monospace" font-size="13.5" fill="#60a5fa">public record </text>
+  <text x="824" y="284" font-family="Courier New, monospace" font-size="13.5" fill="#6ee7b7">Request</text>
+  <text x="874" y="284" font-family="Courier New, monospace" font-size="13.5" fill="#94a3b8">(...)</text>
+
+  <text x="724" y="308" font-family="Courier New, monospace" font-size="13.5" fill="#60a5fa">public record </text>
+  <text x="824" y="308" font-family="Courier New, monospace" font-size="13.5" fill="#6ee7b7">Response</text>
+  <text x="880" y="308" font-family="Courier New, monospace" font-size="13.5" fill="#94a3b8">(...)</text>
+
+  <text x="724" y="344" font-family="Courier New, monospace" font-size="13.5" fill="#60a5fa">public static async </text>
+  <text x="868" y="344" font-family="Courier New, monospace" font-size="13.5" fill="#67e8f9">Task</text>
+  <text x="895" y="344" font-family="Courier New, monospace" font-size="13.5" fill="#f8fafc">&lt;</text>
+  <text x="902" y="344" font-family="Courier New, monospace" font-size="13.5" fill="#6ee7b7">Response</text>
+  <text x="958" y="344" font-family="Courier New, monospace" font-size="13.5" fill="#f8fafc">&gt;</text>
+
+  <text x="724" y="368" font-family="Courier New, monospace" font-size="13.5" fill="#6ee7b7">Handle</text>
+  <text x="772" y="368" font-family="Courier New, monospace" font-size="13.5" fill="#f8fafc">(</text>
+  <text x="779" y="368" font-family="Courier New, monospace" font-size="13.5" fill="#6ee7b7">Request</text>
+  <text x="827" y="368" font-family="Courier New, monospace" font-size="13.5" fill="#94a3b8"> req, ...)</text>
+
+  <text x="724" y="404" font-family="Courier New, monospace" font-size="13.5" fill="#f8fafc">=&gt; store.AddAsync(req, ct);</text>
+
+  <text x="706" y="432" font-family="Courier New, monospace" font-size="13.5" fill="#f8fafc">}</text>
+
+  <!-- Footer -->
+  <line x1="72" y1="582" x2="1128" y2="582" stroke="rgba(51,65,85,0.45)" stroke-width="1"/>
+  <text x="72" y="610" font-family="Arial, sans-serif" font-size="15" fill="#475569">github.com/sano-suguru/slice</text>
+  <text x="1128" y="610" font-family="Arial, sans-serif" font-size="15" text-anchor="end" fill="#475569">MIT License · .NET 10</text>
+</svg>

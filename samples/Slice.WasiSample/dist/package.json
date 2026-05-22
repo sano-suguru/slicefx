@@ -3,15 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "dotnet publish .. -r wasi-wasm -c Release && npm run transpile",
-    "transpile": "jco transpile slice-wasi-sample.wasm -o component --name slice-wasi-sample --tla-compat --no-namespaced-exports --instantiation async --map 'wasi:sockets/tcp@0.2.0=../stubs/tcp.js' --map 'wasi:sockets/udp@0.2.0=../stubs/udp.js' && npx wasm-opt -Oz component/slice-wasi-sample.core.wasm -o component/slice-wasi-sample.core.wasm && node generate-module-map.mjs",
-    "deploy": "npx wrangler deploy --config wrangler.deploy.toml"
+    "build": "dotnet publish \"../Slice.WasiSample.csproj\" -r wasi-wasm -c Release && npm run transpile",
+    "transpile": "jco transpile \"slice-wasi-sample.wasm\" -o component --name slice-wasi-sample --tla-compat --no-namespaced-exports --instantiation async --map 'wasi:sockets/tcp@0.2.0=../stubs/tcp.js' --map 'wasi:sockets/udp@0.2.0=../stubs/udp.js' && wasm-opt -Oz component/slice-wasi-sample.core.wasm -o component/slice-wasi-sample.core.wasm && node generate-module-map.mjs",
+    "deploy": "wrangler deploy --config wrangler.deploy.toml"
   },
   "dependencies": {
     "@bytecodealliance/preview2-shim": "0.17.9"
   },
   "devDependencies": {
     "@bytecodealliance/jco": "1.19.0",
+    "binaryen": "129.0.0",
     "wrangler": "^4.93.1"
   }
 }

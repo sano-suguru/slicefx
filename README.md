@@ -241,7 +241,7 @@ If registrations grow, move the `AddScoped` calls into an application extension 
 | CLI scaffolding (`slice new feature User`) | ✅ experimental |
 | Generated route metadata manifest | ✅ experimental |
 | Typed C# client generation (`slice client csharp`) | ✅ experimental |
-| AWS SAM template generation (`slice manifest aws-lambda`) | ✅ experimental |
+| AWS SAM template generation (`slice manifest aws-lambda`) | ✅ experimental (hosted Lambda manifest) |
 
 ## Source generator, adapters, and roadmap
 
@@ -406,6 +406,7 @@ The CLI is packaged as a local .NET tool command named `slice`. It scaffolds fea
 slice new feature CreateOrder --method POST --route /orders
 slice new feature GetProductDetail --method GET
 slice new filter RequireApiKeyFilter
+slice new wasi-cloudflare
 slice routes
 slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
@@ -414,11 +415,19 @@ slice manifest aws-lambda --output template.yaml
 
 `slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes (`CreateUser` -> `Users`, `ListOrders` -> `Orders`, `GetProductDetail` -> `Products`), and writes to `Features/<Group>/<FeatureName>.cs`. Generated templates return a nested `Response` record by default; `POST`, `PUT`, and `PATCH` templates also include an empty `Request`.
 
+`slice new wasi-cloudflare` scaffolds the Cloudflare Workers host files for a `Slice.Wasi` component into `dist/`: `shim.mjs`, `package.json`, Wrangler config, socket stubs, and module-map generation. It does not move app-specific pieces such as `IncomingHandlerImpl.cs` or `WasiJsonContext.cs` into the runtime library; those remain in the app because they depend on WIT-generated types and user DTO metadata.
+
 `slice routes` first reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs` source files. The command reports whether each slice is `portable`, `partial`, or `aspnet-only` for WASI-style dispatch, and `--format json` exports the same route metadata for tooling. `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes, which is useful for Blazor and other .NET clients. Pass `--project` when running outside the project directory and `--force` to overwrite an existing file.
 
-`slice manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml` with one `AWS::Serverless::Function` per `[Feature]`. All features are included — `aspnet-only` routes work correctly with `Slice.Lambda`'s ASP.NET Core hosting. ASP.NET route constraints (`{id:guid}`) are automatically stripped to API Gateway syntax (`{id}`). The default runtime is `provided.al2023` (NativeAOT / self-contained), which uses `bootstrap` as the handler. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes. Use `--memory` and `--timeout` to set defaults; individual functions can be further customized in the generated template.
+`slice manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml` for the current hosted Lambda model. By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted Slice app and one API Gateway `HttpApi` event per `[Feature]`. It is not yet independent handler or binary output per feature; `--mode per-feature` is reserved for that future path. All features are included — `aspnet-only` routes work correctly with `Slice.Lambda`'s ASP.NET Core hosting. ASP.NET route constraints (`{id:guid}`) are automatically stripped to API Gateway syntax (`{id}`). The default runtime is `provided.al2023` (NativeAOT / self-contained), which uses `bootstrap` as the handler. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
 
 `Features/<Group>/<Feature>.cs` is the recommended and scaffolded project shape, not a compiler-enforced file-system routing rule. The generator discovers `[Feature]` classes, so explicit attributes remain the source of truth.
+
+## Per-feature deployment direction
+
+Slice is not trying to make file-system routing mandatory or hide the route contract. The useful idea is smaller and more .NET-native: a feature file should produce explicit route metadata, compatibility signals, and eventually a path toward per-feature deployment without changing the authoring model.
+
+Today, that means generated registrations, route manifests, portability reporting, typed clients, WASI dispatch, and a SAM template generator. It does not yet mean one generated Lambda handler, one NativeAOT binary, or one WASM component per feature.
 
 ## Why "Vertical Slice + AOT/serverless"?
 
@@ -431,7 +440,7 @@ If you align the slice boundary with the function boundary, you get:
 
 - **Smaller per-function AOT binaries** — trimming is more effective because each function only references what it actually uses.
 - **Faster cold starts** — less code to load and JIT (or none, with AOT).
-- **Same app shape, multiple deployment modes** — run as a Kestrel server in development, host the same app on AWS Lambda today, and keep the path open for finer-grained function-per-feature deployment.
+- **Same app shape, multiple deployment modes** — run as a Kestrel server in development, host the same app on AWS Lambda today, and keep the path open for finer-grained function-per-feature deployment later.
 
 Slice's static-handler shape is designed to make the function-per-feature mapping straightforward, even though the current Lambda adapter hosts the ASP.NET Core app as a Lambda entry point. The near-term deployment direction is full-app deployment plus generated route metadata first; function-per-feature build output should be evaluated on top of that manifest without changing the feature authoring model.
 

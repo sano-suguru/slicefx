@@ -17,6 +17,7 @@ This sample shows Slice `[Feature]` classes — unmodified from their ASP.NET co
 | `runtime.<host>.microsoft.dotnet.ilcompiler.llvm` | `10.0.0-alpha.1.25162.1` |
 | `@bytecodealliance/jco` | `1.19.0` |
 | `@bytecodealliance/preview2-shim` | `0.17.9` |
+| `binaryen` | `129.0.0` |
 
 ## Build the WASM component
 
@@ -102,10 +103,12 @@ curl -X POST https://<worker-name>.<account>.workers.dev/echo \
 
 ## Source map
 
+These files intentionally live in the sample. `Slice.Wasi` owns the reusable runtime pieces (`WasiRequest`, `WasiResponse`, routing, binding, validation, and `WasiApp.DispatchAsync`); the files below are application-specific or deployment-target glue that may later move into CLI scaffolding/templates if multiple apps need the same shape.
+
 | File | Purpose |
 | --- | --- |
-| [`IncomingHandlerImpl.cs`](IncomingHandlerImpl.cs) | `wasi:http/incoming-handler` → `WasiApp.DispatchAsync` bridge (compiled only under `-r wasi-wasm`) |
-| [`WasiJsonContext.cs`](WasiJsonContext.cs) | `JsonSerializerContext` for AOT/trim-safe serialization |
+| [`IncomingHandlerImpl.cs`](IncomingHandlerImpl.cs) | `wasi:http/incoming-handler` → `WasiApp.DispatchAsync` bridge (compiled only under `-r wasi-wasm`; depends on WIT-generated `ProxyWorld` types from the app's componentize-dotnet build) |
+| [`WasiJsonContext.cs`](WasiJsonContext.cs) | App-specific `JsonSerializerContext` for AOT/trim-safe serialization |
 | [`Features/`](Features/) | `[Feature]` classes — identical shape to ASP.NET features |
 | [`spin.toml`](spin.toml) | Fermyon Cloud / Spin deployment manifest |
 | [`dist/shim.mjs`](dist/shim.mjs) | Cloudflare Workers fetch handler; bridges `fetch(Request)` → wasi:http |

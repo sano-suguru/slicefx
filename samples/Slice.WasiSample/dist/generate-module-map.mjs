@@ -1,5 +1,4 @@
 import { readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 
 const componentDir = new URL("./component/", import.meta.url);
 const files = (await readdir(componentDir))
@@ -14,7 +13,7 @@ const imports = files.map((file, index) => `import core${index} from "./${file}"
 const entries = files.map((file, index) => `  ["${file}", core${index}],`).join("\n");
 
 await writeFile(
-  join(componentDir.pathname, "modules.mjs"),
+  new URL("modules.mjs", componentDir),
   `${imports}
 
 const modules = new Map([

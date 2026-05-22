@@ -4,7 +4,8 @@ using Slice.Cli.Commands;
 var newCmd = new Command("new", "Scaffold a new Slice file.")
 {
     NewFeatureCommand.Build(),
-    NewFilterCommand.Build()
+    NewFilterCommand.Build(),
+    NewWasiCloudflareCommand.Build()
 };
 
 var clientCmd = new Command("client", "Generate typed clients from Slice feature routes.")

@@ -143,7 +143,7 @@ function methodTag(m) {
 
 // ── Instantiate the component once at module load ──────────────────────────
 
-_setArgs(['Slice.WasiSample']);
+_setArgs(["Slice.WasiSample"]);
 
 const instancePromise = instantiate(getCoreModule, {
   '../stubs/tcp.js': { TcpSocket },
@@ -223,28 +223,65 @@ export default {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       });
     };
+  },
+};
 
-    async function readRequestBody(cfRequest) {
-      if (cfRequest.method === 'GET' || cfRequest.method === 'HEAD') {
-        return new Uint8Array(0);
+async function readRequestBody(cfRequest) {
+  if (cfRequest.method === 'GET' || cfRequest.method === 'HEAD') {
+    return new Uint8Array(0);
+  }
+
+  const contentLength = cfRequest.headers.get('content-length');
+  if (contentLength !== null) {
+    const declaredLength = Number(contentLength);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
+      throw new PayloadTooLargeError();
+    }
+  }
+
+  if (cfRequest.body === null) {
+    return new Uint8Array(0);
+  }
+
+  const reader = cfRequest.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
       }
 
-      const contentLength = cfRequest.headers.get('content-length');
-      if (contentLength !== null) {
-        const declaredLength = Number(contentLength);
-        if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BODY_BYTES) {
-          throw new PayloadTooLargeError();
-        }
-      }
-
-      const bytes = new Uint8Array(await cfRequest.arrayBuffer());
-      if (bytes.byteLength > MAX_REQUEST_BODY_BYTES) {
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+      total += chunk.byteLength;
+      if (total > MAX_REQUEST_BODY_BYTES) {
+        await reader.cancel();
         throw new PayloadTooLargeError();
       }
 
-      return bytes;
+      chunks.push(chunk);
     }
+  } finally {
+    reader.releaseLock();
+  }
 
-    class PayloadTooLargeError extends Error {}
-  },
-};
+  if (chunks.length === 0) {
+    return new Uint8Array(0);
+  }
+
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return bytes;
+}
+
+class PayloadTooLargeError extends Error {}

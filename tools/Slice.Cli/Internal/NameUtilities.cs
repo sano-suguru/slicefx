@@ -100,6 +100,45 @@ internal static class NameUtilities
         return sb.ToString();
     }
 
+    internal static string ToKebabIdentifier(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "slice-app";
+        }
+
+        var sb = new StringBuilder(value.Length + 4);
+        var previousWasSeparator = true;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (char.IsAsciiLetterOrDigit(ch))
+            {
+                if (char.IsUpper(ch) && i > 0 && !previousWasSeparator)
+                {
+                    sb.Append('-');
+                }
+
+                sb.Append(char.ToLowerInvariant(ch));
+                previousWasSeparator = false;
+                continue;
+            }
+
+            if (!previousWasSeparator)
+            {
+                sb.Append('-');
+                previousWasSeparator = true;
+            }
+        }
+
+        while (sb.Length > 0 && sb[^1] == '-')
+        {
+            sb.Length--;
+        }
+
+        return sb.Length == 0 ? "slice-app" : sb.ToString();
+    }
+
     internal static string ToNamespaceSegment(string value)
     {
         if (string.IsNullOrWhiteSpace(value))

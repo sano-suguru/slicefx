@@ -18,6 +18,9 @@ internal static partial class ManifestAwsLambdaCommand
     private static readonly HashSet<string> KnownRuntimes =
         new(StringComparer.OrdinalIgnoreCase) { "provided", "provided.al2", "provided.al2023", "dotnet8", "dotnet9" };
 
+    private static readonly HashSet<string> KnownModes =
+        new(StringComparer.OrdinalIgnoreCase) { "hosted", "per-feature" };
+
     internal static Command Build()
     {
         var projectOpt = SharedOptions.CreateProject();
@@ -40,15 +43,21 @@ internal static partial class ManifestAwsLambdaCommand
             Description = "Default function timeout in seconds.",
             DefaultValueFactory = _ => 30,
         };
+        var modeOpt = new Option<string>("--mode")
+        {
+            Description = "Lambda manifest mode: 'hosted' for one ASP.NET-hosted Lambda function, or 'per-feature' for future independent handlers.",
+            DefaultValueFactory = _ => "hosted",
+        };
         var forceOpt = SharedOptions.CreateForce();
 
-        var cmd = new Command("aws-lambda", "Generate an AWS SAM template.yaml with one Lambda function per Slice feature.")
+        var cmd = new Command("aws-lambda", "Generate an AWS SAM template.yaml for Slice routes on AWS Lambda.")
         {
             projectOpt,
             outputOpt,
             runtimeOpt,
             memoryOpt,
             timeoutOpt,
+            modeOpt,
             forceOpt
         };
 
@@ -59,11 +68,12 @@ internal static partial class ManifestAwsLambdaCommand
             var runtime = parseResult.GetValue(runtimeOpt) ?? "provided.al2023";
             var memory = parseResult.GetValue(memoryOpt);
             var timeout = parseResult.GetValue(timeoutOpt);
+            var mode = parseResult.GetValue(modeOpt) ?? "hosted";
             var force = parseResult.GetValue(forceOpt);
 
             try
             {
-                await RunAsync(project, output, runtime, memory, timeout, force, ct).ConfigureAwait(false);
+                await RunAsync(project, output, runtime, memory, timeout, mode, force, ct).ConfigureAwait(false);
                 return 0;
             }
             catch (CliException ex)
@@ -82,12 +92,25 @@ internal static partial class ManifestAwsLambdaCommand
         string runtime,
         int memory,
         int timeout,
+        string mode,
         bool force,
         CancellationToken ct)
     {
         if (!KnownRuntimes.Contains(runtime))
         {
             throw new CliException($"Unknown runtime '{runtime}'. Expected one of: {string.Join(", ", KnownRuntimes)}.");
+        }
+
+        if (!KnownModes.Contains(mode))
+        {
+            throw new CliException($"Unknown Lambda manifest mode '{mode}'. Expected one of: {string.Join(", ", KnownModes)}.");
+        }
+
+        if (string.Equals(mode, "per-feature", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CliException(
+                "Lambda per-feature manifest mode is not implemented yet. " +
+                "Use '--mode hosted' for the current ASP.NET-hosted Lambda app model.");
         }
 
         var ctx = ProjectContextDiscovery.Discover(project);
@@ -104,33 +127,27 @@ internal static partial class ManifestAwsLambdaCommand
             throw new CliException($"Output file already exists: {outputFile.FullName}\nUse --force to overwrite.");
         }
 
-        var yaml = GenerateSamTemplate(ctx, routes, runtime, memory, timeout);
+        var yaml = GenerateHostedSamTemplate(ctx, routes, runtime, memory, timeout);
 
         Directory.CreateDirectory(outputFile.DirectoryName!);
         await File.WriteAllTextAsync(outputFile.FullName, yaml, ct).ConfigureAwait(false);
 
         Console.WriteLine($"Generated {outputFile.FullName}");
-        Console.WriteLine($"  {routes.Length} function(s) — runtime: {runtime}, memory: {memory} MB, timeout: {timeout}s");
-
-        var partial = routes.Count(static r => r.Portability == RouteCatalog.PortabilityPartial);
-        if (partial > 0)
-        {
-            Console.WriteLine($"  Note: {partial} route(s) are 'partial' — non-validator endpoint filters will not run in Lambda. See comments in template.yaml.");
-        }
+        Console.WriteLine($"  hosted mode — 1 function, {routes.Length} route event(s), runtime: {runtime}, memory: {memory} MB, timeout: {timeout}s");
     }
 
-    private static string GenerateSamTemplate(
+    private static string GenerateHostedSamTemplate(
         ProjectContext ctx,
         SliceRouteInfo[] routes,
         string runtime,
         int memory,
         int timeout)
     {
-        // Detect logical ID collisions before emitting any YAML.
+        // Detect event logical ID collisions before emitting any YAML.
         var seen = new HashSet<string>();
         foreach (var route in routes)
         {
-            var id = ToLogicalId(route.EndpointName);
+            var id = ToLogicalId(route.EndpointName, "Event");
             if (!seen.Add(id))
             {
                 throw new CliException(
@@ -142,7 +159,11 @@ internal static partial class ManifestAwsLambdaCommand
         var sb = new StringBuilder();
         sb.AppendLine("AWSTemplateFormatVersion: '2010-09-09'");
         sb.AppendLine("Transform: 'AWS::Serverless-2016-10-31'");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Description: '{YamlSingleQuoted($"Generated by slice manifest aws-lambda from {ctx.AssemblyName}. Edit as needed.")}'");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Description: '{YamlSingleQuoted($"Generated by slice manifest aws-lambda --mode hosted from {ctx.AssemblyName}. Edit as needed.")}'");
+        sb.AppendLine();
+        sb.AppendLine("# Hosted mode: one Lambda function hosts the ASP.NET Core app generated by Slice.");
+        sb.AppendLine("# Each [Feature] becomes an API Gateway HttpApi event on the same function.");
+        sb.AppendLine("# This is not independent per-feature handler or binary output.");
         sb.AppendLine();
         sb.AppendLine("Globals:");
         sb.AppendLine("  Function:");
@@ -157,49 +178,34 @@ internal static partial class ManifestAwsLambdaCommand
         sb.AppendLine("    Type: AWS::Serverless::HttpApi");
         sb.AppendLine();
 
+        var handler = GetHandler(ctx.AssemblyName, runtime);
+
+        sb.AppendLine("  SliceHostedFunction:");
+        sb.AppendLine("    Type: AWS::Serverless::Function");
+        sb.AppendLine("    Properties:");
+        if (IsNativeAotRuntime(runtime))
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"      Handler: '{YamlSingleQuoted(handler)}'");
+        }
+        else
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"      Handler: '{YamlSingleQuoted(handler)}'  {ManagedRuntimeHandlerComment}");
+        }
+
+        sb.AppendLine("      Events:");
+
         foreach (var route in routes)
         {
-            var logicalId = ToLogicalId(route.EndpointName);
+            var eventId = ToLogicalId(route.EndpointName, "Event");
             var samPath = ToSamPath(route.Pattern);
-            var handler = GetHandler(ctx.AssemblyName, runtime);
 
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  # {SanitizeComment(route.EndpointName)} — {SanitizeComment(route.Method)} {SanitizeComment(route.Pattern)} ({SanitizeComment(route.Portability)})");
-
-            if (route.Portability == RouteCatalog.PortabilityPartial)
-            {
-                var nonPortableFilters = route.Filters
-                    .Where(static f =>
-                        !f.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal) &&
-                        !f.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal) &&
-                        !f.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal))
-                    .ToArray();
-                if (nonPortableFilters.Length > 0)
-                {
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"  # Warning: the following filters will not run in Lambda: {SanitizeComment(string.Join(", ", nonPortableFilters))}");
-                }
-            }
-
-            sb.AppendLine(CultureInfo.InvariantCulture, $"  {logicalId}:");
-            sb.AppendLine("    Type: AWS::Serverless::Function");
-            sb.AppendLine("    Properties:");
-
-            if (IsNativeAotRuntime(runtime))
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"      Handler: '{YamlSingleQuoted(handler)}'");
-            }
-            else
-            {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"      Handler: '{YamlSingleQuoted(handler)}'  {ManagedRuntimeHandlerComment}");
-            }
-
-            sb.AppendLine("      Events:");
-            sb.AppendLine("        HttpEvent:");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        # {SanitizeComment(route.EndpointName)} — {SanitizeComment(route.Method)} {SanitizeComment(route.Pattern)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        {eventId}:");
             sb.AppendLine("          Type: HttpApi");
             sb.AppendLine("          Properties:");
             sb.AppendLine("            ApiId: !Ref SliceApi");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            Method: '{YamlSingleQuoted(route.Method)}'");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            Path: '{YamlSingleQuoted(samPath)}'");
-            sb.AppendLine();
         }
 
         return sb.ToString();
@@ -237,9 +243,9 @@ internal static partial class ManifestAwsLambdaCommand
 
     /// <summary>
     /// Derives a CloudFormation logical resource ID from an endpoint name.
-    /// "Users.CreateUser" → "UsersCreateUserFunction"
+    /// "Users.CreateUser", "Event" → "UsersCreateUserEvent"
     /// </summary>
-    private static string ToLogicalId(string endpointName)
+    private static string ToLogicalId(string endpointName, string suffix)
     {
         var sb = new StringBuilder();
         foreach (var segment in endpointName.Split('.'))
@@ -257,7 +263,7 @@ internal static partial class ManifestAwsLambdaCommand
             }
         }
 
-        sb.Append("Function");
+        sb.Append(suffix);
         // CloudFormation logical IDs are capped at 255 characters.
         return sb.Length > 255 ? sb.ToString(0, 255) : sb.ToString();
     }
