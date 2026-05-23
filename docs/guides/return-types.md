@@ -27,7 +27,7 @@ public static class CreateUser
 
 Advantages:
 
-- **Workers-portable** — `slice routes` classifies this as `portable`.
+- **WASI-portable** — `slice routes` classifies this as `portable`.
 - **Direct testability** — `var r = await CreateUser.Handle(...); Assert.Equal(...)`.
 - **Accurate OpenAPI schema** — Minimal API infers the response type.
 
@@ -63,7 +63,7 @@ See `samples/Slice.Sample/Features/Users/GetUser.cs`.
 
 | Concern | Direct response | `IResult` return |
 |---|---|---|
-| Workers portability | ✅ `portable` | ❌ `aspnet-only` (SLICE008 info) |
+| WASI portability | ✅ `portable` | ❌ `aspnet-only` (SLICE008 info) |
 | OpenAPI schema fidelity | ✅ Return type flows through | ⚠️ Use `TypedResults.Ok<T>()` to recover the schema |
 | Custom HTTP status | ❌ Always 200 / 204 | ✅ Anything |
 | Test ergonomics | ✅ Assert plain values | ⚠️ Need `IResult.ExecuteAsync` to read the response |
@@ -71,9 +71,9 @@ See `samples/Slice.Sample/Features/Users/GetUser.cs`.
 ## Recommended patterns
 
 1. **Default: direct response.**
-2. **Reach for `IResult` when 404 / 401 / etc. are required**, accepting that the endpoint is no longer Workers-portable (or switch to `WasiResponse`).
-3. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** Note that `Generator_excludes_aspnet_typed_results_from_workers_routes_and_manifest` (in `SourceGeneratorCompileTests.cs`) confirms that `TypedResults` returns are still classified as `aspnet-only` and excluded from WASI routes.
+2. **Reach for `IResult` when 404 / 401 / etc. are required**, accepting that the endpoint is no longer WASI-portable (or switch to `WasiResponse`).
+3. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** Note that `Generator_excludes_aspnet_typed_results_from_wasi_routes_and_manifest` (in `SourceGeneratorCompileTests.cs`) confirms that `TypedResults` returns are still classified as `aspnet-only` and excluded from WASI routes.
 
 ## When SLICE008 appears
 
-Returning `IResult` is a deliberate trade-off; the SLICE008 info message is a reminder that "this endpoint does not run on Workers". No fix is required. If you do want it on Workers, switch to a direct response.
+Returning `IResult` is a deliberate trade-off; the SLICE008 info message is a reminder that "this endpoint is excluded from WASI routes". No fix is required. If you do want it on the WASI path, switch to a direct response.

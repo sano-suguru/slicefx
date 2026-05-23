@@ -22,10 +22,18 @@ This checklist is for deciding whether the repository is ready for a preview rel
 - [ ] Freeze the preview version and scope.
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
-- [ ] Review public API names before the first package push.
+- [x] Review public API names before the first package push.
   - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`DataAnnotationsValidationFilter`, `ISliceValidator<T>`, `SliceValidatorFilter<T>`).
   - Generated API (emitted by `Slice.SourceGenerator`): `AddSlice`, `MapSlices`, route manifest (`GetSliceRoutesGenerated`), cross-assembly module helpers, WASI registrations (`AddSlice(WasiHostBuilder)`, `RegisterWasiRoutes`).
   - WASI API: `WasiHost`, `WasiApp`, `WasiRequest`, `WasiResponse`, `SliceResult`, `WasiRouteTable`.
+  - Naming decision: keep `Slice.Wasi` / `Wasi*` as the preview public API because the adapter targets any `wasi:http` host. `Slice.Workers` / `Worker*` would overfit the API to Cloudflare Workers, which is only one deployment target.
+  - Before release, confirm no stale generic Workers naming remains outside this checklist:
+    ```pwsh
+    rg -n "Workers-portable|Workers portability|does not run on Workers|Generator_.*workers|WorkerHost|WorkerRoute|WorkerValidation|WorkerMissing|WorkerValidator|WorkerReflection|WorkerTyped|workersSource|Slice\\.Workers|WorkerApp|WorkerRequest|WorkerResponse|WorkerRouteTable" `
+      README.md CHANGELOG.md CLAUDE.md docs tests src samples tools `
+      --glob "!docs/oss-release-checklist.md"
+    ```
+    This should return no matches. References to Cloudflare Workers as a concrete deployment target are expected.
   - CLI API: `slice new feature`, `slice new filter`, `slice routes`, `slice client csharp`.
 - [ ] Align docs and samples with the preview scope.
   - `README.md` quick start and status table.

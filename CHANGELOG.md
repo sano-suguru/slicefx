@@ -8,7 +8,7 @@ This project follows semantic versioning once stable packages are published. Bef
 
 ### Preview scope
 
-- Initial experimental framework, source generator, adapters, Workers runtime, and CLI surface.
+- Initial experimental framework, source generator, adapters, WASI runtime, and CLI surface.
 - Core runtime package ID is `Slice.Core` because `Slice` is already used on NuGet.
 - `Slice.SourceGenerator` is required for generated `AddSlice` / `MapSlices` registrations in the `Slice` namespace.
 - Feature assemblies emit module helpers, and hosts can aggregate referenced Slice feature modules.
@@ -17,7 +17,7 @@ This project follows semantic versioning once stable packages are published. Bef
 
 - Added route metadata manifests with portability vocabulary for `portable`, `partial`, and `aspnet-only` routes.
 - Added CLI scaffolding, route inspection, compatibility reporting, and C# typed client generation.
-- Added AWS Lambda, TestHost, and Workers/WASI experimental adapters.
+- Added AWS Lambda, TestHost, and WASI experimental adapters.
 - Added DataAnnotations validation and `ISliceValidator<T>` custom validation support.
 - Added OSS release documents: license, contribution guide, security policy, code of conduct, and changelog.
 - Added GitHub Pages landing page under `docs/`.
@@ -26,5 +26,5 @@ This project follows semantic versioning once stable packages are published. Bef
 
 ### Fixed before first publish
 
-- Hardened handler discovery, duplicate endpoint detection, generated identifier sanitization, and Workers malformed JSON handling.
+- Hardened handler discovery, duplicate endpoint detection, generated identifier sanitization, and WASI malformed JSON handling.
 - Improved CLI handling for hyphenated project names, partial feature classes, generic handler parameters, nullable query parameters, and array query parameters.
