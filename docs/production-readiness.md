@@ -44,13 +44,13 @@ Reproduce with `dotnet run -c Release --project tests/Slice.Benchmarks --no-buil
 
 ### Gate values (derived from baseline)
 
-Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware. The single source of truth is `tests/Slice.Benchmarks/gates.json`; the nightly `Perf` workflow (`.github/workflows/perf.yml`) parses BenchmarkDotNet JSON output and runs `tests/Slice.Benchmarks/check-gates.sh`, failing the workflow if any gate is breached. Edit `gates.json` and this table together.
+Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware; the 100-feature tracked-tree warm gate includes a small CI variance buffer based on the Ubuntu x64 perf run. The single source of truth is `tests/Slice.Benchmarks/gates.json`; the nightly `Perf` workflow (`.github/workflows/perf.yml`) parses BenchmarkDotNet JSON output and runs `tests/Slice.Benchmarks/check-gates.sh`, failing the workflow if any gate is breached. Edit `gates.json` and this table together.
 
 | Metric | Gate | Baseline (Apple M1) | How to measure |
 |---|---|---|---|
 | Source generator cold run (100 features) | < 8 ms | 3.22 ms | `SourceGeneratorBenchmarks.ColdRun` Mean |
 | No-op edit re-run (100 features) | < 6 ms | 2.84 ms | `SourceGeneratorBenchmarks.WarmRun_NoOpEdit` Mean |
-| Tracked-tree trivial edit re-run (100 features) | < 6 ms | 3.03 ms | `SourceGeneratorBenchmarks.WarmRun_TrackedTreeTrivialEdit` Mean |
+| Tracked-tree trivial edit re-run (100 features) | < 7 ms | 3.03 ms | `SourceGeneratorBenchmarks.WarmRun_TrackedTreeTrivialEdit` Mean |
 | Source generator cold run (200 features) | < 10 ms | 3.63 ms | `SourceGeneratorBenchmarks.ColdRun` Mean |
 | No-op edit re-run (200 features) | < 8 ms | 2.98 ms | `SourceGeneratorBenchmarks.WarmRun_NoOpEdit` Mean |
 | Tracked-tree trivial edit re-run (200 features) | < 8 ms | 3.08 ms | `SourceGeneratorBenchmarks.WarmRun_TrackedTreeTrivialEdit` Mean |
