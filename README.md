@@ -43,6 +43,8 @@ curl http://localhost:5099/health
 
 Slice is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
 
+**Release status:** `0.1.0-preview.1` is still unreleased and is not available on NuGet yet. Until the release checklist, local verification, smoke tests, and final NuGet publish are complete, use the repository samples or local project references from a checkout instead of `dotnet add package`.
+
 WASI support (`Slice.Wasi`) depends on [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet), a preview package targeting the WASI Preview 2 / `wasi:http@0.2` interface. Native WASI publish requires Linux x64 or Windows x64; macOS requires a Docker cross-build. The WASI toolchain is actively evolving and may introduce breaking changes between preview releases. Treat any project targeting `Slice.Wasi` as experimental until the upstream tooling stabilizes.
 
 | Package | Purpose |
@@ -55,12 +57,7 @@ WASI support (`Slice.Wasi`) depends on [componentize-dotnet](https://github.com/
 | `Slice.Wasi` | ASP.NET-independent wasi:http dispatch. |
 | `Slice.Cli` | Scaffolding, route inspection, AWS SAM manifest/package helpers, and typed client generation. |
 
-Minimal ASP.NET Core apps need the core runtime and source generator:
-
-```bash
-dotnet add package Slice.Core --version 0.1.0-preview.1
-dotnet add package Slice.SourceGenerator --version 0.1.0-preview.1
-```
+After the first preview is published, minimal ASP.NET Core apps will add `Slice.Core` and `Slice.SourceGenerator` at the same preview version. Those package install commands are intentionally omitted until the NuGet package pages exist.
 
 ## Hello, Slice
 
@@ -149,6 +146,13 @@ Read more:
 | Per-feature Lambda handlers | Experimental HTTP API v2 MVP |
 | TestHost helper | Experimental |
 | WASI adapter | Experimental in-process wasi:http dispatch |
+
+## Adoption evidence
+
+| Evidence type | Current public count | Notes |
+| --- | ---: | --- |
+| Production adoption | 0 | No production users are claimed before a published package exists. |
+| Published personal dogfooding logs | 0 | A maintainer dogfooding write-up should be published before claiming real-world adoption. |
 
 ## Portability
 

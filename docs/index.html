@@ -405,7 +405,11 @@
                 <div class="mt-8 flex flex-wrap justify-center gap-3 text-xs text-slate-400">
                     <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-brand-400"></span><span class="lang-ja">Native AOT を意識</span><span class="lang-en">Native AOT-minded</span></span>
                     <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-emerald-400"></span><span class="lang-ja">SLICE 診断</span><span class="lang-en">SLICE diagnostics</span></span>
-                    <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-cyan-400"></span><span class="lang-ja">Core は NuGet 依存ゼロ</span><span class="lang-en">Zero Core NuGet deps</span></span>
+                    <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-cyan-400"></span><span class="lang-ja">Core は FrameworkReference のみ</span><span class="lang-en">Framework-only Core</span></span>
+                </div>
+                <div class="mt-8 glass-panel rounded-2xl border border-amber-500/30 bg-amber-950/20 p-5 text-left text-sm text-amber-100">
+                    <p class="font-bold text-amber-200"><span class="lang-ja">リリース状況: 0.1.0-preview.1 はまだ NuGet 未公開です。</span><span class="lang-en">Release status: 0.1.0-preview.1 is not on NuGet yet.</span></p>
+                    <p class="mt-2 text-amber-100/80"><span class="lang-ja">現時点ではリポジトリ内サンプルとローカル参照で検証中です。公開済みの本番採用は 0、公開済みの個人 dogfooding ログも 0 です。</span><span class="lang-en">Use the repository samples and local references while release verification is in progress. Public production adoption is 0, and published personal dogfooding logs are 0.</span></p>
                 </div>
             </div>
         </section>
@@ -654,7 +658,7 @@ slice client typescript --output slice-api-client.ts</code></pre>
             <div class="max-w-5xl mx-auto px-6">
                 <div class="text-center mb-12">
                     <h2 class="text-3xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-brand-400"><span class="lang-ja">コアは小さく、必要なアダプタだけを追加</span><span class="lang-en">Small core, optional adapters</span></h2>
-                    <p class="text-slate-400"><span class="lang-ja">ホスティングやテストに必要な依存関係は、用途ごとのサテライトパッケージに分けています。</span><span class="lang-en">Hosting and testing dependencies stay in satellite packages.</span></p>
+                    <p class="text-slate-400"><span class="lang-ja">ホスティングやテストに必要な依存関係は、用途ごとのサテライトパッケージに分けています。以下は preview.1 で公開予定のパッケージ一覧で、NuGet への公開はまだ完了していません。</span><span class="lang-en">Hosting and testing dependencies stay in satellite packages. These are the planned preview.1 packages; NuGet publishing is not complete yet.</span></p>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-6">
                     <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Core</h3><p class="text-sm text-slate-400"><span class="lang-ja">属性、バリデーションフィルター、エンドポイントフィルターを含むコアランタイムです。</span><span class="lang-en">Core runtime: attributes, validation filters, and endpoint filters.</span></p></div>
@@ -671,7 +675,7 @@ slice client typescript --output slice-api-client.ts</code></pre>
             <div class="text-center mb-12">
                 <p class="mb-3 text-sm font-mono text-brand-400"><span class="lang-ja">技術詳細</span><span class="lang-en">Engineering deep dives</span></p>
                 <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">設計の意思決定と運用基準</span><span class="lang-en">Design decisions and operating criteria</span></h2>
-                <p class="text-slate-400 max-w-3xl mx-auto"><span class="lang-ja">Slice がどんな原則で動いていて、どこまで実運用に近いかをまとめたドキュメント群です。</span><span class="lang-en">How Slice is built, what invariants it defends, and where it sits on the path to production readiness.</span></p>
+                <p class="text-slate-400 max-w-3xl mx-auto"><span class="lang-ja">Slice がどんな原則で動いていて、実運用に向けてどの基準をまだ満たす必要があるかをまとめたドキュメント群です。</span><span class="lang-en">How Slice is built, what invariants it defends, and which production-readiness criteria it still needs to meet.</span></p>
             </div>
             <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <a href="https://github.com/sano-suguru/slice/blob/main/docs/design-decisions.md" class="glass-panel interactive-card p-6 rounded-xl block">
@@ -688,8 +692,8 @@ slice client typescript --output slice-api-client.ts</code></pre>
                 </a>
                 <a href="https://github.com/sano-suguru/slice/blob/main/docs/production-readiness.md" class="glass-panel interactive-card p-6 rounded-xl block">
                     <div class="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center mb-4 text-emerald-400 border border-slate-700"><i data-lucide="gauge"></i></div>
-                    <h3 class="font-bold mb-2"><span class="lang-ja">プロダクション準備</span><span class="lang-en">Production readiness</span></h3>
-                    <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">6 つの強み保全インバリアント、ベンチマーク基準値、毎晩実行される perf ゲート、採用マトリクス。</span><span class="lang-en">Six strength-preservation invariants, benchmark baselines, nightly perf gates, and the adoption matrix.</span></p>
+                    <h3 class="font-bold mb-2"><span class="lang-ja">プロダクション準備基準</span><span class="lang-en">Production readiness targets</span></h3>
+                    <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">まだ達成済みの主張ではありません。6 つの強み保全インバリアント、ベンチマーク基準値、perf ゲート、採用マトリクスをまとめています。</span><span class="lang-en">Targets, not a completed claim: strength-preservation invariants, benchmark baselines, perf gates, and the adoption matrix.</span></p>
                     <p class="mt-4 text-xs font-bold text-brand-400"><span class="lang-ja">GitHub で読む</span><span class="lang-en">Read on GitHub</span></p>
                 </a>
                 <a href="perf/latest.svg" class="glass-panel interactive-card p-6 rounded-xl block">

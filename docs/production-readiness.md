@@ -1,6 +1,8 @@
 # Slice production readiness criteria
 
-This document defines the **objective gate values** for deciding whether Slice is ready to adopt in production. The numbers are confirmed against the baseline produced by `tests/Slice.Benchmarks/`.
+This document defines the **objective gate values** for deciding whether Slice is ready to adopt in production. These are readiness targets, not a claim that Slice is production-ready today.
+
+Current public status: `0.1.0-preview.1` is unreleased, the packages are not on NuGet yet, and no production adoption is claimed.
 
 ## Strength-preservation invariants
 
@@ -70,13 +72,22 @@ Not yet measured in `Slice.Benchmarks`. Future candidate. Today, the manual prox
    - `slice routes --format json` output is unchanged.
    - `Slice.Core` has zero `<PackageReference>` entries (the MSBuild `ValidateSliceCorePackageReferences` target enforces this automatically).
 
+## Adoption evidence
+
+| Evidence type | Current public count | Notes |
+|---|---:|---|
+| Production adoption | 0 | Do not claim production readiness from repository checks alone. |
+| Published personal dogfooding logs | 0 | Add a maintainer side-project write-up before claiming real-world usage. |
+
 ## Adoption matrix
+
+These recommendations apply to experiments, pilots, and preview evaluation. Production use requires a published package, completed release smoke tests, project-specific acceptance criteria, external production references, and an explicit API-stability commitment.
 
 | Project shape | Recommendation |
 |---|---|
-| Serverless / WASI microservices | **Recommended** |
-| Full-stack C# (Blazor / .NET client) with typed-client needs | **Recommended** (`slice client csharp` for type safety) |
-| Small-to-medium web API (< 50 endpoints) | **Acceptable** |
+| Serverless / WASI microservices | **Preview candidate** — evaluate portability rules and upstream WASI tooling first |
+| Full-stack C# (Blazor / .NET client) with typed-client needs | **Preview candidate** — evaluate generated clients against the actual route set |
+| Small-to-medium web API (< 50 endpoints) | **Acceptable for experiments** |
 | Large internal monolith (> 200 endpoints, complex domain) | **PoC required** — decide after measuring with phase 0 benchmarks |
 | Existing MediatR / IPipelineBehavior-driven projects | **Not a fit** — incompatible philosophies |
 

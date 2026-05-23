@@ -4,6 +4,8 @@ Slice is pre-1.0 experimental software. Use `0.x` preview versions until the pub
 
 This checklist is for deciding whether the repository is ready for a preview release. It intentionally separates pre-release preparation from the final publish actions.
 
+Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes, and NuGet publish verification are complete.
+
 ## Repository readiness
 
 - [x] Add an MIT `LICENSE` file.
@@ -40,6 +42,13 @@ This checklist is for deciding whether the repository is ready for a preview rel
   - `docs/product-direction.md` product claims and non-goals.
   - `CHANGELOG.md` release notes for the chosen preview version.
   - Sample ports, commands, and expected outputs.
+- [ ] Keep public release messaging honest until NuGet publish is verified.
+  - Do not claim that `dotnet add package Slice.Core` works before the package page exists.
+  - Keep the website and README explicit that `0.1.0-preview.1` is unreleased.
+  - Do not claim production adoption before public evidence exists.
+- [ ] Publish at least one dogfooding note before claiming real-world usage.
+  - Record project shape, routes implemented with Slice, friction points, and fixes made from dogfooding.
+  - Until then, public adoption counts remain: Production adoption 0, published personal dogfooding logs 0.
 
 ## Local verification
 

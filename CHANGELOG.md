@@ -4,7 +4,7 @@ All notable changes to Slice will be documented in this file.
 
 This project follows semantic versioning once stable packages are published. Before then, `0.x` and preview versions may change APIs while the framework is experimental.
 
-## 0.1.0-preview.1 - Unreleased
+## 0.1.0-preview.1 - Unreleased, not yet on NuGet
 
 ### Preview scope
 
@@ -12,6 +12,7 @@ This project follows semantic versioning once stable packages are published. Bef
 - Core runtime package ID is `Slice.Core` because `Slice` is already used on NuGet.
 - `Slice.SourceGenerator` is required for generated `AddSlice` / `MapSlices` registrations in the `Slice` namespace.
 - Feature assemblies emit module helpers, and hosts can aggregate referenced Slice feature modules.
+- Package metadata is prepared, but the preview has not been pushed to NuGet yet.
 
 ### Added
 
