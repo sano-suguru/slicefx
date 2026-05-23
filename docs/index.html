@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slice - Minimal API with Feature Files and Generated Contracts</title>
-    <meta name="description" content="Slice keeps ASP.NET Core Minimal API close while generating route metadata, compatibility reports, and typed clients from feature files.">
+    <title>Slice - Feature Files for ASP.NET Core Minimal APIs</title>
+    <meta name="description" content="Slice keeps each .NET API endpoint in one feature file and generates ASP.NET Core registrations, checks, route metadata, and typed clients from that shape.">
     <meta name="robots" content="index, follow">
 
     <!-- Canonical & Sitemap -->
@@ -19,8 +19,8 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sano-suguru.github.io/slice/">
-    <meta property="og:title" content="Slice - Minimal API with Feature Files and Generated Contracts">
-    <meta property="og:description" content="Slice keeps ASP.NET Core Minimal API close while generating route metadata, compatibility reports, and typed clients from feature files.">
+    <meta property="og:title" content="Slice - Feature Files for ASP.NET Core Minimal APIs">
+    <meta property="og:description" content="Slice keeps each .NET API endpoint in one feature file and generates registrations, checks, route metadata, and typed clients from that shape.">
     <meta property="og:locale" content="en_US">
     <meta property="og:locale:alternate" content="ja_JP">
     <meta property="og:site_name" content="Slice Framework">
@@ -31,8 +31,8 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Slice - Minimal API with Feature Files and Generated Contracts">
-    <meta name="twitter:description" content="Slice keeps ASP.NET Core Minimal API close while generating route metadata, compatibility reports, and typed clients from feature files.">
+    <meta name="twitter:title" content="Slice - Feature Files for ASP.NET Core Minimal APIs">
+    <meta name="twitter:description" content="Slice keeps each .NET API endpoint in one feature file and generates registrations, checks, route metadata, and typed clients from that shape.">
     <meta name="twitter:image" content="https://sano-suguru.github.io/slice/ogp.svg">
     <meta name="twitter:image:alt" content="Slice Framework - One file. One feature. Generated API contracts.">
 
@@ -82,8 +82,9 @@
     <style>
         body {
             background:
-                radial-gradient(circle at 20% 0%, rgba(37, 99, 235, 0.18), transparent 32rem),
-                radial-gradient(circle at 85% 12%, rgba(20, 184, 166, 0.12), transparent 28rem),
+                radial-gradient(circle at 20% 0%, rgba(37, 99, 235, 0.26), transparent 32rem),
+                radial-gradient(circle at 85% 12%, rgba(20, 184, 166, 0.2), transparent 28rem),
+                radial-gradient(circle at 52% 34%, rgba(34, 211, 238, 0.08), transparent 30rem),
                 linear-gradient(180deg, #020617 0%, #07111f 48%, #020617 100%);
             color: #f8fafc;
         }
@@ -139,22 +140,35 @@
             scroll-padding-top: 5rem;
         }
         .glass-panel {
-            background: rgba(30, 41, 59, 0.72);
+            position: relative;
+            background:
+                linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(20, 184, 166, 0.05) 42%, rgba(30, 41, 59, 0.72)),
+                rgba(30, 41, 59, 0.72);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(125, 211, 252, 0.16);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.06),
+                0 0 0 1px rgba(59, 130, 246, 0.06),
+                0 24px 80px rgba(8, 47, 73, 0.24);
         }
         .background-grid {
+            overflow: hidden;
             background-image:
-                linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-            background-size: 3rem 3rem;
+                radial-gradient(circle, rgba(125, 211, 252, 0.42) 0 1px, transparent 1.8px),
+                radial-gradient(circle, rgba(52, 211, 153, 0.32) 0 1px, transparent 1.7px),
+                linear-gradient(rgba(34, 211, 238, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(96, 165, 250, 0.1) 1px, transparent 1px);
+            background-position: 0 0, 1.5rem 1.5rem, 0 0, 0 0;
+            background-size: 7rem 7rem, 9rem 9rem, 3rem 3rem, 3rem 3rem;
+        }
+        .background-grid {
             -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 70%);
             mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 70%);
         }
         .code-window-header {
-            background: #1e293b;
-            border-bottom: 1px solid #334155;
+            background: linear-gradient(90deg, #1e293b, rgba(14, 116, 144, 0.32), #1e293b);
+            border-bottom: 1px solid rgba(125, 211, 252, 0.22);
         }
         .code-window-title {
             display: flex;
@@ -195,6 +209,7 @@
         }
         .nav-link:hover {
             background: rgba(148, 163, 184, 0.12);
+            box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.18), 0 0 24px rgba(34, 211, 238, 0.12);
         }
         .interactive-card {
             position: relative;
@@ -223,13 +238,25 @@
             align-items: center;
             gap: 0.5rem;
             border-radius: 999px;
-            border: 1px solid rgba(51, 65, 85, 0.95);
-            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(125, 211, 252, 0.28);
+            background:
+                linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(8, 47, 73, 0.42)),
+                rgba(15, 23, 42, 0.72);
             padding: 0.5rem 0.875rem;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.06),
+                0 0 24px rgba(34, 211, 238, 0.1);
+        }
+        main h1 .text-transparent {
+            filter: drop-shadow(0 0 22px rgba(34, 211, 238, 0.22));
+        }
+        main h2 .text-transparent {
+            filter: drop-shadow(0 0 18px rgba(96, 165, 250, 0.18));
         }
         .code-card {
-            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+            box-shadow:
+                0 24px 80px rgba(0, 0, 0, 0.42),
+                0 0 70px rgba(37, 99, 235, 0.14);
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
         .code-card:hover {
@@ -342,7 +369,7 @@
             <div class="text-center max-w-4xl mx-auto opacity-0 animate-fade-in-up">
                 <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-900/40 px-4 py-2 text-sm font-mono text-brand-400 shadow-lg shadow-brand-900/30">
                     <span class="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.8)]"></span>
-                    <span class="lang-ja">機能ごとに書けて、API契約まで自動生成できる.NET APIフレームワーク。</span><span class="lang-en">Feature-first .NET APIs with generated contracts.</span>
+                    <span class="lang-ja">機能ファイルから API 契約を生成する .NET API フレームワーク。</span><span class="lang-en">Generate API contracts from feature files.</span>
                 </p>
                 <h1 class="text-5xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
                     <span class="lang-ja">
@@ -357,8 +384,8 @@
                     </span>
                 </h1>
                 <p class="text-xl md:text-2xl text-slate-400 mb-10 font-medium">
-                    <span class="lang-ja">標準の ASP.NET Core に近い感覚で、小さな .NET API を機能ごとに整理できます。ルート、互換性、クライアントを手作業で合わせ続ける負担を減らします。</span>
-                    <span class="lang-en">Build small .NET APIs explicitly, close to standard ASP.NET Core, without hand-syncing routes, compatibility notes, and clients later.</span>
+                    <span class="lang-ja">Minimal API の書き味はそのまま。1つの機能定義から登録、診断、型付きクライアントを生成します。</span>
+                    <span class="lang-en">Keep Minimal APIs. Generate registration, checks, and typed clients from one feature definition.</span>
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
                     <a href="#code" class="px-8 py-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-lg transition-colors shadow-lg shadow-brand-600/20 flex items-center gap-2 w-full sm:w-auto justify-center">
@@ -376,8 +403,8 @@
                     </div>
                 </div>
                 <div class="mt-8 flex flex-wrap justify-center gap-3 text-xs text-slate-400">
-                    <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-brand-400"></span><span class="lang-ja">登録コードを自動生成</span><span class="lang-en">Source-generated registrations</span></span>
-                    <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-emerald-400"></span><span class="lang-ja">起動時リフレクションなし</span><span class="lang-en">Zero startup reflection</span></span>
+                    <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-brand-400"></span><span class="lang-ja">Native AOT を意識</span><span class="lang-en">Native AOT-minded</span></span>
+                    <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-emerald-400"></span><span class="lang-ja">SLICE 診断</span><span class="lang-en">SLICE diagnostics</span></span>
                     <span class="metric-pill"><span class="h-2 w-2 rounded-full bg-cyan-400"></span><span class="lang-ja">Core は NuGet 依存ゼロ</span><span class="lang-en">Zero Core NuGet deps</span></span>
                 </div>
             </div>
@@ -386,24 +413,24 @@
         <section class="bg-slate-900/50 border-y border-white/5 py-16" id="features">
             <div class="max-w-7xl mx-auto px-6">
                 <div class="text-center mb-12">
-                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">Sliceが大切にしている3つのこと</span><span class="lang-en">Three focused ideas</span></h2>
-                    <p class="text-slate-400"><span class="lang-ja">ASP.NET Core Minimal API の使いやすさはそのままに、機能ファイルと生成されるAPI契約を無理なくつなぎます。</span><span class="lang-en">Keep ASP.NET Core Minimal API close while connecting feature files with generated contracts.</span></p>
+                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">Sliceが解決したいこと</span><span class="lang-en">What Slice solves</span></h2>
+                    <p class="text-slate-400"><span class="lang-ja">ルート、DTO、バリデーション、クライアント、移植性チェックを別々に管理せず、1つの機能ファイルからつなげます。</span><span class="lang-en">Keep routes, DTOs, validation, clients, and portability checks connected to one feature file.</span></p>
                 </div>
                 <div class="grid md:grid-cols-3 gap-8">
-                    <article class="glass-panel interactive-card p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.1s;">
+                    <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up border border-slate-700" style="animation-delay: 0.1s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-brand-400 border border-slate-700"><i data-lucide="file-code-2"></i></div>
-                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">機能単位で見通せる</span><span class="lang-en">Feature-shaped APIs</span></h3>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">機能単位で構成</span><span class="lang-en">Feature-shaped APIs</span></h3>
                         <p class="text-slate-400 leading-relaxed"><span class="lang-ja">1つの静的クラスが1つのエンドポイント。リクエスト、レスポンス、ハンドラー、バリデーションを同じ場所で確認できます。</span><span class="lang-en">One static class maps to one endpoint, keeping request, response, handler, and validation close together.</span></p>
                     </article>
-                    <article class="glass-panel interactive-card p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.2s;">
+                    <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up border border-slate-700" style="animation-delay: 0.2s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-cyan-400 border border-slate-700"><i data-lucide="route"></i></div>
-                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">API契約は自動生成</span><span class="lang-en">Generated API contracts</span></h3>
-                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">ルートメタデータ、互換性レポート、型付きクライアントを、同じ機能ファイルから生成します。</span><span class="lang-en">Generate route metadata, compatibility reports, and typed clients from the same feature files.</span></p>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">API契約がずれにくい</span><span class="lang-en">API contracts stay aligned</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">ルートメタデータ、互換性レポート、型付きクライアントを、同じ機能ファイルから生成します。</span><span class="lang-en">Route metadata, compatibility reports, and typed clients are generated from the same feature files.</span></p>
                     </article>
-                    <article class="glass-panel interactive-card p-8 rounded-2xl opacity-0 animate-fade-in-up" style="animation-delay: 0.3s;">
+                    <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up border border-slate-700" style="animation-delay: 0.3s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-emerald-400 border border-slate-700"><i data-lucide="zap"></i></div>
-                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">標準機能をそのまま使える</span><span class="lang-en">Standard by default</span></h3>
-                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">Minimal API のバインディング、DI、エンドポイントフィルター、DataAnnotations をそのまま利用できます。必要な場面では ASP.NET 固有の <code>IResult</code> も使えます。</span><span class="lang-en">Keep Minimal API binding, DI, endpoint filters, and DataAnnotations; use ASP.NET-specific <code>IResult</code> only when a slice needs it.</span></p>
+                        <h3 class="text-xl font-bold mb-3"><span class="lang-ja">ASP.NET Core から離れない</span><span class="lang-en">Still ASP.NET Core</span></h3>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">Minimal API のバインディング、DI、エンドポイントフィルター、DataAnnotations をそのまま利用できます。必要な場面では ASP.NET 固有の <code>IResult</code> も使えます。</span><span class="lang-en">Keep Minimal API binding, DI, endpoint filters, and DataAnnotations; use ASP.NET-specific <code>IResult</code> when a slice needs it.</span></p>
                     </article>
                 </div>
             </div>
@@ -413,10 +440,10 @@
             <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 items-start">
                 <div>
                     <p class="mb-3 text-sm font-mono text-brand-400"><span class="lang-ja">Sliceを選ぶ理由</span><span class="lang-en">Why Slice</span></p>
-                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">Minimal API はそのまま、面倒な周辺だけを生成</span><span class="lang-en">Standard Minimal APIs, generated around the edges</span></h2>
+                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">Minimal API はそのまま、ずれやすい周辺だけを生成</span><span class="lang-en">Standard Minimal APIs, generated around the pieces that drift</span></h2>
                     <p class="text-slate-400">
-                        <span class="lang-ja">SliceはASP.NET Coreを置き換えるものではありません。実行時の感覚は Minimal API に近いまま、登録コード、診断、互換性レポート、型付きクライアントを機能ファイルから生成します。</span>
-                        <span class="lang-en">Slice does not replace ASP.NET Core. It keeps the runtime close to Minimal APIs and generates registration, diagnostics, compatibility reports, and typed clients from feature files.</span>
+                        <span class="lang-ja">SliceはASP.NET Coreの上に乗ります。実行時は Minimal API に近く、ずれやすい登録・診断・クライアント生成だけを機能ファイルから補います。</span>
+                        <span class="lang-en">Slice sits on ASP.NET Core. Runtime behavior stays close to Minimal APIs; the generator handles the registration, checks, and clients that tend to drift.</span>
                     </p>
                 </div>
 
@@ -440,9 +467,9 @@
         <section class="max-w-7xl mx-auto px-6 py-20">
             <div class="text-center mb-12">
                 <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">どんなチームに向いている？</span><span class="lang-en">Who is Slice for?</span></h2>
-                <p class="text-slate-400"><span class="lang-ja">API 層は軽く保ちたい。でもルート、クライアント、将来の実行環境をばらばらに管理したくない。そんなチームに向いています。</span><span class="lang-en">For teams that want a light API layer without letting routes, clients, and future runtime choices drift apart.</span></p>
+                <p class="text-slate-400"><span class="lang-ja">API 層は軽く保ちたい。でもルート、クライアント、将来の実行環境をばらばらに管理したくない。そんな個人やチームに向いています。</span><span class="lang-en">For individual developers and teams that want a light API layer without letting routes, clients, and future runtime choices drift apart.</span></p>
             </div>
-            <div class="glass-panel interactive-card rounded-2xl border border-slate-700 overflow-hidden">
+            <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
                 <div class="grid md:grid-cols-[220px_1fr] gap-0 border-b border-slate-700">
                     <div class="p-6 font-bold text-white bg-slate-900/50"><span class="lang-ja">小さなAPIチーム</span><span class="lang-en">Small API teams</span></div>
                     <div class="p-6 text-slate-400"><span class="lang-ja">1エンドポイントを1ファイルで管理できます。リクエスト、レスポンス、バリデーション、ハンドラーがまとまるので、担当範囲も見えやすくなります。</span><span class="lang-en">One endpoint is one file. Request, response, validation, and handler stay together, so feature ownership stays visible.</span></div>
@@ -459,41 +486,48 @@
         </section>
 
         <section class="max-w-7xl mx-auto px-6 py-24">
-            <h2 class="text-3xl font-bold mb-12 text-center"><span class="lang-ja">いま使える機能</span><span class="lang-en">What works today</span></h2>
+            <h2 class="text-3xl font-bold mb-12 text-center"><span class="lang-ja">Slice の強み</span><span class="lang-en">What you get</span></h2>
             <div class="grid lg:grid-cols-2 gap-12 items-start">
                 <div class="space-y-8">
                     <div class="flex gap-4">
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
-                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Slice.Core は NuGet 依存ゼロ</span><span class="lang-en">Zero NuGet dependencies in Slice.Core</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja">コアランタイムが依存するのは <code>Microsoft.AspNetCore.App</code> だけです。FluentValidation や MediatR を前提にしません。</span><span class="lang-en">The core runtime only depends on <code>Microsoft.AspNetCore.App</code>; FluentValidation and MediatR are not required.</span></p>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Core は NuGet 依存ゼロ</span><span class="lang-en">Zero-dependency core</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">コアランタイムが依存するのは <code>Microsoft.AspNetCore.App</code> だけです。FluentValidation や MediatR を前提にせず、必要なアダプタだけを後から追加できます。</span><span class="lang-en">The core runtime only depends on <code>Microsoft.AspNetCore.App</code>. FluentValidation and MediatR are not required; optional adapters can be added later.</span></p>
                         </div>
                     </div>
                     <div class="flex gap-4">
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
-                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ソースジェネレータ同梱</span><span class="lang-en">Source generator included</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja"><code>AddSlice()</code> と <code>MapSlices()</code> はソースジェネレータが出力します。登録経路を1つに絞ることで、起動時のリフレクションをなくします。</span><span class="lang-en"><code>AddSlice()</code> and <code>MapSlices()</code> are emitted by the source generator — the single registration path, with zero startup reflection.</span></p>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">生成された登録コード</span><span class="lang-en">Generated registrations</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja"><code>AddSlice()</code> と <code>MapSlices()</code> はソースジェネレータが出力します。登録経路を1つに絞り、無効な機能定義は <code>SLICE###</code> 診断としてビルド時に出します。</span><span class="lang-en"><code>AddSlice()</code> and <code>MapSlices()</code> are emitted by the source generator. Invalid feature shapes become <code>SLICE###</code> diagnostics at build time.</span></p>
                         </div>
                     </div>
                     <div class="flex gap-4">
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
-                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">サーバーレスとテスト向けアダプタ</span><span class="lang-en">Serverless and testing adapters</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja">AWS Lambda、Cloudflare Workers / Fermyon Spin 向けの WASI、TestHost に対応する実験的なアダプタと、CLI スキャフォールディングを用意しています。</span><span class="lang-en">Experimental adapters exist for AWS Lambda, WASI on Cloudflare Workers or Fermyon Spin, TestHost, and CLI scaffolding.</span></p>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Native AOT を意識した起動経路</span><span class="lang-en">Native AOT-minded startup path</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">生成コードは標準の <code>MapMethods</code> 呼び出しに展開され、起動時のルートスキャンを避けます。<code>Slice.Core</code> は NuGet 依存を増やさず、trimming/AOT 向けの小さな土台を保ちます。</span><span class="lang-en">Generated code expands to standard <code>MapMethods</code> calls and avoids startup route scanning. <code>Slice.Core</code> avoids extra NuGet dependencies to keep the base small for trimming and Native AOT.</span></p>
                         </div>
                     </div>
                     <div class="flex gap-4">
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
-                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">Slice 定義を活かすツール</span><span class="lang-en">Tooling generated from slices</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja"><code data-kind="command">slice routes</code> で互換性を確認し、<code data-kind="command">slice client csharp</code> で Blazor/.NET 向けの型付き HttpClient を生成できます。</span><span class="lang-en"><code data-kind="command">slice routes</code> reports compatibility, and <code data-kind="command">slice client csharp</code> generates typed HttpClient wrappers for Blazor/.NET clients.</span></p>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">必要なアダプタだけ追加</span><span class="lang-en">Optional adapters</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">AWS Lambda、wasi:http、TestHost へのアダプタはサテライトパッケージです。普段は ASP.NET Core で使いながら、移植できる機能を <code data-kind="command">slice routes</code> で確認できます。</span><span class="lang-en">Lambda, wasi:http, and TestHost support live in satellite packages. Use ASP.NET Core day to day while <code data-kind="command">slice routes</code> shows which features remain portable.</span></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ルートマニフェスト</span><span class="lang-en">Route-manifest tooling</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">ルートマニフェストをもとに、<code data-kind="command">slice routes</code>、<code data-kind="command">slice client csharp</code>、<code data-kind="command">slice client typescript</code> が同じ定義を使います。</span><span class="lang-en">The route manifest powers <code data-kind="command">slice routes</code>, <code data-kind="command">slice client csharp</code>, and <code data-kind="command">slice client typescript</code> from the same definitions.</span></p>
                         </div>
                     </div>
                 </div>
 
                 <div class="glass-panel p-8 rounded-2xl border border-slate-700">
-                    <h3 class="text-xl font-bold mb-6 border-b border-slate-700 pb-4"><span class="lang-ja">機能一覧</span><span class="lang-en">Feature checklist</span></h3>
+                    <h3 class="text-xl font-bold mb-6 border-b border-slate-700 pb-4"><span class="lang-ja">いま使える機能</span><span class="lang-en">What works today</span></h3>
                     <ul class="space-y-4 text-slate-300">
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja"><code data-kind="attribute">[Feature("METHOD /path")]</code> でルートを宣言</span><span class="lang-en"><code data-kind="attribute">[Feature("METHOD /path")]</code> declarative routing</span></span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja">ソースジェネレータで登録コードを生成</span><span class="lang-en">Source-generated registrations</span></span></li>
@@ -502,7 +536,7 @@
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja">DataAnnotations と <code>ISliceValidator&lt;T&gt;</code> で検証</span><span class="lang-en">DataAnnotations and <code>ISliceValidator&lt;T&gt;</code></span></span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja">名前空間から OpenAPI タグを推論</span><span class="lang-en">OpenAPI tags inferred from namespaces</span></span></li>
                         <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja">ルートメタデータの出力と移植性レポート</span><span class="lang-en">Route metadata export and portability reporting</span></span></li>
-                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja">Blazor/.NET 向け C# 型付きクライアント生成</span><span class="lang-en">C# typed client generation for Blazor/.NET</span></span></li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i><span><span class="lang-ja">C# / TypeScript 型付きクライアント生成</span><span class="lang-en">C# / TypeScript typed client generation</span></span></li>
                     </ul>
                 </div>
             </div>
@@ -579,7 +613,39 @@ app.Run();</code></pre>
                 <div class="p-6 overflow-x-auto bg-[#282c34]">
 <pre><code class="language-bash">slice routes
 slice routes --format json
-slice client csharp --output SliceApiClient.g.cs</code></pre>
+slice client csharp --output SliceApiClient.g.cs
+slice client typescript --output slice-api-client.ts</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="max-w-7xl mx-auto px-6 py-20" id="portability">
+            <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 items-start">
+                <div>
+                    <p class="mb-3 text-sm font-mono text-brand-400"><span class="lang-ja">WASI / WebAssembly / edge</span><span class="lang-en">WASI / WebAssembly / edge</span></p>
+                    <h2 class="text-3xl font-bold mb-4"><span class="lang-ja">まずは ASP.NET Core。WASI は必須ではありません</span><span class="lang-en">Start with ASP.NET Core. WASI is optional.</span></h2>
+                    <p class="text-slate-400 mb-6">
+                        <span class="lang-ja">Slice の既定は普通の ASP.NET Core アプリです。WASI / edge は、同じ機能ファイルを将来 ASP.NET 以外にも持っていけるかを確認するための実験的な選択肢です。</span>
+                        <span class="lang-en">Slice defaults to a normal ASP.NET Core app. WASI / edge support is an experimental way to see whether the same feature files can move beyond ASP.NET later.</span>
+                    </p>
+                    <p class="text-slate-500 text-sm">
+                        <span class="lang-ja">edge は利用者に近い場所でコードを動かす考え方、WASI はサーバー側コードを WebAssembly component として動かす仕組みです。Slice.Wasi は、生成されたルートテーブルを使って ASP.NET の外でも portable な機能を dispatch します。</span>
+                        <span class="lang-en">Edge means running code closer to users. WASI packages server-side code as a WebAssembly component; Slice.Wasi uses a generated route table to dispatch portable features outside ASP.NET.</span>
+                    </p>
+                </div>
+                <div class="grid md:grid-cols-3 gap-6">
+                    <article class="glass-panel p-6 rounded-xl border border-slate-700">
+                        <h3 class="font-bold mb-3"><span class="lang-ja">portable</span><span class="lang-en">portable</span></h3>
+                        <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">プレーンな request / response を返す機能。型付きクライアント、WASI dispatch、per-feature Lambda の候補になります。</span><span class="lang-en">Plain request / response features. Candidates for typed clients, WASI dispatch, and per-feature Lambda.</span></p>
+                    </article>
+                    <article class="glass-panel p-6 rounded-xl border border-slate-700">
+                        <h3 class="font-bold mb-3"><span class="lang-ja">partial</span><span class="lang-en">partial</span></h3>
+                        <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja">ハンドラー形状は移植しやすいが、一部のフィルターなど ASP.NET 固有の振る舞いがあります。</span><span class="lang-en">The handler shape is portable, but some attached behavior such as endpoint filters is ASP.NET-specific today.</span></p>
+                    </article>
+                    <article class="glass-panel p-6 rounded-xl border border-slate-700">
+                        <h3 class="font-bold mb-3"><span class="lang-ja">aspnet-only</span><span class="lang-en">aspnet-only</span></h3>
+                        <p class="text-sm text-slate-400 leading-relaxed"><span class="lang-ja"><code>IResult</code> など ASP.NET の機能を意図的に使う機能。悪いコードではなく、ASP.NET に残る判断です。</span><span class="lang-en">Features that intentionally use ASP.NET concepts such as <code>IResult</code>. Not bad code; simply an ASP.NET-specific choice.</span></p>
+                    </article>
                 </div>
             </div>
         </section>
@@ -591,12 +657,12 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
                     <p class="text-slate-400"><span class="lang-ja">ホスティングやテストに必要な依存関係は、用途ごとのサテライトパッケージに分けています。</span><span class="lang-en">Hosting and testing dependencies stay in satellite packages.</span></p>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-6">
-                    <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Core</h3><p class="text-sm text-slate-400"><span class="lang-ja">属性、バリデーションフィルター、エンドポイントフィルターを含むコアランタイムです。</span><span class="lang-en">Core runtime: attributes, validation filters, and endpoint filters.</span></p></div>
-                    <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.SourceGenerator</h3><p class="text-sm text-slate-400"><span class="lang-ja">機能ルートの登録コードを、AOT に適した形で生成します。</span><span class="lang-en">AOT-friendly generated registrations for feature routes.</span></p></div>
-                    <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Lambda</h3><p class="text-sm text-slate-400"><span class="lang-ja">ASP.NET Core 上で AWS Lambda ホスティングを使うための連携パッケージです。</span><span class="lang-en">AWS Lambda hosting integration over ASP.NET Core.</span></p></div>
-                    <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Wasi</h3><p class="text-sm text-slate-400"><span class="lang-ja">Cloudflare Workers や Fermyon Spin などの wasi:http ホスト向けに、ASP.NET に依存しないディスパッチを提供します。</span><span class="lang-en">ASP.NET-independent dispatch for wasi:http hosts such as Cloudflare Workers and Fermyon Spin.</span></p></div>
-                    <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.TestHost</h3><p class="text-sm text-slate-400"><span class="lang-ja">Slice アプリをインプロセスで HTTP テストするためのヘルパーです。</span><span class="lang-en">In-process HTTP testing helpers for Slice apps.</span></p></div>
-                    <div class="glass-panel interactive-card p-6 rounded-xl"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400"><span class="lang-ja"><code data-kind="command">slice</code> コマンドで、スキャフォールディング、ルート確認、互換性レポート、型付きクライアント生成を実行できます。</span><span class="lang-en">Scaffolding, route inspection, compatibility reports, and typed client generation through the <code data-kind="command">slice</code> command.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Core</h3><p class="text-sm text-slate-400"><span class="lang-ja">属性、バリデーションフィルター、エンドポイントフィルターを含むコアランタイムです。</span><span class="lang-en">Core runtime: attributes, validation filters, and endpoint filters.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.SourceGenerator</h3><p class="text-sm text-slate-400"><span class="lang-ja">機能ルートの登録コードを、AOT に適した形で生成します。</span><span class="lang-en">AOT-friendly generated registrations for feature routes.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Lambda</h3><p class="text-sm text-slate-400"><span class="lang-ja">ASP.NET Core 上で AWS Lambda ホスティングを使うための連携パッケージです。</span><span class="lang-en">AWS Lambda hosting integration over ASP.NET Core.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Wasi</h3><p class="text-sm text-slate-400"><span class="lang-ja">Cloudflare Workers や Fermyon Spin などの wasi:http ホスト向けに、ASP.NET に依存しない実験的なディスパッチを提供します。</span><span class="lang-en">Experimental ASP.NET-independent dispatch for wasi:http hosts such as Cloudflare Workers and Fermyon Spin.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.TestHost</h3><p class="text-sm text-slate-400"><span class="lang-ja">Slice アプリをインプロセスで HTTP テストするためのヘルパーです。</span><span class="lang-en">In-process HTTP testing helpers for Slice apps.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400"><span class="lang-ja"><code data-kind="command">slice</code> コマンドで、スキャフォールディング、ルート確認、互換性レポート、型付きクライアント生成を実行できます。</span><span class="lang-en">Scaffolding, route inspection, compatibility reports, and typed client generation through the <code data-kind="command">slice</code> command.</span></p></div>
                 </div>
             </div>
         </section>
@@ -644,7 +710,7 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
         <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-2 text-slate-400">
                 <div class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center font-bold text-xs">S</div>
-                <span><span class="lang-ja">Slice Framework - 実験的な設計プロジェクト</span><span class="lang-en">Slice Framework - An experimental design exploration.</span></span>
+                <span><span class="lang-ja">Slice Framework - 実験的な .NET API フレームワーク</span><span class="lang-en">Slice Framework - An experimental .NET API framework.</span></span>
             </div>
             <div class="text-sm text-slate-500"><span class="lang-ja">MITライセンスで公開しています。</span><span class="lang-en">Released under the MIT License.</span></div>
         </div>
@@ -655,7 +721,7 @@ slice client csharp --output SliceApiClient.g.cs</code></pre>
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Slice",
-      "description": "Slice keeps ASP.NET Core Minimal API close while generating route metadata, compatibility reports, and typed clients from feature files.",
+      "description": "Slice keeps each .NET API endpoint in one feature file and generates ASP.NET Core registrations, checks, route metadata, and typed clients from that shape.",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": ".NET 10",
       "url": "https://sano-suguru.github.io/slice/",

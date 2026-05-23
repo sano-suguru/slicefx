@@ -6,13 +6,27 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Write a .NET API feature once. Run it on ASP.NET-hosted apps, AWS Lambda, or wasi:http hosts (Cloudflare Workers, Fermyon Spin).
+> One feature file per endpoint. Generated ASP.NET Core registration, checks, clients, and portability hints.
 
 Website: <https://sano-suguru.github.io/slice/>
 
-**Slice** is an experimental .NET framework where one file is one feature. A Roslyn **incremental** source generator turns `[Feature]` classes into AOT-safe `AddSlice()` / `MapSlices()` calls and route manifests consumed by `slice client csharp`, surfacing **16 categories of compile-time diagnostics (SLICE001–006 and SLICE008–017)** so convention violations never reach runtime. `Slice.Core` is zero-dependency by construction (enforced by both an MSBuild target and CI), and a nightly perf workflow gates source-generator throughput against published baselines.
+**Slice** is an experimental .NET framework for teams that like ASP.NET Core Minimal APIs but do not want route strings, DTOs, validation, filters, clients, and deployment checks to drift apart. A feature is one static class with its request, response, handler, validation, and filters in one place. The generator emits standard Minimal API registrations plus a route manifest for tooling, AOT-friendly startup, Lambda experiments, and WASI/WebAssembly dispatch.
 
 Curious about the design choices? See **[Design decisions FAQ](docs/design-decisions.md)** and **[Production readiness criteria](docs/production-readiness.md)**.
+
+## Why use Slice?
+
+| Need | Slice provides |
+| --- | --- |
+| Endpoint code that is easy to review | One feature file per endpoint: request, response, handler, validation, and filters stay together. |
+| Less hand-synced API glue | `AddSlice()` / `MapSlices()`, route metadata, and typed clients are generated from the same feature definitions. |
+| Standard ASP.NET Core behavior | Minimal API binding, DI, endpoint filters, DataAnnotations, OpenAPI compatibility, and `IResult` remain available. |
+| Native AOT-friendly startup | Generated `MapMethods` calls avoid startup route scanning; `Slice.Core` has no `PackageReference` entries and only uses the `Microsoft.AspNetCore.App` framework reference. |
+| Early portability feedback | `slice routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only`; Lambda and wasi:http adapters are optional. |
+
+Slice is not a replacement for ASP.NET Core. It is a generated vertical-slice layer around Minimal APIs for teams that want explicit feature files, generated contracts, and portability checks without adopting a mediator stack or custom endpoint pipeline.
+
+Slice compiles down to standard `WebApplication.MapMethods` calls — removing the source generator reference and expanding the generated output in place is the full exit path. For teams already on FastEndpoints or similar, Slice fills a different niche: compile-time portability classification across ASP.NET, Lambda, and wasi:http, not a richer filter and pipeline ecosystem.
 
 ### Latest benchmark results
 
@@ -24,20 +38,6 @@ Each endpoint is a static feature file: request, response, validation, filters, 
 dotnet run --project samples/Slice.Sample
 curl http://localhost:5099/health
 ```
-
-## Who is it for?
-
-| Team | Why Slice helps |
-| --- | --- |
-| AOT, serverless, and WASI-minded teams | One feature shape can target ASP.NET-hosted apps, Lambda, and wasi:http hosts when the signature is portable. |
-| Small API and product teams | Endpoint code stays local instead of spreading across controllers, services, validators, and mapping profiles. |
-| Blazor and .NET client teams | `slice client csharp` generates typed `HttpClient` wrappers from server routes. |
-| TypeScript / browser / edge teams | `slice client typescript` generates a zero-dependency `fetch` client from the same route manifest. |
-| Framework-light .NET teams | Slice keeps Minimal API binding, DI, endpoint filters, DataAnnotations, and `IResult` instead of introducing a mediator stack. |
-
-Slice is not a replacement for ASP.NET Core. It is a generated vertical-slice layer around Minimal APIs for teams that want explicit feature files, generated contracts, and portability checks.
-
-Slice compiles down to standard `WebApplication.MapMethods` calls — removing the source generator reference and expanding the generated output in place is the full exit path. For teams already on FastEndpoints or similar, Slice fills a different niche: compile-time portability classification across ASP.NET, Lambda, and wasi:http, not a richer filter and pipeline ecosystem.
 
 ## Project status
 
@@ -161,6 +161,14 @@ The source generator classifies each feature endpoint at build time. `slice rout
 | `aspnet-only` | Returns `IResult` or uses ASP.NET-specific behavior. The full Minimal API feature set is available. |
 
 Mixing all three classes in the same project is the expected pattern. `aspnet-only` features are standard Minimal API endpoints with the complete ASP.NET ecosystem available — they are not penalized or degraded. The classification tells tooling where a feature can run, not whether it is well-written.
+
+### WASI and edge are optional
+
+You do not need WASI or edge hosting to use Slice. The default path is still a normal ASP.NET Core app.
+
+**Edge** usually means running code closer to users on platforms such as Cloudflare Workers or Fermyon Spin instead of only in one central server region. **WASI** is a standards-based way to package server-side code as a WebAssembly component that those hosts can run. In Slice, WASI support proves the portability story: if a feature returns plain request/response records and avoids ASP.NET-only response helpers, the same feature shape can be dispatched outside ASP.NET through a generated route table and `Slice.Wasi`.
+
+That path is intentionally experimental. `Slice.Wasi` depends on preview tooling, has stricter JSON and validation rules, and does not run arbitrary ASP.NET endpoint filters. The practical benefit today is visibility: `slice routes` tells you which endpoints are portable, which are partially portable, and which intentionally stay ASP.NET-only.
 
 ## OpenAPI
 
