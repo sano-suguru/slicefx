@@ -2,10 +2,13 @@
   "$comment": "Gate values for nightly perf regression detection. Means are in milliseconds; allocations in megabytes. Updates here should be reflected in docs/production-readiness.md.",
   "gates": [
     { "method": "ColdRun",          "featureCount": 50,  "maxMeanMs": 8.0,  "maxAllocatedMB": 5.0 },
-    { "method": "WarmRun_NoOpEdit", "featureCount": 50,  "maxMeanMs": 9.0,  "maxAllocatedMB": 5.0 },
-    { "method": "ColdRun",          "featureCount": 100, "maxMeanMs": 12.0, "maxAllocatedMB": 7.0 },
-    { "method": "WarmRun_NoOpEdit", "featureCount": 100, "maxMeanMs": 12.0, "maxAllocatedMB": 7.0 },
-    { "method": "ColdRun",          "featureCount": 200, "maxMeanMs": 15.0, "maxAllocatedMB": 8.0 },
-    { "method": "WarmRun_NoOpEdit", "featureCount": 200, "maxMeanMs": 20.0, "maxAllocatedMB": 8.0 }
+    { "method": "WarmRun_NoOpEdit", "featureCount": 50,  "maxMeanMs": 6.0,  "maxAllocatedMB": 5.0 },
+    { "method": "WarmRun_TrackedTreeTrivialEdit", "featureCount": 50,  "maxMeanMs": 6.0,  "maxAllocatedMB": 5.0 },
+    { "method": "ColdRun",          "featureCount": 100, "maxMeanMs": 8.0,  "maxAllocatedMB": 7.0 },
+    { "method": "WarmRun_NoOpEdit", "featureCount": 100, "maxMeanMs": 6.0,  "maxAllocatedMB": 5.0 },
+    { "method": "WarmRun_TrackedTreeTrivialEdit", "featureCount": 100, "maxMeanMs": 6.0,  "maxAllocatedMB": 5.0 },
+    { "method": "ColdRun",          "featureCount": 200, "maxMeanMs": 10.0, "maxAllocatedMB": 8.0 },
+    { "method": "WarmRun_NoOpEdit", "featureCount": 200, "maxMeanMs": 8.0,  "maxAllocatedMB": 5.0 },
+    { "method": "WarmRun_TrackedTreeTrivialEdit", "featureCount": 200, "maxMeanMs": 8.0,  "maxAllocatedMB": 5.0 }
   ]
 }

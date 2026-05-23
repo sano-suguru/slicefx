@@ -23,6 +23,72 @@ public class IncrementalCacheTests
         }
         """;
 
+    private const string FeatureSourceTrackedEditV1 = """
+        using Slice;
+
+        namespace CacheTestApp.Features.Items;
+
+        [Feature("GET /items/{id:int}")]
+        public static class GetItem
+        {
+            public static Response Handle(int id)
+            {
+                // version 1
+                return new(id);
+            }
+
+            public sealed record Response(int Id);
+        }
+        """;
+
+    private const string FeatureSourceTrackedEditV2 = """
+        using Slice;
+
+        namespace CacheTestApp.Features.Items;
+
+        [Feature("GET /items/{id:int}")]
+        public static class GetItem
+        {
+            public static Response Handle(int id)
+            {
+                // version 2
+                return new(id);
+            }
+
+            public sealed record Response(int Id);
+        }
+        """;
+
+    private const string FeatureSourceWithDiagnosticV1 = """
+        using Slice;
+
+        namespace CacheTestApp.Items;
+
+        [Feature("GET /items/{id:int}")]
+        public static class GetItem
+        {
+            // version 1
+            public static Response Handle(int id) => new(id);
+
+            public sealed record Response(int Id);
+        }
+        """;
+
+    private const string FeatureSourceWithDiagnosticV2 = """
+        using Slice;
+
+        namespace CacheTestApp.Items;
+
+        [Feature("GET /items/{id:int}")]
+        public static class GetItem
+        {
+            // version 2
+            public static Response Handle(int id) => new(id);
+
+            public sealed record Response(int Id);
+        }
+        """;
+
     [Fact]
     public void FeatureModels_step_is_cached_when_unrelated_file_is_edited()
     {
@@ -55,6 +121,77 @@ public class IncrementalCacheTests
 
         var runResult = driver.GetRunResult();
         AssertStepReused(runResult, "SliceReferencedModules");
+    }
+
+    [Fact]
+    public void EmitPlan_step_is_cached_when_unrelated_file_is_edited()
+    {
+        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }");
+        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }");
+
+        var compilation = CreateCompilation("CacheTestApp", FeatureSource, unrelatedV1);
+        GeneratorDriver driver = CreateTrackingDriver();
+
+        driver = driver.RunGenerators(compilation);
+        var compilationV2 = compilation.ReplaceSyntaxTree(unrelatedV1, unrelatedV2);
+        driver = driver.RunGenerators(compilationV2);
+
+        var runResult = driver.GetRunResult();
+        AssertStepReused(runResult, "SliceEmitPlan");
+    }
+
+    [Fact]
+    public void EmitPlan_step_is_cached_when_tracked_feature_tree_gets_trivial_edit()
+    {
+        var compilation = CreateCompilation("CacheTestApp", FeatureSourceTrackedEditV1);
+        GeneratorDriver driver = CreateTrackingDriver();
+
+        driver = driver.RunGenerators(compilation);
+        var featureTree = compilation.SyntaxTrees.First();
+        var compilationV2 = compilation.ReplaceSyntaxTree(
+            featureTree,
+            CSharpSyntaxTree.ParseText(FeatureSourceTrackedEditV2, new CSharpParseOptions(LanguageVersion.Latest)));
+        driver = driver.RunGenerators(compilationV2);
+
+        var runResult = driver.GetRunResult();
+        AssertStepReused(runResult, "SliceFeatureModels");
+        AssertStepReused(runResult, "SliceEmitPlan");
+    }
+
+    [Fact]
+    public void FeatureModels_step_is_cached_when_tracked_feature_tree_with_diagnostic_gets_trivial_edit()
+    {
+        var compilation = CreateCompilation("CacheTestApp", FeatureSourceWithDiagnosticV1);
+        GeneratorDriver driver = CreateTrackingDriver();
+
+        driver = driver.RunGenerators(compilation);
+        var featureTree = compilation.SyntaxTrees.First();
+        var compilationV2 = compilation.ReplaceSyntaxTree(
+            featureTree,
+            CSharpSyntaxTree.ParseText(FeatureSourceWithDiagnosticV2, new CSharpParseOptions(LanguageVersion.Latest)));
+        driver = driver.RunGenerators(compilationV2);
+
+        var runResult = driver.GetRunResult();
+        AssertStepReused(runResult, "SliceFeatureModels");
+        AssertStepReused(runResult, "SliceEmitPlan");
+    }
+
+    [Fact]
+    public void FeatureModels_step_is_invalidated_when_feature_location_shifts()
+    {
+        var compilation = CreateCompilation("CacheTestApp", FeatureSourceWithDiagnosticV1);
+        GeneratorDriver driver = CreateTrackingDriver();
+
+        driver = driver.RunGenerators(compilation);
+        var featureTree = compilation.SyntaxTrees.First();
+        var compilationV2 = compilation.ReplaceSyntaxTree(
+            featureTree,
+            CSharpSyntaxTree.ParseText("\n" + FeatureSourceWithDiagnosticV1, new CSharpParseOptions(LanguageVersion.Latest)));
+        driver = driver.RunGenerators(compilationV2);
+
+        var runResult = driver.GetRunResult();
+        AssertStepInvalidated(runResult, "SliceFeatureModels");
+        AssertStepReused(runResult, "SliceEmitPlan");
     }
 
     [Fact]
@@ -125,5 +262,18 @@ public class IncrementalCacheTests
                 output.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged,
                 $"Step '{stepName}' had output with reason '{output.Reason}'; expected Cached or Unchanged on a no-op edit. " +
                 "This indicates the incremental generator pipeline is re-running work it should reuse."));
+    }
+
+    private static void AssertStepInvalidated(GeneratorDriverRunResult runResult, string stepName)
+    {
+        var generatorResult = Assert.Single(runResult.Results);
+        Assert.True(
+            generatorResult.TrackedSteps.TryGetValue(stepName, out var steps),
+            $"Expected tracked step '{stepName}' to be present. Available: {string.Join(", ", generatorResult.TrackedSteps.Keys)}");
+
+        var outputs = steps.SelectMany(s => s.Outputs).ToArray();
+        Assert.NotEmpty(outputs);
+        Assert.Contains(outputs, output =>
+            output.Reason is IncrementalStepRunReason.Modified or IncrementalStepRunReason.New);
     }
 }

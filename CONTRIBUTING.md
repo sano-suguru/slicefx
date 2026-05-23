@@ -7,7 +7,7 @@ Thanks for your interest in Slice. This project is experimental, so the best con
 1. Keep `Slice.Core` dependency-free except for `Microsoft.AspNetCore.App`.
 2. Do not add mediator-style abstractions; use ASP.NET Core endpoint filters for cross-cutting behavior.
 3. Keep per-request paths reflection-free.
-4. Keep runtime fallback and generated registration behavior aligned when changing routing, validation, filters, or metadata.
+4. Keep generated registrations and the generated route manifest aligned when changing routing, validation, filters, or metadata.
 5. Update samples and docs when public behavior changes.
 
 ## Definition of Done
@@ -18,7 +18,7 @@ A change is done when:
 2. `dotnet test Slice.slnx --configuration Release --no-build --no-restore` passes.
 3. Formatting and style analyzers are clean with `dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591`, or formatting was intentionally applied.
 4. `src\Slice.Core\Slice.Core.csproj` still has no `<PackageReference>` items.
-5. Runtime fallback and source-generated registration behavior stay aligned when feature registration, validation, filters, or metadata change.
+5. Generated registrations, route manifests, and CLI source-scanning fallback behavior stay aligned when feature registration, validation, filters, or metadata change.
 6. Samples and README/docs are updated when public behavior changes.
 7. Any breaking change is documented in the PR description.
 
@@ -28,7 +28,7 @@ A change is done when:
 - Per-request code must not use reflection.
 - Feature handlers remain `public static` and receive dependencies as parameters.
 - Cross-cutting behavior uses ASP.NET Core endpoint filters, not new mediator-style abstractions.
-- Generated registrations should mirror the runtime fallback's validation, filter, and metadata order.
+- Generated registrations are the ASP.NET endpoint registration path; the CLI source-scanning fallback is tooling-only and should mirror generated route manifest metadata for unbuilt projects.
 
 ## Local verification
 

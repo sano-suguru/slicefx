@@ -30,9 +30,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         // Report diagnostics without blocking the model pipeline.
         var diagnostics = features
             .Where(static r => r.Diagnostic is not null)
-            .Select(static (r, _) => r.Diagnostic!);
+            .Select(static (r, _) => r.Diagnostic!.Value);
 
-        context.RegisterSourceOutput(diagnostics, static (spc, d) => spc.ReportDiagnostic(d));
+        context.RegisterSourceOutput(diagnostics, static (spc, d) => spc.ReportDiagnostic(d.ToDiagnostic()));
 
         var validModels = features
             .Where(static r => r.Model is not null)
@@ -86,94 +86,114 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (pair, _) => pair.Right.Enabled ? FindLambdaJsonContext(pair.Left.Left, pair.Left.Right) : null)
             .WithTrackingName("SliceLambdaJsonContext");
 
-        context.RegisterSourceOutput(
-            validModels.Combine(assemblyName)
-                .Combine(hasAspNetRef)
-                .Combine(hasWasiRef)
-                .Combine(referencedModules)
-                .Combine(emitExtensions)
-                .Combine(wasiJsonContextFqn)
-                .Combine(lambdaPerFunctionOptions)
-                .Combine(lambdaJsonContextFqn),
-            static (spc, pair) =>
+        var emitPlan = validModels.Combine(assemblyName)
+            .Combine(hasAspNetRef)
+            .Combine(hasWasiRef)
+            .Combine(referencedModules)
+            .Combine(emitExtensions)
+            .Combine(wasiJsonContextFqn)
+            .Combine(lambdaPerFunctionOptions)
+            .Combine(lambdaJsonContextFqn)
+            .Select(static (pair, _) =>
             {
                 var ((((((((models, asmName), emitAspNet), emitWasi), referencedModules), emitExtensions), wasiJsonContextFqn), lambdaOptions), lambdaJsonContextFqn) = pair;
-
-                var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
-                foreach (var diagnostic in duplicateDiagnostics)
-                {
-                    spc.ReportDiagnostic(diagnostic);
-                }
-
-                if (!duplicateDiagnostics.IsEmpty)
-                {
-                    return;
-                }
-
-                foreach (var diagnostic in FindFilterOrderDiagnostics(models))
-                {
-                    spc.ReportDiagnostic(diagnostic);
-                }
-
-                foreach (var diagnostic in lambdaOptions.Diagnostics)
-                {
-                    spc.ReportDiagnostic(diagnostic);
-                }
-
-                var manifestSource = RouteManifestEmitter.Emit(
+                return CreateEmitPlan(
                     models,
                     asmName,
-                    lambdaOptions.Enabled,
-                    lambdaJsonContextFqn);
-                spc.AddSource(
-                    $"{asmName}.SliceRouteManifest.g.cs",
-                    Microsoft.CodeAnalysis.Text.SourceText.From(manifestSource, Encoding.UTF8));
-
-                if (emitAspNet)
-                {
-                    var source = RegistrationEmitter.Emit(models, asmName, referencedModules, emitExtensions);
-                    spc.AddSource(
-                        $"{asmName}.SliceRegistrations.g.cs",
-                        Microsoft.CodeAnalysis.Text.SourceText.From(source, Encoding.UTF8));
-                }
-
-                if (lambdaOptions.Enabled)
-                {
-                    var (lambdaSource, lambdaDiagnostics) = LambdaPerFunctionEmitter.Emit(
-                        models,
-                        asmName,
-                        lambdaJsonContextFqn,
-                        lambdaOptions.StartupTypeFqn);
-                    foreach (var d in lambdaDiagnostics)
-                    {
-                        spc.ReportDiagnostic(d);
-                    }
-
-                    spc.AddSource(
-                        $"{asmName}.SliceLambdaPerFunctionHandlers.g.cs",
-                        Microsoft.CodeAnalysis.Text.SourceText.From(lambdaSource, Encoding.UTF8));
-                }
-
-                if (!emitWasi)
-                {
-                    return;
-                }
-
-                var (wasiSource, wasiDiagnostics) = WasiRegistrationEmitter.Emit(
-                    models,
-                    asmName,
-                    wasiJsonContextFqn,
+                    emitAspNet,
+                    emitWasi,
                     referencedModules,
-                    emitExtensions);
-                foreach (var d in wasiDiagnostics)
+                    emitExtensions,
+                    wasiJsonContextFqn,
+                    lambdaOptions,
+                    lambdaJsonContextFqn);
+            })
+            .WithTrackingName("SliceEmitPlan");
+
+        context.RegisterSourceOutput(
+            emitPlan,
+            static (spc, plan) =>
+            {
+                foreach (var diagnostic in plan.Diagnostics)
                 {
-                    spc.ReportDiagnostic(d);
+                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
                 }
 
-                spc.AddSource(
-                    $"{asmName}.SliceWasiRegistrations.g.cs",
-                    Microsoft.CodeAnalysis.Text.SourceText.From(wasiSource, Encoding.UTF8));
+                foreach (var source in plan.Sources)
+                {
+                    spc.AddSource(
+                        source.HintName,
+                        Microsoft.CodeAnalysis.Text.SourceText.From(source.Source, Encoding.UTF8));
+                }
             });
+    }
+
+    private static EmitPlan CreateEmitPlan(
+        ImmutableArray<FeatureModel> models,
+        string asmName,
+        bool emitAspNet,
+        bool emitWasi,
+        ImmutableArray<ReferencedSliceModule> referencedModules,
+        bool emitExtensions,
+        string? wasiJsonContextFqn,
+        LambdaPerFunctionOptions lambdaOptions,
+        string? lambdaJsonContextFqn)
+    {
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
+        diagnostics.AddRange(duplicateDiagnostics);
+        if (!duplicateDiagnostics.IsEmpty)
+        {
+            return new EmitPlan([], diagnostics.ToImmutable());
+        }
+
+        diagnostics.AddRange(FindFilterOrderDiagnostics(models));
+        diagnostics.AddRange(lambdaOptions.Diagnostics);
+
+        var sources = ImmutableArray.CreateBuilder<GeneratedSource>();
+        sources.Add(new GeneratedSource(
+            $"{asmName}.SliceRouteManifest.g.cs",
+            RouteManifestEmitter.Emit(
+                models,
+                asmName,
+                lambdaOptions.Enabled,
+                lambdaJsonContextFqn)));
+
+        if (emitAspNet)
+        {
+            sources.Add(new GeneratedSource(
+                $"{asmName}.SliceRegistrations.g.cs",
+                RegistrationEmitter.Emit(models, asmName, referencedModules, emitExtensions)));
+        }
+
+        if (lambdaOptions.Enabled)
+        {
+            var (lambdaSource, lambdaDiagnostics) = LambdaPerFunctionEmitter.Emit(
+                models,
+                asmName,
+                lambdaJsonContextFqn,
+                lambdaOptions.StartupTypeFqn);
+            diagnostics.AddRange(lambdaDiagnostics);
+            sources.Add(new GeneratedSource(
+                $"{asmName}.SliceLambdaPerFunctionHandlers.g.cs",
+                lambdaSource));
+        }
+
+        if (emitWasi)
+        {
+            var (wasiSource, wasiDiagnostics) = WasiRegistrationEmitter.Emit(
+                models,
+                asmName,
+                wasiJsonContextFqn,
+                referencedModules,
+                emitExtensions);
+            diagnostics.AddRange(wasiDiagnostics);
+            sources.Add(new GeneratedSource(
+                $"{asmName}.SliceWasiRegistrations.g.cs",
+                wasiSource));
+        }
+
+        return new EmitPlan(sources.ToImmutable(), diagnostics.ToImmutable());
     }
 
     private static SliceGenerationRole GetGenerationRole(
@@ -232,7 +252,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 var diagnostic = ValidateLambdaPerFunctionStartupType(startupType, startupInterface);
                 if (diagnostic is not null)
                 {
-                    return new LambdaPerFunctionOptions(true, null, [diagnostic]);
+                    return new LambdaPerFunctionOptions(true, null, [diagnostic.Value]);
                 }
 
                 startupTypeFqn = startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -244,7 +264,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return new LambdaPerFunctionOptions(false, null, []);
     }
 
-    private static Diagnostic? ValidateLambdaPerFunctionStartupType(
+    private static EquatableDiagnostic? ValidateLambdaPerFunctionStartupType(
         INamedTypeSymbol startupType,
         INamedTypeSymbol? startupInterface)
     {
@@ -260,8 +280,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             return null;
         }
 
-        var location = startupType.Locations.Length > 0 ? startupType.Locations[0] : null;
-        return Diagnostic.Create(
+        var location = CreateDiagnosticLocation(startupType.Locations.Length > 0 ? startupType.Locations[0] : null);
+        return EquatableDiagnostic.Create(
             SliceDiagnostics.InvalidLambdaPerFeatureStartupType,
             location,
             startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
@@ -425,9 +445,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         var parts = routeArg!.Split(s_spaceSeparator, 2, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2)
         {
-            return FeatureResult.Error(Diagnostic.Create(
+            return FeatureResult.Error(EquatableDiagnostic.Create(
                 SliceDiagnostics.InvalidRouteFormat,
-                featureType.Locations.Length > 0 ? featureType.Locations[0] : null,
+                CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
                 featureType.Name, routeArg));
         }
 
@@ -465,26 +485,26 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         var handles = handleBuilder.ToImmutable();
         if (handles.IsEmpty)
         {
-            return FeatureResult.Error(Diagnostic.Create(
+            return FeatureResult.Error(EquatableDiagnostic.Create(
                 SliceDiagnostics.MissingHandleMethod,
-                featureType.Locations.Length > 0 ? featureType.Locations[0] : null,
+                CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
                 featureType.Name));
         }
 
         if (handles.Length > 1)
         {
-            return FeatureResult.Error(Diagnostic.Create(
+            return FeatureResult.Error(EquatableDiagnostic.Create(
                 SliceDiagnostics.AmbiguousHandleMethod,
-                featureType.Locations.Length > 0 ? featureType.Locations[0] : null,
+                CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
                 featureType.Name));
         }
 
         var handle = handles[0];
         if (!handle.IsStatic || handle.DeclaredAccessibility != Accessibility.Public)
         {
-            return FeatureResult.Error(Diagnostic.Create(
+            return FeatureResult.Error(EquatableDiagnostic.Create(
                 SliceDiagnostics.HandleNotPublicStatic,
-                handle.Locations.Length > 0 ? handle.Locations[0] : null,
+                CreateDiagnosticLocation(handle.Locations.Length > 0 ? handle.Locations[0] : null),
                 featureType.Name));
         }
 
@@ -567,9 +587,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             featureLocation.EndCharacter);
 
         return tagInferred && tag == "Default"
-            ? new FeatureResult(model, Diagnostic.Create(
+            ? new FeatureResult(model, EquatableDiagnostic.Create(
                 SliceDiagnostics.TagInferenceFallback,
-                featureType.Locations.Length > 0 ? featureType.Locations[0] : null,
+                CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
                 featureType.Name))
             : new FeatureResult(model, null);
     }
@@ -920,9 +940,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return "Default";
     }
 
-    private static ImmutableArray<Diagnostic> FindFilterOrderDiagnostics(ImmutableArray<FeatureModel> models)
+    private static ImmutableArray<EquatableDiagnostic> FindFilterOrderDiagnostics(ImmutableArray<FeatureModel> models)
     {
-        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
         foreach (var model in models)
         {
             var hints = model.GetFilterOrderHints();
@@ -952,9 +972,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
                 if (filterIndex < afterIndex)
                 {
-                    diagnostics.Add(Diagnostic.Create(
+                    diagnostics.Add(EquatableDiagnostic.Create(
                         SliceDiagnostics.FilterOrderViolation,
-                        model.GetDiagnosticLocation(),
+                        model.GetDiagnosticLocationModel(),
                         model.FullyQualifiedTypeName,
                         TrimGlobalPrefix(hint.FilterFqn),
                         TrimGlobalPrefix(hint.AfterFqn)));
@@ -968,20 +988,20 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
     private static string TrimGlobalPrefix(string value)
         => value.StartsWith("global::", StringComparison.Ordinal) ? value.Substring("global::".Length) : value;
 
-    private static ImmutableArray<Diagnostic> FindDuplicateEndpointNameDiagnostics(
+    private static ImmutableArray<EquatableDiagnostic> FindDuplicateEndpointNameDiagnostics(
         ImmutableArray<FeatureModel> models,
         ImmutableArray<ReferencedSliceModule> referencedModules)
     {
         var seen = new Dictionary<string, string>(StringComparer.Ordinal);
-        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
 
         foreach (var model in models)
         {
             if (seen.TryGetValue(model.EndpointName, out var existing))
             {
-                diagnostics.Add(Diagnostic.Create(
+                diagnostics.Add(EquatableDiagnostic.Create(
                     SliceDiagnostics.DuplicateEndpointName,
-                    location: null,
+                    DiagnosticLocationModel.None,
                     model.EndpointName,
                     existing,
                     model.FullyQualifiedTypeName));
@@ -1001,9 +1021,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             var routeIdentity = $"{route.FeatureType} ({route.AssemblyName})";
             if (seen.TryGetValue(route.EndpointName, out var existing))
             {
-                diagnostics.Add(Diagnostic.Create(
+                diagnostics.Add(EquatableDiagnostic.Create(
                     SliceDiagnostics.DuplicateEndpointName,
-                    location: null,
+                    DiagnosticLocationModel.None,
                     route.EndpointName,
                     existing,
                     routeIdentity));
@@ -1017,7 +1037,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
     }
 }
 
-internal readonly struct FeatureResult(FeatureModel? model, Diagnostic? diagnostic)
+internal readonly struct FeatureResult(FeatureModel? model, EquatableDiagnostic? diagnostic) : IEquatable<FeatureResult>
 {
     /// <summary>
     /// Gets the discovered feature model when the feature is valid.
@@ -1027,12 +1047,26 @@ internal readonly struct FeatureResult(FeatureModel? model, Diagnostic? diagnost
     /// <summary>
     /// Gets the diagnostic reported for an invalid or notable feature.
     /// </summary>
-    public Diagnostic? Diagnostic { get; } = diagnostic;
+    public EquatableDiagnostic? Diagnostic { get; } = diagnostic;
+
+    public bool Equals(FeatureResult other)
+        => EqualityComparer<FeatureModel?>.Default.Equals(Model, other.Model)
+           && Nullable.Equals(Diagnostic, other.Diagnostic);
+
+    public override bool Equals(object? obj) => obj is FeatureResult other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            return ((Model?.GetHashCode() ?? 0) * 397) ^ Diagnostic.GetHashCode();
+        }
+    }
 
     /// <summary>
     /// Creates a feature result that contains only a diagnostic.
     /// </summary>
     /// <param name="diagnostic">The diagnostic to report.</param>
     /// <returns>A feature result containing the diagnostic.</returns>
-    public static FeatureResult Error(Diagnostic diagnostic) => new(null, diagnostic);
+    public static FeatureResult Error(EquatableDiagnostic diagnostic) => new(null, diagnostic);
 }

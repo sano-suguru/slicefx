@@ -31,6 +31,8 @@ internal sealed class JsonReportConfig : ManualConfig
 public class SourceGeneratorBenchmarks
 {
     private CSharpCompilation _compilation = null!;
+    private CSharpCompilation _unrelatedEditCompilation = null!;
+    private CSharpCompilation _trackedFeatureEditCompilation = null!;
     private SyntaxTree _unrelatedV1 = null!;
     private SyntaxTree _unrelatedV2 = null!;
     private GeneratorDriver _warmDriver = null!;
@@ -50,8 +52,12 @@ public class SourceGeneratorBenchmarks
         _unrelatedV1 = CSharpSyntaxTree.ParseText("namespace Bench { public static class Unrelated { public static int Answer() => 42; } }");
         _unrelatedV2 = CSharpSyntaxTree.ParseText("namespace Bench { public static class Unrelated { public static int Answer() => 43; } }");
 
-        var featureSource = BuildFeatureSource(FeatureCount);
+        var featureSource = BuildFeatureSource(FeatureCount, "1");
         _compilation = CreateCompilation("Bench", featureSource, _unrelatedV1);
+        _unrelatedEditCompilation = _compilation.ReplaceSyntaxTree(_unrelatedV1, _unrelatedV2);
+        _trackedFeatureEditCompilation = _compilation.ReplaceSyntaxTree(
+            _compilation.SyntaxTrees.First(),
+            CSharpSyntaxTree.ParseText(BuildFeatureSource(FeatureCount, "2"), new CSharpParseOptions(LanguageVersion.Latest)));
 
         var driver = CSharpGeneratorDriver.Create([new SliceFeatureGenerator().AsSourceGenerator()]);
         _warmDriver = driver.RunGenerators(_compilation);
@@ -74,12 +80,25 @@ public class SourceGeneratorBenchmarks
     /// <returns>The driver post-run, returned to defeat dead-code elimination.</returns>
     [Benchmark]
     public GeneratorDriver WarmRun_NoOpEdit()
-    {
-        var newCompilation = _compilation.ReplaceSyntaxTree(_unrelatedV1, _unrelatedV2);
-        return _warmDriver.RunGenerators(newCompilation);
-    }
+        => _warmDriver.RunGenerators(_unrelatedEditCompilation);
 
-    private static string BuildFeatureSource(int count)
+    /// <summary>
+    /// Compilation edit only: isolates the cost currently included in <see cref="WarmRun_NoOpEdit"/>.
+    /// </summary>
+    /// <returns>The compilation after an unrelated syntax tree replacement.</returns>
+    [Benchmark]
+    public CSharpCompilation CompilationEditOnly()
+        => _compilation.ReplaceSyntaxTree(_unrelatedV1, _unrelatedV2);
+
+    /// <summary>
+    /// Warm generator run after a trivia-only edit in the feature syntax tree.
+    /// </summary>
+    /// <returns>The driver post-run, returned to defeat dead-code elimination.</returns>
+    [Benchmark]
+    public GeneratorDriver WarmRun_TrackedTreeTrivialEdit()
+        => _warmDriver.RunGenerators(_trackedFeatureEditCompilation);
+
+    private static string BuildFeatureSource(int count, string implementationCommentVersion)
     {
         var sb = new StringBuilder();
         sb.AppendLine("using Slice;");
@@ -92,7 +111,11 @@ public class SourceGeneratorBenchmarks
             sb.AppendLine(CultureInfo.InvariantCulture, $"[Feature(\"GET /items/{idx}/{{id:int}}\")]");
             sb.AppendLine(CultureInfo.InvariantCulture, $"public static class GetItem{idx}");
             sb.AppendLine("{");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"    public static Response Handle(int id) => new(id);");
+            sb.AppendLine("    public static Response Handle(int id)");
+            sb.AppendLine("    {");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        // version {implementationCommentVersion}");
+            sb.AppendLine("        return new(id);");
+            sb.AppendLine("    }");
             sb.AppendLine("    public sealed record Response(int Id);");
             sb.AppendLine("}");
             sb.AppendLine();

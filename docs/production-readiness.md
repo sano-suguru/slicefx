@@ -17,18 +17,24 @@ Before discussing gate values, the six differentiators that must **never** be er
 
 ## Baseline measurements
 
-Measured on Apple M1 (8 cores, macOS 26.4.1, .NET SDK 10.0.300, BenchmarkDotNet 0.14.0) on 2026-05-21. CI hardware (Ubuntu / x64) will differ; re-run on the perf workflow's host to confirm.
+Measured on Apple M1 (8 cores, macOS 26.4.1, .NET SDK 10.0.300, BenchmarkDotNet 0.14.0) on 2026-05-23. CI hardware (Ubuntu / x64) will differ; re-run on the perf workflow's host to confirm.
 
 ### Source generator throughput
 
-| Method           | FeatureCount | Mean     | Allocated |
-|----------------- |------------- |---------:|----------:|
-| ColdRun          | 50           | 3.86 ms | 3.02 MB |
-| WarmRun_NoOpEdit | 50           | 4.45 ms | 2.79 MB |
-| ColdRun          | 100          | 5.19 ms | 3.88 MB |
-| WarmRun_NoOpEdit | 100          | 5.96 ms | 3.41 MB |
-| ColdRun          | 200          | 6.73 ms | 5.57 MB |
-| WarmRun_NoOpEdit | 200          | 9.08 ms | 4.68 MB |
+| Method                         | FeatureCount | Mean     | Allocated |
+|-------------------------------- |------------- |---------:|----------:|
+| ColdRun                         | 50           | 2.78 ms | 2.89 MB |
+| WarmRun_NoOpEdit                | 50           | 2.62 ms | 2.19 MB |
+| WarmRun_TrackedTreeTrivialEdit  | 50           | 2.67 ms | 2.20 MB |
+| CompilationEditOnly             | 50           | 0.001 ms | 0.002 MB |
+| ColdRun                         | 100          | 3.22 ms | 3.67 MB |
+| WarmRun_NoOpEdit                | 100          | 2.84 ms | 2.29 MB |
+| WarmRun_TrackedTreeTrivialEdit  | 100          | 3.03 ms | 2.29 MB |
+| CompilationEditOnly             | 100          | 0.001 ms | 0.002 MB |
+| ColdRun                         | 200          | 3.63 ms | 5.14 MB |
+| WarmRun_NoOpEdit                | 200          | 2.98 ms | 2.43 MB |
+| WarmRun_TrackedTreeTrivialEdit  | 200          | 3.08 ms | 2.44 MB |
+| CompilationEditOnly             | 200          | 0.001 ms | 0.002 MB |
 
 The table above is the local Apple M1 baseline. The chart below is generated from BenchmarkDotNet JSON and uses `tests/Slice.Benchmarks/gates.json` for the dotted gate lines; after the nightly perf workflow runs on `main`, it reflects the latest GitHub Actions Ubuntu x64 measurement. The SVG caption identifies the actual measurement host.
 
@@ -42,20 +48,22 @@ Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware.
 
 | Metric | Gate | Baseline (Apple M1) | How to measure |
 |---|---|---|---|
-| Source generator cold run (100 features) | < 12 ms | 5.19 ms | `SourceGeneratorBenchmarks.ColdRun` Mean |
-| No-op edit re-run (100 features) | < 12 ms | 5.96 ms | `SourceGeneratorBenchmarks.WarmRun_NoOpEdit` Mean |
-| Source generator cold run (200 features) | < 15 ms | 6.73 ms | `SourceGeneratorBenchmarks.ColdRun` Mean |
-| No-op edit re-run (200 features) | < 20 ms | 9.08 ms | `SourceGeneratorBenchmarks.WarmRun_NoOpEdit` Mean |
-| Allocations per generator pass (200 features) | < 8 MB | 5.57 MB | `MemoryDiagnoser` Allocated |
-| Tracked-step cache reuse on a no-op edit | 100% (Cached/Unchanged) | Verified | `IncrementalCacheTests` (`SliceFeatureModels`, `SliceReferencedModules`) |
+| Source generator cold run (100 features) | < 8 ms | 3.22 ms | `SourceGeneratorBenchmarks.ColdRun` Mean |
+| No-op edit re-run (100 features) | < 6 ms | 2.84 ms | `SourceGeneratorBenchmarks.WarmRun_NoOpEdit` Mean |
+| Tracked-tree trivial edit re-run (100 features) | < 6 ms | 3.03 ms | `SourceGeneratorBenchmarks.WarmRun_TrackedTreeTrivialEdit` Mean |
+| Source generator cold run (200 features) | < 10 ms | 3.63 ms | `SourceGeneratorBenchmarks.ColdRun` Mean |
+| No-op edit re-run (200 features) | < 8 ms | 2.98 ms | `SourceGeneratorBenchmarks.WarmRun_NoOpEdit` Mean |
+| Tracked-tree trivial edit re-run (200 features) | < 8 ms | 3.08 ms | `SourceGeneratorBenchmarks.WarmRun_TrackedTreeTrivialEdit` Mean |
+| Allocations per cold generator pass (200 features) | < 8 MB | 5.03 MB | `MemoryDiagnoser` Allocated |
+| Tracked-step cache reuse on no-op and trivial edits | 100% (Cached/Unchanged) | Verified | `IncrementalCacheTests` (`SliceFeatureModels`, `SliceReferencedModules`, `SliceEmitPlan`) |
 | `Slice.Core.dll` size | < 50 KB | (measure during release) | `bin/Release/net10.0/Slice.Core.dll` |
 
 ### Observations from the baseline
 
-1. **Absolute numbers are very small** — even at 200 features the cold run is under 7 ms on M1. This is well below any threshold at which IDE responsiveness would be a concern.
-2. **WarmRun is *slower* than ColdRun in wall-clock time, despite allocating less** (e.g., 200 features: 9.08 ms vs 6.73 ms; 4.68 MB vs 5.57 MB). The upstream `SliceFeatureModels` and `SliceReferencedModules` steps are confirmed cached by `IncrementalCacheTests`, so this delta comes from the `RegisterSourceOutput` action body re-running emit work. Output text is identical (test verifies this), but the emit step is not free.
-   - Follow-up candidate: gate the emit body itself behind a Select that produces a single cacheable record, so the SourceOutput action becomes a no-op when inputs are unchanged. Not blocking — the absolute cost is tiny.
-3. **GC pressure scales linearly** with feature count. Gen2 collections appear only at 100+ features. Manageable.
+1. **Absolute numbers are very small** — even at 200 features the cold run is under 4 ms on M1. This is well below any threshold at which IDE responsiveness would be a concern.
+2. **WarmRun is now faster than ColdRun on the generator path**. `WarmRun_NoOpEdit` precomputes the edited compilation and measures the generator re-run only; `CompilationEditOnly` isolates the sub-microsecond syntax-tree replacement cost. The final `SliceEmitPlan` step is cacheable, so `RegisterSourceOutput` only reports diagnostics and adds cached source text when inputs are unchanged.
+3. **Tracked feature-tree trivial edits are covered**. `WarmRun_TrackedTreeTrivialEdit` edits implementation trivia inside the feature syntax tree and stays below the 200-feature cold run, proving the optimization is not limited to unrelated-file edits.
+4. **The emit plan trades a small amount of steady-state driver memory for lower warm-run work** by retaining generated source strings and structural diagnostic data in the incremental state table. At 200 features this still allocates less than half of a cold run.
 
 ### MapSlices() startup cost
 

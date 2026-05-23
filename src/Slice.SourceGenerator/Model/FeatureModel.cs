@@ -117,20 +117,21 @@ internal sealed record FeatureModel(
     /// </summary>
     /// <returns>The source location when available; otherwise <see cref="Location.None"/>.</returns>
     public Location GetDiagnosticLocation()
-    {
-        if (FeatureLocationSourceStart < 0
-            || FeatureLocationSourceLength < 0)
-        {
-            return Location.None;
-        }
+        => GetDiagnosticLocationModel().ToLocation();
 
-        return Location.Create(
+    /// <summary>
+    /// Rehydrates the feature type location model used by cacheable diagnostics.
+    /// </summary>
+    /// <returns>The source location model when available; otherwise <see cref="DiagnosticLocationModel.None"/>.</returns>
+    public DiagnosticLocationModel GetDiagnosticLocationModel()
+        => new(
             FeatureLocationFilePath,
-            new TextSpan(FeatureLocationSourceStart, FeatureLocationSourceLength),
-            new LinePositionSpan(
-                new LinePosition(FeatureLocationStartLine, FeatureLocationStartCharacter),
-                new LinePosition(FeatureLocationEndLine, FeatureLocationEndCharacter)));
-    }
+            FeatureLocationSourceStart,
+            FeatureLocationSourceLength,
+            FeatureLocationStartLine,
+            FeatureLocationStartCharacter,
+            FeatureLocationEndLine,
+            FeatureLocationEndCharacter);
 }
 
 internal readonly record struct FilterOrderHintEntry(string FilterFqn, string AfterFqn);
@@ -145,6 +146,22 @@ internal readonly record struct DiagnosticLocationModel(
     int EndCharacter)
 {
     public static DiagnosticLocationModel None { get; } = new(string.Empty, -1, -1, -1, -1, -1, -1);
+
+    public Location ToLocation()
+    {
+        if (SourceStart < 0
+            || SourceLength < 0)
+        {
+            return Location.None;
+        }
+
+        return Location.Create(
+            FilePath,
+            new TextSpan(SourceStart, SourceLength),
+            new LinePositionSpan(
+                new LinePosition(StartLine, StartCharacter),
+                new LinePosition(EndLine, EndCharacter)));
+    }
 }
 
 internal sealed record HandleParamModel(string TypeFqn, string Name, bool IsInterfaceOrAbstract);

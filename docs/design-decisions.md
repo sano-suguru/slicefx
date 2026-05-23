@@ -76,11 +76,11 @@ Each satellite (`Slice.Lambda`, `Slice.TestHost`, `Slice.Wasi`) brings its own N
 
 This is why the source generator emits separate files for each active surface (`{Asm}_SliceRegistrations.g.cs`, `{Asm}_SliceWasiRegistrations.g.cs`, `{Asm}_SliceRouteManifest.g.cs`, and `{Asm}.SliceLambdaPerFunctionHandlers.g.cs` when Lambda per-feature handlers are enabled) instead of one combined output.
 
-## Why does the warm-run benchmark report slower than cold-run?
+## How is warm-run kept faster than cold-run?
 
-Honest answer: because the emit step is currently not cached. Upstream stages (`SliceFeatureModels`, `SliceReferencedModules`) are confirmed cached by `IncrementalCacheTests`, but `RegisterSourceOutput` re-runs the formatting/emit work each pass. Output text is byte-identical (verified by tests), so correctness is fine.
+Upstream stages (`SliceFeatureModels`, `SliceReferencedModules`) are confirmed cached by `IncrementalCacheTests`, and final source generation is folded into a cacheable `SliceEmitPlan` step. `RegisterSourceOutput` stays thin: it reports structural diagnostics and adds cached source text, but it does not rebuild route manifests or registration source when inputs are unchanged.
 
-This is documented in [`production-readiness.md`](production-readiness.md) observation #2 as a candidate follow-up. Absolute cost at 200 features is ~9 ms — well below the nightly perf gate at 20 ms — so it's not blocking.
+The benchmark suite separates `CompilationEditOnly`, `WarmRun_NoOpEdit`, and `WarmRun_TrackedTreeTrivialEdit` so the measured warm path reflects generator reuse rather than syntax-tree replacement cost. The cached emit plan intentionally retains generated source strings in Roslyn's incremental state table; the trade-off is small steady-state memory for lower per-edit work.
 
 ## Why publish a `slice` CLI as a .NET local tool?
 
