@@ -76,7 +76,7 @@ slice openapi --output openapi.json
 `slice routes` makes portability visible at the slice boundary:
 
 - `portable` means the route avoids ASP.NET-specific return types and can be considered for WASI-style dispatch.
-- `partial` means the route shape is portable, but some attached behavior such as non-validator endpoint filters is ASP.NET-only today.
+- `partial` means the route shape is portable, but some attached behavior such as endpoint filters is ASP.NET-only today.
 - `aspnet-only` means the route intentionally depends on ASP.NET concepts such as `IResult`.
 
 `slice client csharp` and `slice client typescript` generate typed clients for portable and partial routes: write the server feature once, then let tooling produce the client entrypoint instead of manually maintaining endpoint strings and DTO wiring.
@@ -131,7 +131,7 @@ For WASI-specific responses, use `SliceResult` or `WasiResponse`. The generator 
 
 ## WASI/fetch-style direction
 
-`Slice.Wasi` is the active experiment for a lightweight wasi:http runtime. Its minimal dispatch surface is `WasiRequest` in and `WasiResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; non-validator ASP.NET endpoint filters should not be assumed to run in the WASI path.
+`Slice.Wasi` is the active experiment for a lightweight wasi:http runtime. Its minimal dispatch surface is `WasiRequest` in and `WasiResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; ASP.NET endpoint filters should not be assumed to run in the WASI path.
 
 Near-term WASI work should focus on better manifest-driven compatibility reporting and source-generated JSON/validation coverage before introducing another public routing API.
 
@@ -145,7 +145,7 @@ Near-term WASI work should focus on better manifest-driven compatibility reporti
 
 The first per-feature Lambda mode is intentionally narrower than ASP.NET-hosted Lambda. It targets API Gateway HTTP API v2 and supports route parameters, query parameters, JSON request bodies, DI services, and `CancellationToken`. Supported return shapes start with POCOs, `Task<T>`, and `ValueTask<T>`; additional result helpers can be added only if they do not recreate ASP.NET's endpoint pipeline.
 
-The MVP excludes features that return `IResult`, depend on non-validator endpoint filters, require reflection-based validation, use unsupported route parameter types, or lack an explicit `[SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]` context for AOT-safe JSON body/response metadata. ASP.NET-specific middleware behavior such as auth, CORS, or Problem Details customization remains outside the compile-time contract. API Gateway REST v1, ALB, non-HTTP triggers, per-feature WASM components, and separate NativeAOT binaries stay out of the MVP. Reuse the existing WASI-style binding concepts where practical so portable feature rules converge instead of splitting by host.
+The MVP excludes features that return `IResult`, depend on endpoint filters, require reflection-based validation, use unsupported route parameter types, or lack an explicit `[SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]` context for AOT-safe JSON body/response metadata. ASP.NET-specific middleware behavior such as auth, CORS, or Problem Details customization remains outside the compile-time contract. API Gateway REST v1, ALB, non-HTTP triggers, per-feature WASM components, and separate NativeAOT binaries stay out of the MVP. Reuse the existing WASI-style binding concepts where practical so portable feature rules converge instead of splitting by host.
 
 Cloudflare WASI function-per-feature deployment (one WASM component per feature) requires per-feature NativeAOT compilation and is blocked on `componentize-dotnet` multi-component build support. The current Slice.WASI model (one WASM component, all routes dispatched in-process) is the practical deployment target until that tooling matures.
 

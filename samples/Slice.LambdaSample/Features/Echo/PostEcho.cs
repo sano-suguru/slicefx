@@ -6,7 +6,6 @@ namespace Slice.LambdaSample.Features.Echo;
 /// Demonstrates a Lambda-ready endpoint with DataAnnotations and custom Slice validation.
 /// </summary>
 [Feature("POST /echo", Summary = "Echo the request body back")]
-[Filter<SliceValidatorFilter<Request>>]   // custom imperative validation via ISliceValidator<Request>
 public static class PostEcho
 {
     /// <summary>

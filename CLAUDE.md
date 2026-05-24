@@ -76,10 +76,11 @@ Framework-enforced conventions (not just style):
 
 ### ISliceValidator&lt;T&gt; — fluent validation (`src/Slice.Core/`)
 
-`ISliceValidator<T>`, `SliceValidationResult`, and `SliceValidatorFilter<T>` are defined in `Slice.Core`
+`ISliceValidator<T>` and `SliceValidationResult` are defined in `Slice.Core`
 (no extra NuGet dependency). Use when DataAnnotations alone isn't expressive enough (cross-field rules,
-async checks, etc.). `DataAnnotationsValidationFilter` is attached first; `SliceValidatorFilter<T>`
-then runs in normal `[Filter<T>]` declaration order with any other feature filters.
+async checks, etc.). Implement one closed validator for a discovered Slice request parameter.
+`DataAnnotationsValidationFilter` is attached first; `ISliceValidator<T>` then runs before
+user-declared `[Filter<T>]` endpoint filters. Unmatched validators are build errors.
 
 ```csharp
 // 1. Implement the validator
@@ -93,20 +94,11 @@ public sealed class MyRequestValidator : ISliceValidator<MyFeature.Request>
     }
 }
 
-// 2. Attach to the feature
-[Feature("POST /things")]
-[Filter<SliceValidatorFilter<Request>>]   // runs after DataAnnotations, in [Filter<T>] declaration order
-public static class MyFeature { ... }
-
-// 3. Register with DI (in Program.cs — generator does NOT auto-scan ISliceValidator<T>)
-builder.Services.AddScoped<ISliceValidator<MyFeature.Request>, MyRequestValidator>();
+// The source generator discovers and registers the validator automatically.
 ```
 
 Both DataAnnotations and `ISliceValidator<T>` can coexist on the same feature; DataAnnotations runs
-first, and only if it passes does the `[Filter<T>]` chain continue. Put
-`[Filter<SliceValidatorFilter<Request>>]` before or after other filters to control whether those
-filters run before or after custom validation. Note: `Program.cs` (top-level statements) runs in
-the global namespace — add `using Slice;` to access `ISliceValidator<T>` directly.
+first, then Slice validators, and only if they pass does the `[Filter<T>]` chain continue.
 
 ### Slice.Wasi (`src/Slice.Wasi/`)
 
@@ -116,7 +108,7 @@ ASP.NET-independent WASI satellite (experimental). Bypasses Kestrel entirely; th
 
 **WASI publish:** `samples/Slice.WasiSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/Slice.WasiSample -r wasi-wasm -c Release`. The component exports `wasi:http/incoming-handler@0.2.0` — the standard WASI HTTP interface. With the current NativeAOT-LLVM preview packages, native publish is supported from Linux x64 or Windows x64 hosts; macOS should publish through a Linux x64 Docker container such as `docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work mcr.microsoft.com/dotnet/sdk:10.0 dotnet publish samples/Slice.WasiSample -r wasi-wasm -c Release`. The CopyWasiWasmComponent target copies the generated component to `samples/Slice.WasiSample/dist/slice-wasi-sample.wasm`. For Cloudflare Workers: `samples/Slice.WasiSample/dist` uses `@bytecodealliance/jco` to transpile the component and `shim.mjs` to bridge Cloudflare's `fetch(Request)` to the wasi:http handler (`npm ci` in the checked-in sample, then `npm run transpile`; scaffolds without a lockfile use `npm install` first). For Fermyon Cloud / Spin: deploy `spin.toml` + `dist/slice-wasi-sample.wasm` directly — Spin natively understands `wasi:http/incoming-handler`. Treat Slice.Wasi APIs as experimental and the build/transpile/deploy toolchain as unstable upstream preview tooling.
 
-Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE008 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE009. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, and `MinLength` rules; routes that need reflection-based validation are excluded with SLICE011. `[Filter<T>]` filters other than `SliceValidatorFilter<T>` are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline).
+Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE008 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE009. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, and `MinLength` rules; routes that need reflection-based validation are excluded with SLICE011. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
 
 ```csharp
 var builder = WasiHost.CreateBuilder();

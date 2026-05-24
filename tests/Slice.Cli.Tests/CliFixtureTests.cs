@@ -129,7 +129,7 @@ public class CliFixtureTests
         {
             ReturnType = "My.App.Features.Things.GetThing.Response",
             Portability = RouteCatalog.PortabilityPartial,
-            PortabilityReason = "non-validator endpoint filters do not run in the WASI path",
+            PortabilityReason = "endpoint filters do not run in the WASI path",
             Filters = ["RequestLoggingFilter"]
         };
         var typedAspNetRoute = aspNetOnlyRoute with
@@ -1365,7 +1365,7 @@ public class CliFixtureTests
         Assert.Contains("Handler: 'lambda-per-feature-app::Slice.lambda_per_feature_app_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
         Assert.Contains("Path: '/health'", yaml);
         Assert.DoesNotContain("HealthGetFilteredHealthFunction:", yaml);
-        Assert.Contains("# - Health.GetFilteredHealth: non-validator endpoint filters require the ASP.NET endpoint filter pipeline", yaml);
+        Assert.Contains("# - Health.GetFilteredHealth: endpoint filters require the ASP.NET endpoint filter pipeline", yaml);
     }
 
     [Fact]

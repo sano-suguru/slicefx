@@ -6,19 +6,13 @@ namespace Slice;
 /// (cross-field rules, database lookups, etc.).
 /// </summary>
 /// <remarks>
-/// Registration pattern:
-/// <list type="number">
-///   <item>Declare <c>[Filter&lt;SliceValidatorFilter&lt;Request&gt;&gt;]</c> on the feature class.</item>
-///   <item>Register the implementation: <c>services.AddScoped&lt;ISliceValidator&lt;Request&gt;, MyValidator&gt;()</c>.</item>
-/// </list>
-/// Validator implementations are registered manually because they are application services, not
-/// Slice features. This keeps discovery explicit, avoids runtime assembly scanning, and lets the
-/// application choose lifetimes and environment-specific replacements.
-/// <see cref="DataAnnotationsValidationFilter"/> is always attached before <c>[Filter&lt;T&gt;]</c>
-/// filters. <c>SliceValidatorFilter&lt;T&gt;</c> then participates in normal declaration order with
-/// other filters. Returning <see cref="SliceValidationResult.Success"/> passes control to the
-/// next filter; returning <c>SliceValidationResult.Failure(...)</c> short-circuits with a
-/// 400 Problem Details response.
+/// Implement a closed <c>ISliceValidator&lt;Request&gt;</c> type to attach request-level
+/// validation to a Slice feature. The source generator registers validators as scoped services
+/// and runs them automatically for matching request parameters.
+/// <see cref="DataAnnotationsValidationFilter"/> runs first, then <c>ISliceValidator&lt;T&gt;</c>,
+/// then user-declared <c>[Filter&lt;T&gt;]</c> filters. Returning
+/// <see cref="SliceValidationResult.Success"/> passes control to the next step; returning
+/// <c>SliceValidationResult.Failure(...)</c> short-circuits with a 400 Problem Details response.
 /// </remarks>
 /// <typeparam name="T">The value type to validate.</typeparam>
 public interface ISliceValidator<T>

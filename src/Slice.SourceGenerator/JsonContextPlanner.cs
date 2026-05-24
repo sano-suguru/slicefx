@@ -133,12 +133,9 @@ internal static class JsonContextPlanner
             return "returns ASP.NET IResult";
         }
 
-        foreach (var filter in feature.GetFilterFqns())
+        if (!feature.GetFilterFqns().IsEmpty)
         {
-            if (!filter.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal))
-            {
-                return "non-validator endpoint filters require the ASP.NET endpoint filter pipeline";
-            }
+            return "endpoint filters require the ASP.NET endpoint filter pipeline";
         }
 
         if (feature.RequiresReflectionValidation)

@@ -4,7 +4,6 @@ namespace Slice.LambdaSample.Validators;
 
 /// <summary>
 /// Demonstrates ISliceValidator — adds a rule that DataAnnotations cannot express.
-/// Register in DI: services.AddScoped&lt;ISliceValidator&lt;PostEcho.Request&gt;, EchoRequestValidator&gt;()
 /// </summary>
 public sealed class EchoRequestValidator : ISliceValidator<PostEcho.Request>
 {

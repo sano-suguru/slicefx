@@ -54,7 +54,7 @@ The command reports each route's portability:
 | Status | Meaning |
 | --- | --- |
 | `portable` | The handler shape avoids ASP.NET-specific return types and can be considered for WASI-style dispatch. |
-| `partial` | The route shape is portable, but some attached behavior such as non-validator endpoint filters is ASP.NET-only today. |
+| `partial` | The route shape is portable, but some attached behavior such as endpoint filters is ASP.NET-only today. |
 | `aspnet-only` | The route intentionally depends on ASP.NET concepts such as `IResult`. |
 
 `--format json` exports the same route metadata for tooling.

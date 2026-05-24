@@ -4,7 +4,6 @@ namespace Slice.SourceGenerator;
 
 internal static class SourceGenerationHelpers
 {
-    public const string SliceValidatorFilterPrefix = "global::Slice.SliceValidatorFilter<";
     public const string ManifestSchemaVersion = SliceRouteManifestSchema.CurrentVersion;
     public const string ManifestEligible = "eligible";
     public const string ManifestIneligible = "ineligible";
@@ -60,6 +59,19 @@ internal static class SourceGenerationHelpers
 
     public static bool IsSimpleType(string typeFqn)
         => s_simpleTypes.Contains(typeFqn) || IsSimpleNullableType(typeFqn);
+
+    public static bool IsFrameworkType(string typeFqn)
+    {
+        var value = TrimGlobalAlias(typeFqn);
+        return value.StartsWith("System.", StringComparison.Ordinal)
+            || value.StartsWith("Microsoft.", StringComparison.Ordinal);
+    }
+
+    public static bool IsRequestLikeParameter(HandleParamModel parameter)
+        => parameter.TypeFqn != "global::System.Threading.CancellationToken"
+           && !parameter.IsInterfaceOrAbstract
+           && !IsSimpleType(parameter.TypeFqn)
+           && !IsFrameworkType(parameter.TypeFqn);
 
     public static bool IsRouteParam(string name, string pattern)
     {

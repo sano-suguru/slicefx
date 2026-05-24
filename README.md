@@ -119,7 +119,7 @@ public static class DeleteUser
 }
 ```
 
-`AddSlice()` registers referenced filters as scoped services, and `[Filter<T>]` applies them in declaration order. DataAnnotations validation runs before feature filters. For rules that need code, attach `SliceValidatorFilter<TRequest>` and register an `ISliceValidator<TRequest>` manually in DI.
+`AddSlice()` registers referenced filters and matching validators as scoped services, and `[Filter<T>]` applies filters in declaration order. DataAnnotations validation runs first; closed `ISliceValidator<TRequest>` implementations are discovered when `TRequest` is a Slice request parameter and run automatically before feature filters for rules that need code. A request type can have one Slice validator; orphan validators fail the build so validation is never skipped silently.
 
 Read more:
 
@@ -161,7 +161,7 @@ The source generator classifies each feature endpoint at build time. `slice rout
 | Class | Meaning |
 | --- | --- |
 | `portable` | Returns a plain record or void. Eligible for typed-client generation, WASI dispatch, and per-feature Lambda. |
-| `partial` | Portable handler shape, but attached non-validator filters are ASP.NET-only today. |
+| `partial` | Portable handler shape, but attached endpoint filters are ASP.NET-only today. |
 | `aspnet-only` | Returns `IResult` or uses ASP.NET-specific behavior. The full Minimal API feature set is available. |
 
 Mixing all three classes in the same project is the expected pattern. `aspnet-only` features are standard Minimal API endpoints with the complete ASP.NET ecosystem available — they are not penalized or degraded. The classification tells tooling where a feature can run, not whether it is well-written.

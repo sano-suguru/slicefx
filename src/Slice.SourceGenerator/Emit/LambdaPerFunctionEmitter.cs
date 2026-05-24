@@ -8,6 +8,8 @@ internal static class LambdaPerFunctionEmitter
     public static (string Source, ImmutableArray<EquatableDiagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
         string assemblyName,
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<ReferencedSliceModule> referencedModules,
         JsonContextPlan jsonContextPlan,
         string? startupTypeFqn)
     {
@@ -32,7 +34,7 @@ internal static class LambdaPerFunctionEmitter
         sb.AppendLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
         sb.AppendLine($"public static class {className}");
         sb.AppendLine("{");
-        EmitServiceProvider(sb, startupTypeFqn);
+        EmitServiceProvider(sb, assemblyName, referencedModules, startupTypeFqn);
         var lambdaJsonContextFqn = jsonContextPlan.ContextFqn;
         if (lambdaJsonContextFqn is not null)
         {
@@ -42,7 +44,7 @@ internal static class LambdaPerFunctionEmitter
 
         foreach (var feature in features)
         {
-            EmitFeatureHandler(sb, feature, jsonContextPlan, diagnostics);
+            EmitFeatureHandler(sb, feature, validators, jsonContextPlan, diagnostics);
         }
 
         EmitValidationHelpers(sb, features);
@@ -51,8 +53,13 @@ internal static class LambdaPerFunctionEmitter
         return (sb.ToString(), diagnostics.ToImmutable());
     }
 
-    private static void EmitServiceProvider(StringBuilder sb, string? startupTypeFqn)
+    private static void EmitServiceProvider(
+        StringBuilder sb,
+        string assemblyName,
+        ImmutableArray<ReferencedSliceModule> referencedModules,
+        string? startupTypeFqn)
     {
+        var registrationClassName = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceRegistrations");
         sb.AppendLine("    private static readonly global::System.Lazy<global::Microsoft.Extensions.DependencyInjection.ServiceProvider> s_services = new(");
         sb.AppendLine("        static () => global::Slice.Lambda.PerFunction.LambdaServiceProvider.Build(static services =>");
         sb.AppendLine("        {");
@@ -60,12 +67,21 @@ internal static class LambdaPerFunctionEmitter
         {
             sb.AppendLine($"            new {startupTypeFqn}().ConfigureServices(services);");
         }
+        sb.AppendLine($"            global::Slice.{registrationClassName}.AddSliceValidatorServices(services);");
+        foreach (var module in referencedModules)
+        {
+            if (module.HasValidatorServices)
+            {
+                sb.AppendLine($"            {module.RegistrationTypeFqn}.AddSliceValidatorServices(services);");
+            }
+        }
         sb.AppendLine("        }));");
     }
 
     private static void EmitFeatureHandler(
         StringBuilder sb,
         FeatureModel feature,
+        ImmutableArray<ValidatorModel> validators,
         JsonContextPlan jsonContextPlan,
         ImmutableArray<EquatableDiagnostic>.Builder diagnostics)
     {
@@ -90,8 +106,6 @@ internal static class LambdaPerFunctionEmitter
         var bodyParam = FindBodyParam(feature, @params);
         var awaitedReturnType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
 
-        var filterFqns = feature.GetFilterFqns();
-        var validatorTypeFqn = FindSliceValidatorType(filterFqns, bodyParam?.TypeFqn);
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>Handles {CSharpXmlText(feature.HttpMethod + " " + feature.Pattern)} for {CSharpXmlText(feature.EndpointName)}.</summary>");
         sb.AppendLine($"    public static async global::System.Threading.Tasks.Task<global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyResponse> {HandlerMethodName(feature)}(");
@@ -121,11 +135,14 @@ internal static class LambdaPerFunctionEmitter
                 sb.AppendLine("        if (__daErrors is not null) return global::Slice.Lambda.PerFunction.LambdaResponseFactory.ValidationProblem(__daErrors);");
             }
 
-            if (validatorTypeFqn is not null)
+            if (HasValidatorForParameter(bodyParam, validators))
             {
-                sb.AppendLine($"        var __validator = __scope.ServiceProvider.GetRequiredService<global::Slice.ISliceValidator<{bodyParam.TypeFqn}>>();");
-                sb.AppendLine($"        var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken).ConfigureAwait(false);");
-                sb.AppendLine("        if (!__vr.IsValid) return global::Slice.Lambda.PerFunction.LambdaResponseFactory.ValidationProblem(__vr.Errors!);");
+                sb.AppendLine($"        var __validator = __scope.ServiceProvider.GetService<global::Slice.ISliceValidator<{bodyParam.TypeFqn}>>();");
+                sb.AppendLine("        if (__validator is not null)");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken).ConfigureAwait(false);");
+                sb.AppendLine("            if (!__vr.IsValid) return global::Slice.Lambda.PerFunction.LambdaResponseFactory.ValidationProblem(__vr.Errors!);");
+                sb.AppendLine("        }");
             }
         }
 
@@ -189,12 +206,9 @@ internal static class LambdaPerFunctionEmitter
             return new LambdaSkipReason("SLICE012", "returns ASP.NET IResult");
         }
 
-        foreach (var filter in feature.GetFilterFqns())
+        if (!feature.GetFilterFqns().IsEmpty)
         {
-            if (!IsSliceValidatorFilter(filter))
-            {
-                return new LambdaSkipReason("SLICE013", "non-validator endpoint filters require the ASP.NET endpoint filter pipeline");
-            }
+            return new LambdaSkipReason("SLICE013", "endpoint filters require the ASP.NET endpoint filter pipeline");
         }
 
         if (feature.RequiresReflectionValidation)
@@ -425,28 +439,10 @@ internal static class LambdaPerFunctionEmitter
         return null;
     }
 
-    private static string? FindSliceValidatorType(ImmutableArray<string> filterFqns, string? bodyTypeFqn)
-    {
-        if (bodyTypeFqn is null)
-        {
-            return null;
-        }
-
-        foreach (var fqn in filterFqns)
-        {
-            if (fqn.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal))
-            {
-                return fqn;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsSliceValidatorFilter(string filter)
-        => filter.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal)
-           || filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal)
-           || filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal);
+    private static bool HasValidatorForParameter(
+        HandleParamModel parameter,
+        ImmutableArray<ValidatorModel> validators)
+        => validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn);
 
     private enum ParamSource { Route, Query, DI }
 

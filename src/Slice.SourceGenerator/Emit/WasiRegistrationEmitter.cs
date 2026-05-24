@@ -9,6 +9,7 @@ internal static class WasiRegistrationEmitter
     /// Emits Slice WASI registration source for the specified feature models.
     /// </summary>
     /// <param name="features">The feature models to include in generated registrations.</param>
+    /// <param name="validators">The validator models to include in generated service registrations.</param>
     /// <param name="assemblyName">The target assembly name used to form the generated class name.</param>
     /// <param name="jsonContextPlan">The JSON source-generation context plan for WASI dispatch.</param>
     /// <param name="referencedModules">The referenced Slice modules to aggregate from user-facing extension methods.</param>
@@ -16,6 +17,7 @@ internal static class WasiRegistrationEmitter
     /// <returns>The generated C# source and any diagnostics produced while emitting it.</returns>
     public static (string Source, ImmutableArray<EquatableDiagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
+        ImmutableArray<ValidatorModel> validators,
         string assemblyName,
         JsonContextPlan jsonContextPlan,
         ImmutableArray<ReferencedSliceModule> referencedModules,
@@ -32,7 +34,7 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("using global::Slice.Wasi.Binding;");
         sb.AppendLine("using global::Slice.Wasi.Routing;");
         sb.AppendLine("using global::Slice.Wasi.Validation;");
-        if (!features.IsEmpty)
+        if (!features.IsEmpty || !validators.IsEmpty)
         {
             sb.AppendLine();
             sb.AppendLine($"[assembly: global::Slice.SliceFeatureModuleAttribute(typeof(global::Slice.{className}))]");
@@ -57,6 +59,7 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("    public static global::Slice.Wasi.WasiHostBuilder AddSliceWasiRoutes(");
         sb.AppendLine("        global::Slice.Wasi.WasiHostBuilder builder)");
         sb.AppendLine("    {");
+        EmitWasiServiceRegistrations(sb, validators);
         sb.AppendLine("        builder.AddRoutes(RegisterWasiRoutes);");
         sb.AppendLine("        return builder;");
         sb.AppendLine("    }");
@@ -134,7 +137,7 @@ internal static class WasiRegistrationEmitter
             }
 
             sb.AppendLine($"        // {ToSingleLineComment(f.EndpointName)}");
-            EmitTableAdd(sb, f, wasiJsonContextFqn);
+            EmitTableAdd(sb, f, validators, wasiJsonContextFqn);
             sb.AppendLine();
         }
 
@@ -160,14 +163,23 @@ internal static class WasiRegistrationEmitter
         return null;
     }
 
-    private static void EmitTableAdd(StringBuilder sb, FeatureModel f, string? wasiJsonContextFqn)
+    private static void EmitWasiServiceRegistrations(StringBuilder sb, ImmutableArray<ValidatorModel> validators)
+    {
+        foreach (var validator in validators)
+        {
+            sb.AppendLine($"        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<global::Slice.ISliceValidator<{validator.RequestTypeFqn}>, {validator.ImplementationTypeFqn}>(builder.Services);");
+        }
+    }
+
+    private static void EmitTableAdd(
+        StringBuilder sb,
+        FeatureModel f,
+        ImmutableArray<ValidatorModel> validators,
+        string? wasiJsonContextFqn)
     {
         var @params = f.GetParams();
-        var filterFqns = f.GetFilterFqns();
 
         var bodyParam = FindBodyParam(f, @params);
-        // Find SliceValidatorFilter<T>
-        var validatorTypeFqn = FindSliceValidatorType(filterFqns, bodyParam?.TypeFqn);
 
         sb.AppendLine($"        table.Add(");
         sb.AppendLine($"            {Str(f.HttpMethod)},");
@@ -198,11 +210,14 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine($"                    if (__daErrors is not null) return global::Slice.Wasi.SliceResult.ValidationProblem(__daErrors);");
             }
 
-            if (validatorTypeFqn is not null)
+            if (HasValidatorForParameter(bodyParam, validators))
             {
-                sb.AppendLine($"                    var __validator = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Slice.ISliceValidator<{bodyParam.TypeFqn}>>(ctx.Services);");
-                sb.AppendLine($"                    var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken);");
-                sb.AppendLine($"                    if (!__vr.IsValid) return global::Slice.Wasi.SliceResult.ValidationProblem(__vr.Errors!);");
+                sb.AppendLine($"                    var __validator = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::Slice.ISliceValidator<{bodyParam.TypeFqn}>>(ctx.Services);");
+                sb.AppendLine("                    if (__validator is not null)");
+                sb.AppendLine("                    {");
+                sb.AppendLine($"                        var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken);");
+                sb.AppendLine($"                        if (!__vr.IsValid) return global::Slice.Wasi.SliceResult.ValidationProblem(__vr.Errors!);");
+                sb.AppendLine("                    }");
             }
         }
 
@@ -463,25 +478,13 @@ internal static class WasiRegistrationEmitter
         return null;
     }
 
+    private static bool HasValidatorForParameter(
+        HandleParamModel parameter,
+        ImmutableArray<ValidatorModel> validators)
+        => validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn);
+
     private static bool IsWasiResponseType(string? typeFqn)
         => typeFqn == "global::Slice.Wasi.WasiResponse";
-
-    private static string? FindSliceValidatorType(ImmutableArray<string> filterFqns, string? bodyTypeFqn)
-    {
-        if (bodyTypeFqn is null)
-        {
-            return null;
-        }
-
-        foreach (var fqn in filterFqns)
-        {
-            if (fqn.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal))
-            {
-                return fqn;
-            }
-        }
-        return null;
-    }
 
     private enum ParamSource { Route, Query, DI }
 

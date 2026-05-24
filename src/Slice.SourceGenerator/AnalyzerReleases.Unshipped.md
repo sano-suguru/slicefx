@@ -20,3 +20,6 @@ SLICE016 | Slice | Warning | UnsupportedValidationForLambdaPerFeature
 SLICE017 | Slice | Error | InvalidLambdaPerFeatureStartupType
 SLICE018 | Slice | Error | DuplicateJsonContextOverride
 SLICE019 | Slice | Error | InvalidJsonContextOverride
+SLICE020 | Slice | Error | InvalidSliceValidator
+SLICE021 | Slice | Error | DuplicateSliceValidator
+SLICE022 | Slice | Error | UnmatchedSliceValidator

@@ -69,6 +69,316 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_auto_registers_and_runs_slice_validators_before_user_filters()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace ValidatorApp.Features.Users;
+
+            [Feature("POST /users")]
+            [Filter<AuditFilter>]
+            public static class CreateUser
+            {
+                public sealed record Request(string Name);
+
+                public sealed record Response(string Name);
+
+                public static Response Handle(Request req) => new(req.Name);
+            }
+
+            public sealed class CreateUserValidator : ISliceValidator<CreateUser.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+
+            public sealed class AuditFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("TryAddScoped<global::Slice.ISliceValidator<global::ValidatorApp.Features.Users.CreateUser.Request>, global::ValidatorApp.Features.Users.CreateUserValidator>(services)", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("GetService<global::Slice.ISliceValidator<global::ValidatorApp.Features.Users.CreateUser.Request>>(invocationContext.HttpContext.RequestServices)", generatedSource, StringComparison.Ordinal);
+
+        var dataAnnotationsIndex = generatedSource.IndexOf("DataAnnotationsValidationFilter.CreateFilterFactory", StringComparison.Ordinal);
+        var validatorIndex = generatedSource.IndexOf("__CreateSliceValidatorFactory_global__ValidatorApp_Features_Users_CreateUser", StringComparison.Ordinal);
+        var userFilterIndex = generatedSource.IndexOf(".AddEndpointFilter<global::ValidatorApp.Features.Users.AuditFilter>()", StringComparison.Ordinal);
+        Assert.True(dataAnnotationsIndex >= 0 && dataAnnotationsIndex < validatorIndex);
+        Assert.True(validatorIndex < userFilterIndex);
+    }
+
+    [Fact]
+    public void Generator_discovers_slice_validators_through_aliases_and_derived_interfaces()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+            using AliasValidator = Slice.ISliceValidator<ValidatorAliasApp.Features.Users.CreateUser.Request>;
+
+            namespace ValidatorAliasApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed class AliasCreateUserValidator : AliasValidator
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+
+            public interface IDerivedCreateUserValidator : ISliceValidator<CreateUser.Request>
+            {
+            }
+
+            public sealed class DerivedCreateUserValidator : IDerivedCreateUserValidator
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+
+            public abstract class ValidatorBase<T> : ISliceValidator<T>
+                where T : class
+            {
+                public abstract ValueTask<SliceValidationResult> ValidateAsync(T value, CancellationToken ct);
+            }
+
+            public sealed class BaseCreateUserValidator : ValidatorBase<CreateUser.Request>
+            {
+                public override ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorAliasApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE021");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE020");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE022");
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE022_for_unmatched_slice_validators()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace ValidatorDiagnosticsApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed record OtherRequest(string Name);
+
+            public sealed class OtherRequestValidator : ISliceValidator<OtherRequest>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(OtherRequest value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE022"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("OtherRequestValidator", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_does_not_emit_validator_filter_when_request_has_no_validator()
+    {
+        var source = """
+            using Slice;
+
+            namespace ValidatorNoopApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorNoopApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain("__CreateSliceValidatorFactory_", generatedSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetService<global::Slice.ISliceValidator<global::ValidatorNoopApp.Features.Users.CreateUser.Request>>", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_checks_validator_service_type_not_request_dto_type()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace ValidatorGateApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed class CreateUserValidator : ISliceValidator<CreateUser.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorGateApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("IsService(typeof(global::Slice.ISliceValidator<T>))", generatedSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsService(typeof(T))", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE020_for_open_generic_slice_validators()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace ValidatorDiagnosticsApp;
+
+            public sealed class GenericValidator<T> : ISliceValidator<T>
+                where T : class
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(T value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE020"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("open generic", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE020_for_invalid_slice_validator_request_type()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace ValidatorDiagnosticsApp;
+
+            public sealed class IntValidator : ISliceValidator<int>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(int value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE020"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("not a supported Slice request type", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE021_for_duplicate_slice_validators_in_one_assembly()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace ValidatorDiagnosticsApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed class FirstValidator : ISliceValidator<CreateUser.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+
+            public sealed class SecondValidator : ISliceValidator<CreateUser.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE021"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("CreateUser.Request", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_emits_empty_host_registrations_and_manifest_when_no_features_exist()
     {
         var source = """
@@ -268,6 +578,7 @@ public class SourceGeneratorCompileTests
         Assert.Contains("Name length is invalid.", wasiSource, StringComparison.Ordinal);
         Assert.Contains("At least two items are required.", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("WasiValidationRunner.Validate", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ISliceValidator<global::WasiValidationApp.Features.Items.CreateItem.Request>", wasiSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -346,9 +657,12 @@ public class SourceGeneratorCompileTests
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("public static class LambdaApp_SliceLambdaPerFunctionHandlers", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("global::Slice.LambdaApp_SliceRegistrations.AddSliceValidatorServices(services);", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddSliceServices(services);", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("Users_GetUser", lambdaSource, StringComparison.Ordinal);
         Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var id)", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("global::System.Text.Json.JsonException or global::System.FormatException", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("ISliceValidator<global::LambdaApp.Features.Users.CreateUser.Request>", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("GetRequiredService<global::LambdaApp.Clock>()", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("LambdaResponseFactory.Ok<global::LambdaApp.Features.Users.GetUser.Response>", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("\"LambdaApp\"", manifestSource, StringComparison.Ordinal);
@@ -394,6 +708,8 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using System;
+            using System.Threading;
+            using System.Threading.Tasks;
             using System.Text.Json;
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
@@ -504,6 +820,8 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using System;
+            using System.Threading;
+            using System.Threading.Tasks;
             using System.Text.Json;
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
@@ -624,10 +942,12 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_resolves_wasi_slice_validators_as_required_services()
+    public void Generator_auto_registers_and_resolves_wasi_slice_validators()
     {
         var source = """
             using System;
+            using System.Threading;
+            using System.Threading.Tasks;
             using System.Text.Json;
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
@@ -654,7 +974,6 @@ public class SourceGeneratorCompileTests
             namespace WasiValidatorApp.Features.Items
             {
                 [Feature("POST /items")]
-                [Filter<SliceValidatorFilter<Request>>]
                 public static class CreateItem
                 {
                     public sealed record Request(string Name);
@@ -663,6 +982,12 @@ public class SourceGeneratorCompileTests
 
                     public static Response Handle(Request req) => new(req.Name);
                 }
+
+                public sealed class CreateItemValidator : ISliceValidator<CreateItem.Request>
+                {
+                    public ValueTask<SliceValidationResult> ValidateAsync(CreateItem.Request value, CancellationToken ct)
+                        => ValueTask.FromResult(SliceValidationResult.Success);
+                }
             }
             """;
 
@@ -670,11 +995,14 @@ public class SourceGeneratorCompileTests
         GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var registrationSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Contains("ServiceProviderServiceExtensions.GetRequiredService<global::Slice.ISliceValidator<global::WasiValidatorApp.Features.Items.CreateItem.Request>>(ctx.Services)", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("TryAddScoped<global::Slice.ISliceValidator<global::WasiValidatorApp.Features.Items.CreateItem.Request>, global::WasiValidatorApp.Features.Items.CreateItemValidator>(services)", registrationSource, StringComparison.Ordinal);
+        Assert.Contains("ServiceProviderServiceExtensions.GetService<global::Slice.ISliceValidator<global::WasiValidatorApp.Features.Items.CreateItem.Request>>(ctx.Services)", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetRequiredService<global::Slice.ISliceValidator", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("GetService(typeof(global::Slice.ISliceValidator", wasiSource, StringComparison.Ordinal);
     }
 
@@ -894,6 +1222,72 @@ public class SourceGeneratorCompileTests
             && diagnostic.Severity == DiagnosticSeverity.Error
             && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
                 .Contains("FeatureLib", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Generator_reports_duplicate_validators_from_referenced_feature_assemblies()
+    {
+        var featureSource = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace FeatureLib.Features.Products;
+
+            [Feature("POST /products")]
+            public static class CreateProduct
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed class CreateProductValidator : ISliceValidator<CreateProduct.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateProduct.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+
+        using var featureAssembly = CompileGeneratedAssembly("FeatureLib", featureSource);
+
+        var hostSource = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Builder;
+            using Slice;
+
+            namespace HostApp;
+
+            public sealed class HostCreateProductValidator : ISliceValidator<FeatureLib.Features.Products.CreateProduct.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(FeatureLib.Features.Products.CreateProduct.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+
+            public static class Startup
+            {
+                public static void Configure()
+                {
+                    var builder = WebApplication.CreateSlimBuilder();
+                    builder.Services.AddSlice();
+                    using var app = builder.Build();
+                    app.MapSlices();
+                }
+            }
+            """;
+
+        var hostCompilation = CreateHostCompilation(
+            "HostApp",
+            hostSource,
+            extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE021"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("CreateProduct.Request", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
     [Fact]

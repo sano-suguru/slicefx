@@ -112,7 +112,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor UnsupportedValidationForWasi = new(
         "SLICE011",
         "DataAnnotations validation is not supported in WASI path",
-        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the WASI route table. Use supported validation attributes or SliceValidatorFilter<T>.",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the WASI route table. Use supported validation attributes or ISliceValidator<T>.",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -134,7 +134,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor UnsupportedFilterForLambdaPerFeature = new(
         "SLICE013",
         "Endpoint filter not supported in Lambda per-feature path",
-        "Feature '{0}' uses non-validator endpoint filters and will be excluded from Lambda per-feature handlers",
+        "Feature '{0}' uses endpoint filters and will be excluded from Lambda per-feature handlers",
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
@@ -167,7 +167,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor UnsupportedValidationForLambdaPerFeature = new(
         "SLICE016",
         "DataAnnotations validation is not supported in Lambda per-feature path",
-        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda per-feature handlers. Use supported validation attributes or SliceValidatorFilter<T>.",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda per-feature handlers. Use supported validation attributes or ISliceValidator<T>.",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -201,6 +201,39 @@ internal static class SliceDiagnostics
         "SLICE019",
         "Invalid Slice JSON context override",
         "Slice JSON context override '{0}' must derive from System.Text.Json.Serialization.JsonSerializerContext",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when an ISliceValidator&lt;T&gt; implementation cannot be generated safely.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidSliceValidator = new(
+        "SLICE020",
+        "Invalid Slice validator",
+        "Slice validator '{0}' is invalid: {1}",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when one assembly contains multiple validators for the same request type.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicateSliceValidator = new(
+        "SLICE021",
+        "Duplicate Slice validator",
+        "Request type '{0}' has multiple ISliceValidator<T> implementations across generated Slice modules: '{1}' and '{2}'. Use a single validator or combine the rules in one validator.",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when an ISliceValidator&lt;T&gt; implementation does not match a discovered Slice request parameter.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnmatchedSliceValidator = new(
+        "SLICE022",
+        "Slice validator does not match a Slice request",
+        "Slice validator '{0}' targets '{1}', but no discovered Slice feature uses that type as a request parameter",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

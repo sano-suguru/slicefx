@@ -252,13 +252,8 @@ internal static partial class RouteCatalog
             return (PortabilityAspNetOnly, "returns ASP.NET IResult");
         }
 
-        var hasAspNetFilter = filters.Any(static filter =>
-            !filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal) &&
-            !filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal) &&
-            !filter.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal));
-
-        return hasAspNetFilter
-            ? (PortabilityPartial, "non-validator endpoint filters do not run in the WASI path")
+        return filters.Length > 0
+            ? (PortabilityPartial, "endpoint filters do not run in the WASI path")
             : (PortabilityPortable, null);
     }
 
@@ -278,9 +273,9 @@ internal static partial class RouteCatalog
             return new RouteCapability(LambdaIneligible, "returns ASP.NET IResult");
         }
 
-        if (filters.Any(static filter => !IsSliceValidatorFilter(filter)))
+        if (filters.Length > 0)
         {
-            return new RouteCapability(LambdaIneligible, "non-validator endpoint filters require the ASP.NET endpoint filter pipeline");
+            return new RouteCapability(LambdaIneligible, "endpoint filters require the ASP.NET endpoint filter pipeline");
         }
 
         foreach (var parameter in parameters)
@@ -303,12 +298,6 @@ internal static partial class RouteCatalog
 
         return new RouteCapability(LambdaEligible, null);
     }
-
-    private static bool IsSliceValidatorFilter(string filter)
-        => (filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal) &&
-            filter.EndsWith('>'))
-           || filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal)
-           || filter.StartsWith("global::Slice.SliceValidatorFilter<", StringComparison.Ordinal);
 
     private static bool IsSimpleType(string type)
         => s_simpleTypes.Contains(type)

@@ -39,6 +39,23 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (r, _) => r.Model!)
             .Collect();
 
+        var validators = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: static (node, _) => IsValidatorCandidate(node),
+                transform: TransformValidator)
+            .WithTrackingName("SliceValidatorModels");
+
+        var validatorDiagnostics = validators
+            .Where(static r => r.Diagnostic is not null)
+            .Select(static (r, _) => r.Diagnostic!.Value);
+
+        context.RegisterSourceOutput(validatorDiagnostics, static (spc, d) => spc.ReportDiagnostic(d.ToDiagnostic()));
+
+        var validValidators = validators
+            .Where(static r => r.Model is not null)
+            .Select(static (r, _) => r.Model!)
+            .Collect();
+
         var assemblyName = context.CompilationProvider
             .Select(static (c, _) => c.AssemblyName ?? "Unknown");
 
@@ -101,7 +118,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     : new JsonContextPlan(JsonContextTarget.LambdaPerFeature, null, [], []))
             .WithTrackingName("SliceLambdaJsonContextPlan");
 
-        var emitPlan = validModels.Combine(assemblyName)
+        var emitPlan = validModels.Combine(validValidators)
+            .Combine(assemblyName)
             .Combine(hasAspNetRef)
             .Combine(hasWasiRef)
             .Combine(referencedModules)
@@ -119,10 +137,12 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 var (referencedModulesPair, emitExtensions) = emitExtensionsPair;
                 var (emitWasiPair, referencedModules) = referencedModulesPair;
                 var (emitAspNetPair, emitWasi) = emitWasiPair;
-                var (modelsPair, emitAspNet) = emitAspNetPair;
-                var (models, asmName) = modelsPair;
+                var (modelsAndValidatorsPair, emitAspNet) = emitAspNetPair;
+                var (modelsAndValidators, asmName) = modelsAndValidatorsPair;
+                var (models, validators) = modelsAndValidators;
                 return CreateEmitPlan(
                     models,
+                    validators,
                     asmName,
                     emitAspNet,
                     emitWasi,
@@ -155,6 +175,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
     private static EmitPlan CreateEmitPlan(
         ImmutableArray<FeatureModel> models,
+        ImmutableArray<ValidatorModel> validators,
         string asmName,
         bool emitAspNet,
         bool emitWasi,
@@ -166,6 +187,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         JsonContextPlan lambdaJsonContextPlan)
     {
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        var requestTypeFqns = FindSliceRequestTypeFqns(models, referencedModules);
+        var matchedValidators = MatchValidators(validators, requestTypeFqns);
+
         var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
         diagnostics.AddRange(duplicateDiagnostics);
         if (!duplicateDiagnostics.IsEmpty)
@@ -174,6 +198,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
 
         diagnostics.AddRange(FindFilterOrderDiagnostics(models));
+        diagnostics.AddRange(FindUnmatchedValidatorDiagnostics(validators, requestTypeFqns));
+        diagnostics.AddRange(FindDuplicateValidatorDiagnostics(matchedValidators, referencedModules));
         diagnostics.AddRange(lambdaOptions.Diagnostics);
         diagnostics.AddRange(jsonContextOverrides.Diagnostics);
         diagnostics.AddRange(wasiJsonContextPlan.Diagnostics);
@@ -184,6 +210,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             $"{asmName}.SliceRouteManifest.g.cs",
             RouteManifestEmitter.Emit(
                 models,
+                matchedValidators,
                 asmName,
                 lambdaOptions.Enabled,
                 wasiJsonContextPlan,
@@ -193,7 +220,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         {
             sources.Add(new GeneratedSource(
                 $"{asmName}.SliceRegistrations.g.cs",
-                RegistrationEmitter.Emit(models, asmName, referencedModules, emitExtensions)));
+                RegistrationEmitter.Emit(models, matchedValidators, asmName, referencedModules, emitExtensions)));
         }
 
         if (lambdaOptions.Enabled)
@@ -201,6 +228,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             var (lambdaSource, lambdaDiagnostics) = LambdaPerFunctionEmitter.Emit(
                 models,
                 asmName,
+                matchedValidators,
+                referencedModules,
                 lambdaJsonContextPlan,
                 lambdaOptions.StartupTypeFqn);
             diagnostics.AddRange(lambdaDiagnostics);
@@ -213,6 +242,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         {
             var (wasiSource, wasiDiagnostics) = WasiRegistrationEmitter.Emit(
                 models,
+                matchedValidators,
                 asmName,
                 wasiJsonContextPlan,
                 referencedModules,
@@ -343,6 +373,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
 
             var routes = FindReferencedSliceRoutes(compilation, assembly);
+            var validators = FindReferencedSliceValidators(compilation, assembly);
             foreach (var attribute in assembly.GetAttributes())
             {
                 if (!IsAttribute(attribute.AttributeClass, moduleAttribute, "Slice.SliceFeatureModuleAttribute")
@@ -356,13 +387,45 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     assembly.Identity.Name,
                     registrationType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     routes,
+                    validators,
                     HasPublicStaticMethod(registrationType, "AddSliceServices"),
+                    HasPublicStaticMethod(registrationType, "AddSliceValidatorServices"),
                     HasPublicStaticMethod(registrationType, "MapSliceRoutes"),
                     HasPublicStaticMethod(registrationType, "AddSliceWasiRoutes")
                         && HasPublicStaticMethod(registrationType, "RegisterWasiRoutes"));
 
                 builder.Add(module);
             }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static ImmutableArray<ReferencedSliceValidator> FindReferencedSliceValidators(
+        Compilation compilation,
+        IAssemblySymbol assembly)
+    {
+        var validatorAttribute = compilation.GetTypeByMetadataName("Slice.SliceFeatureValidatorAttribute");
+        if (validatorAttribute is null)
+        {
+            return [];
+        }
+
+        var builder = ImmutableArray.CreateBuilder<ReferencedSliceValidator>();
+        foreach (var attribute in assembly.GetAttributes())
+        {
+            if (!IsAttribute(attribute.AttributeClass, validatorAttribute, "Slice.SliceFeatureValidatorAttribute")
+                || attribute.ConstructorArguments.Length != 2
+                || attribute.ConstructorArguments[0].Value is not string requestType
+                || attribute.ConstructorArguments[1].Value is not string validatorType)
+            {
+                continue;
+            }
+
+            builder.Add(new ReferencedSliceValidator(
+                assembly.Identity.Name,
+                requestType,
+                validatorType));
         }
 
         return builder.ToImmutable();
@@ -425,12 +488,16 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 continue;
             }
 
+            var requestType = attribute.ConstructorArguments.Length > 6
+                ? attribute.ConstructorArguments[6].Value as string
+                : null;
             builder.Add(new ReferencedSliceRoute(
                 assembly.Identity.Name,
                 endpointName,
                 featureType,
                 httpMethod,
-                pattern));
+                pattern,
+                requestType is null ? null : NormalizeTypeFqn(requestType)));
         }
 
         return builder.ToImmutable();
@@ -450,6 +517,113 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
     // ---------------------------------------------------------------------------
     // Transform
     // ---------------------------------------------------------------------------
+
+    private static bool IsValidatorCandidate(SyntaxNode node)
+        => node is TypeDeclarationSyntax { BaseList: not null };
+
+    private static ValidatorResult TransformValidator(GeneratorSyntaxContext ctx, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        if (ctx.Node is not TypeDeclarationSyntax
+            || ctx.SemanticModel.GetDeclaredSymbol(ctx.Node, ct) is not INamedTypeSymbol validatorType)
+        {
+            return default;
+        }
+
+        var validatorInterface = ctx.SemanticModel.Compilation.GetTypeByMetadataName("Slice.ISliceValidator`1");
+        if (validatorInterface is null)
+        {
+            return default;
+        }
+
+        var interfaces = validatorType.AllInterfaces
+            .Where(i => SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, validatorInterface))
+            .ToArray();
+        if (interfaces.Length == 0)
+        {
+            return default;
+        }
+
+        var location = CreateDiagnosticLocation(validatorType.Locations.Length > 0 ? validatorType.Locations[0] : null);
+        var validatorName = validatorType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        if (validatorType.TypeKind != TypeKind.Class || validatorType.IsAbstract)
+        {
+            return default;
+        }
+
+        if (validatorType.IsGenericType)
+        {
+            return ValidatorResult.Error(EquatableDiagnostic.Create(
+                SliceDiagnostics.InvalidSliceValidator,
+                location,
+                validatorName,
+                "open generic validator implementations are not supported"));
+        }
+
+        if (interfaces.Length > 1)
+        {
+            return ValidatorResult.Error(EquatableDiagnostic.Create(
+                SliceDiagnostics.InvalidSliceValidator,
+                location,
+                validatorName,
+                "a validator implementation must target exactly one request type"));
+        }
+
+        if (!IsAccessibleFromGeneratedCode(validatorType))
+        {
+            return ValidatorResult.Error(EquatableDiagnostic.Create(
+                SliceDiagnostics.InvalidSliceValidator,
+                location,
+                validatorName,
+                "validator implementations must be accessible from generated code"));
+        }
+
+        var requestType = interfaces[0].TypeArguments[0];
+        var requestTypeFqn = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (!IsValidValidatorRequestType(requestType, requestTypeFqn))
+        {
+            return ValidatorResult.Error(EquatableDiagnostic.Create(
+                SliceDiagnostics.InvalidSliceValidator,
+                location,
+                validatorName,
+                $"request type '{SourceGenerationHelpers.TrimGlobalAlias(requestTypeFqn)}' is not a supported Slice request type"));
+        }
+
+        return new ValidatorResult(
+            new ValidatorModel(
+                validatorName,
+                requestTypeFqn,
+                location.FilePath,
+                location.SourceStart,
+                location.SourceLength,
+                location.StartLine,
+                location.StartCharacter,
+                location.EndLine,
+                location.EndCharacter),
+            null);
+    }
+
+    private static bool IsValidValidatorRequestType(ITypeSymbol requestType, string requestTypeFqn)
+        => requestType.IsReferenceType
+           && requestType.TypeKind != TypeKind.Interface
+           && requestType.TypeKind != TypeKind.Delegate
+           && !SourceGenerationHelpers.IsSimpleType(requestTypeFqn)
+           && !SourceGenerationHelpers.IsFrameworkType(requestTypeFqn);
+
+    private static bool IsAccessibleFromGeneratedCode(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private static FeatureResult TransformFeature(GeneratorAttributeSyntaxContext ctx, CancellationToken ct)
     {
@@ -982,6 +1156,122 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                         SourceGenerationHelpers.TrimGlobalAlias(hint.AfterFqn)));
                 }
             }
+        }
+
+        return diagnostics.ToImmutable();
+    }
+
+    private static ImmutableArray<string> FindSliceRequestTypeFqns(
+        ImmutableArray<FeatureModel> models,
+        ImmutableArray<ReferencedSliceModule> referencedModules)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var builder = ImmutableArray.CreateBuilder<string>();
+        foreach (var model in models)
+        {
+            foreach (var parameter in model.GetParams())
+            {
+                if (SourceGenerationHelpers.IsRequestLikeParameter(parameter)
+                    && seen.Add(parameter.TypeFqn))
+                {
+                    builder.Add(parameter.TypeFqn);
+                }
+            }
+        }
+
+        foreach (var requestType in referencedModules
+                     .SelectMany(static module => module.Routes)
+                     .Select(static route => route.RequestType)
+                     .Where(static requestType => requestType is not null))
+        {
+            if (seen.Add(requestType!))
+            {
+                builder.Add(requestType!);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static string NormalizeTypeFqn(string typeName)
+        => typeName.StartsWith("global::", StringComparison.Ordinal)
+            ? typeName
+            : "global::" + typeName;
+
+    private static ImmutableArray<ValidatorModel> MatchValidators(
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<string> requestTypeFqns)
+    {
+        var requestTypes = new HashSet<string>(requestTypeFqns, StringComparer.Ordinal);
+        var builder = ImmutableArray.CreateBuilder<ValidatorModel>();
+        foreach (var validator in validators)
+        {
+            if (requestTypes.Contains(validator.RequestTypeFqn))
+            {
+                builder.Add(validator);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    private static ImmutableArray<EquatableDiagnostic> FindUnmatchedValidatorDiagnostics(
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<string> requestTypeFqns)
+    {
+        var requestTypes = new HashSet<string>(requestTypeFqns, StringComparer.Ordinal);
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        foreach (var validator in validators)
+        {
+            if (!requestTypes.Contains(validator.RequestTypeFqn))
+            {
+                diagnostics.Add(EquatableDiagnostic.Create(
+                    SliceDiagnostics.UnmatchedSliceValidator,
+                    validator.GetDiagnosticLocationModel(),
+                    SourceGenerationHelpers.TrimGlobalAlias(validator.ImplementationTypeFqn),
+                    SourceGenerationHelpers.TrimGlobalAlias(validator.RequestTypeFqn)));
+            }
+        }
+
+        return diagnostics.ToImmutable();
+    }
+
+    private static ImmutableArray<EquatableDiagnostic> FindDuplicateValidatorDiagnostics(
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<ReferencedSliceModule> referencedModules)
+    {
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        foreach (var validator in validators)
+        {
+            if (seen.TryGetValue(validator.RequestTypeFqn, out var existing))
+            {
+                diagnostics.Add(EquatableDiagnostic.Create(
+                    SliceDiagnostics.DuplicateSliceValidator,
+                    validator.GetDiagnosticLocationModel(),
+                    SourceGenerationHelpers.TrimGlobalAlias(validator.RequestTypeFqn),
+                    SourceGenerationHelpers.TrimGlobalAlias(existing),
+                    SourceGenerationHelpers.TrimGlobalAlias(validator.ImplementationTypeFqn)));
+                continue;
+            }
+
+            seen.Add(validator.RequestTypeFqn, validator.ImplementationTypeFqn);
+        }
+
+        foreach (var validator in referencedModules.SelectMany(static module => module.Validators))
+        {
+            if (seen.TryGetValue(validator.RequestType, out var existing))
+            {
+                diagnostics.Add(EquatableDiagnostic.Create(
+                    SliceDiagnostics.DuplicateSliceValidator,
+                    DiagnosticLocationModel.None,
+                    SourceGenerationHelpers.TrimGlobalAlias(validator.RequestType),
+                    SourceGenerationHelpers.TrimGlobalAlias(existing),
+                    SourceGenerationHelpers.TrimGlobalAlias(validator.ValidatorType)));
+                continue;
+            }
+
+            seen.Add(validator.RequestType, validator.ValidatorType);
         }
 
         return diagnostics.ToImmutable();

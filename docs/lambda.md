@@ -63,7 +63,7 @@ Supported return shapes:
 Unsupported routes are excluded with generator diagnostics and CLI reasons. Common exclusions include:
 
 - `IResult` return types
-- Non-validator endpoint filters
+- Endpoint filters
 - Reflection-only validation
 - Unsupported route parameter types
 - JSON body or response routes without a marked Lambda per-feature `SliceJsonContext`

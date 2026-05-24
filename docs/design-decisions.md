@@ -51,7 +51,7 @@ The full perf baseline (M1, 200 features, 6.7 ms cold-run) is in [`production-re
 
 Most validation rules (`Required`, `MinLength`, `EmailAddress`) are declarative and read well on a record's primary constructor — DataAnnotations is the right tool. `DataAnnotationsValidationFilter` is attached automatically and runs first.
 
-Cross-field rules, async checks (e.g., uniqueness against a store), or anything that needs DI don't fit attributes cleanly. For those, implement `ISliceValidator<T>` and attach `[Filter<SliceValidatorFilter<TRequest>>]`. The two compose: DataAnnotations runs first, and only on success does the filter chain (including `SliceValidatorFilter<T>`) execute.
+Cross-field rules, async checks (e.g., uniqueness against a store), or anything that needs DI don't fit attributes cleanly. For those, implement one closed `ISliceValidator<TRequest>` where `TRequest` is a discovered Slice request parameter. The generator registers it and runs it automatically after DataAnnotations and before user-declared `[Filter<T>]` filters; unmatched validators are reported as build errors.
 
 Both APIs live in `Slice.Core` and require zero extra NuGet packages.
 
@@ -65,7 +65,7 @@ Instead, filters are scoped services. Configure them through constructor DI by b
 
 WASI exclusions and route-manifest portability use the same vocabulary, but they are checked at different layers:
 
-- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-based DataAnnotations validation (SLICE011) or non-validator endpoint filters prevent full WASI behavior.
+- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-based DataAnnotations validation (SLICE011) or endpoint filters prevent full WASI behavior.
 - **WASI route table emission**: JSON body/response routes additionally need a source-generated `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]` for AOT-safe serialization. Without it, SLICE009 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
 
 The manifest classification is surfaced by `slice routes` and consumed by `slice client csharp`; the WASI source-generator path applies its own route-table eligibility checks using the same portability vocabulary where applicable.
