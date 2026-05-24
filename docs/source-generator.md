@@ -54,7 +54,7 @@ The generator emits route metadata for tooling and deployment experiments, inclu
 - Referenced filter type names
 - Portability status: `portable`, `partial`, or `aspnet-only`
 
-The manifest is string-based so tools can consume route shape without adding dependencies to `Slice.Core`.
+The manifest is string-based so tools can consume route shape without adding dependencies to `Slice.Core`. `slice openapi` uses the manifest as an offline OpenAPI projection for portable tooling; hosted ASP.NET apps should use `Microsoft.AspNetCore.OpenApi` for the authoritative runtime document.
 
 ## Diagnostics
 

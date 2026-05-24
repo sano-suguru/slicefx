@@ -123,10 +123,52 @@ internal static partial class RouteCatalog
             normalized = normalized["this ".Length..];
         }
 
+        var (bindingSource, bindingName, parameterWithoutAttributes) = ReadParameterBinding(normalized);
+        normalized = parameterWithoutAttributes;
         var separator = normalized.LastIndexOf(' ');
         return separator < 0
             ? null
-            : new SliceRouteParameter(normalized[..separator], normalized[(separator + 1)..]);
+            : new SliceRouteParameter(
+                normalized[..separator],
+                normalized[(separator + 1)..],
+                IsNullableTypeName(normalized[..separator]),
+                bindingSource,
+                bindingName);
+    }
+
+    private static (string? Source, string? Name, string Parameter) ReadParameterBinding(string parameter)
+    {
+        string? source = null;
+        string? name = null;
+        while (parameter.StartsWith('['))
+        {
+            var end = parameter.IndexOf(']');
+            if (end < 0)
+            {
+                break;
+            }
+
+            var attribute = parameter[1..end];
+            var attributeName = attribute.Split(['(', ' '], 2)[0];
+            source ??= attributeName switch
+            {
+                "FromQuery" or "FromQueryAttribute" => "query",
+                "FromRoute" or "FromRouteAttribute" => "route",
+                "FromHeader" or "FromHeaderAttribute" => "header",
+                "FromBody" or "FromBodyAttribute" => "body",
+                _ => null,
+            };
+
+            var nameMatch = ParameterBindingNameRegex().Match(attribute);
+            if (nameMatch.Success)
+            {
+                name = UnescapeCSharpString(nameMatch.Groups["name"].Value);
+            }
+
+            parameter = parameter[(end + 1)..].TrimStart();
+        }
+
+        return (source, name, parameter);
     }
 
     private static IEnumerable<string> SplitParameterList(string parameters)
@@ -285,6 +327,9 @@ internal static partial class RouteCatalog
         return s_simpleTypes.Contains(type[nullablePrefix.Length..^1]);
     }
 
+    private static bool IsNullableTypeName(string type)
+        => type.EndsWith('?') || IsNullableType(type);
+
     private static bool IsRouteParam(string name, string pattern)
     {
         for (var i = 0; i < pattern.Length; i++)
@@ -361,6 +406,9 @@ internal static partial class RouteCatalog
 
     [GeneratedRegex(@"\bpublic\s+static\s+(?:async\s+)?(?<return>[A-Za-z0-9_<>,\.\?\s:\[\]]+?)\s+Handle\s*\((?<params>[^)]*)\)")]
     private static partial Regex HandleRegex();
+
+    [GeneratedRegex(@"\bName\s*=\s*""(?<name>(?:\\.|[^""\\])*)""")]
+    private static partial Regex ParameterBindingNameRegex();
 }
 
 internal sealed record SliceRouteInfo(
@@ -397,7 +445,15 @@ internal sealed record SliceRouteInfo(
             : $"{SourceAssemblyName}::{LambdaPerFeatureHandlerType}::{LambdaPerFeatureHandlerMethod}";
 }
 
-internal sealed record SliceRouteParameter(string Type, string Name);
+internal sealed record SliceRouteParameter(
+    string Type,
+    string Name,
+    bool IsNullable = false,
+    string? BindingSource = null,
+    string? BindingName = null)
+{
+    internal string WireName => string.IsNullOrWhiteSpace(BindingName) ? Name : BindingName;
+}
 
 internal sealed record RouteCatalogDiscovery(
     SliceRouteInfo[] Routes,

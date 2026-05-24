@@ -16,6 +16,8 @@ slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
 slice client typescript --output slice-api-client.ts
 
+slice openapi --output openapi.json
+
 slice manifest aws-lambda --output template.yaml
 slice manifest aws-lambda --mode per-feature --output template.yaml
 slice package aws-lambda --mode per-feature --output artifacts/aws-lambda
@@ -65,7 +67,7 @@ The generated class is `public partial class` so it can be extended in a sibling
 
 ## Typed TypeScript client
 
-`slice client typescript` generates a zero-dependency `fetch`-based TypeScript client for portable and partial routes. TypeScript interfaces are emitted for request and response record shapes where property information is available in the built project output.
+`slice client typescript` generates a zero-dependency `fetch`-based TypeScript client for portable and partial routes. TypeScript interfaces are emitted for request and response record shapes where property information is available in the built project output. The schema reader honors common `System.Text.Json` metadata such as `[JsonPropertyName]`, `[JsonIgnore]`, required members, string-enum converters, and binary members represented as base64 strings.
 
 The generated code requires only the global `fetch` API and runs in browsers, Cloudflare Workers, Node.js 18+, and Deno. The generated class accepts a `baseUrl` string and an optional `RequestInit` for default headers or credentials:
 
@@ -77,6 +79,19 @@ const item = await client.items.getItemAsync(42);
 ```
 
 `aspnet-only` routes are excluded from generated TypeScript and C# clients. Use a standard OpenAPI toolchain or a manual ASP.NET-specific client for those endpoints.
+
+## OpenAPI manifest projection
+
+`slice openapi` writes an OpenAPI JSON document from the source-generated route manifest. It is designed for CI, WASI, Lambda per-feature, and other cases where you want a portable contract without starting the ASP.NET host:
+
+```bash
+slice openapi --output openapi.json
+slice openapi --title Slice.Sample --version 1.0.0 --output openapi.json
+```
+
+The document is marked with `x-slice-source: "manifest"`. It projects common `System.Text.Json` metadata, nullable handler parameters, and Minimal API binding names/sources from generated route metadata and build output. For hosted ASP.NET apps, the authoritative OpenAPI document should still come from `Microsoft.AspNetCore.OpenApi` via `builder.Services.AddOpenApi()` and `app.MapOpenApi()`.
+
+By default, `slice openapi` includes `portable` and `partial` routes. `aspnet-only` routes are omitted because the manifest cannot safely infer `IResult` response schemas; omissions are written as warnings and included in `x-slice-omitted`. Pass `--include-aspnet-only` only when you want those operations emitted with incomplete schemas and explicit `x-slice-portability` metadata.
 
 ## AWS Lambda artifacts
 

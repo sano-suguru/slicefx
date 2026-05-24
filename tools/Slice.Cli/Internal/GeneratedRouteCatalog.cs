@@ -386,13 +386,18 @@ internal static class GeneratedRouteCatalog
         var parameters = new List<SliceRouteParameter>();
         foreach (var line in SplitLines(value))
         {
-            var separator = line.LastIndexOf('|');
-            if (separator <= 0 || separator == line.Length - 1)
+            var parts = line.Split('|');
+            if (parts.Length < 2 || parts[0].Length == 0 || parts[1].Length == 0)
             {
                 continue;
             }
 
-            parameters.Add(new SliceRouteParameter(line[..separator], line[(separator + 1)..]));
+            parameters.Add(new SliceRouteParameter(
+                parts[0],
+                parts[1],
+                IsNullable: parts.Length > 2 && parts[2] == "N",
+                BindingSource: parts.Length > 3 && parts[3].Length > 0 ? parts[3] : null,
+                BindingName: parts.Length > 4 && parts[4].Length > 0 ? parts[4] : null));
         }
 
         return [.. parameters];

@@ -9,6 +9,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Slice.Core\Slice.Core.csproj" />
     <ProjectReference Include="..\..\src\Slice.SourceGenerator\Slice.SourceGenerator.csproj"
                       OutputItemType="Analyzer"

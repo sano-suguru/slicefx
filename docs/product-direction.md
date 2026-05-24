@@ -69,6 +69,8 @@ The CLI is the first user-visible surface for this direction:
 slice routes
 slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
+slice client typescript --output slice-api-client.ts
+slice openapi --output openapi.json
 ```
 
 `slice routes` makes portability visible at the slice boundary:
@@ -77,7 +79,9 @@ slice client csharp --output SliceApiClient.g.cs
 - `partial` means the route shape is portable, but some attached behavior such as non-validator endpoint filters is ASP.NET-only today.
 - `aspnet-only` means the route intentionally depends on ASP.NET concepts such as `IResult`.
 
-`slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes: write the server feature once, then let tooling produce the client entrypoint instead of manually maintaining endpoint strings and DTO wiring.
+`slice client csharp` and `slice client typescript` generate typed clients for portable and partial routes: write the server feature once, then let tooling produce the client entrypoint instead of manually maintaining endpoint strings and DTO wiring.
+
+`slice openapi` projects the same manifest into OpenAPI JSON for portable tooling without starting an ASP.NET host. The ASP.NET Core `AddOpenApi` / `MapOpenApi` document remains the authoritative hosted-app document; the CLI output is stamped as a manifest projection and must not invent metadata beyond the manifest.
 
 `slice new wasi-cloudflare` scaffolds Cloudflare Workers deployment glue for the WASI path. The primary WASI sample also deploys natively to Fermyon Cloud / Spin because it emits a standard `wasi:http/incoming-handler` component. Runtime docs should present this as wasi:http portability first, with Cloudflare glue and Spin deployment as target-specific details. Keep the support language precise: `Slice.Wasi` is experimental 0.x API surface, while the upstream WASI build/transpile stack is preview/unstable and can break independently of Slice.
 

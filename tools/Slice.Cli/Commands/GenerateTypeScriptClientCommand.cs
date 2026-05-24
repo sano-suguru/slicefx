@@ -83,37 +83,11 @@ internal static partial class GenerateTypeScriptClientCommand
             Directory.CreateDirectory(outputDir);
         }
 
-        var assemblyFiles = FindAssemblyFiles(ctx);
+        var assemblyFiles = BuildOutputAssemblyFinder.FindAssemblyFiles(ctx);
         var content = RenderClient(className, routes, assemblyFiles);
         await File.WriteAllTextAsync(outputFile, content, ct).ConfigureAwait(false);
         Console.WriteLine($"Generated {outputFile}");
     }
-
-    private static FileInfo[] FindAssemblyFiles(ProjectContext ctx)
-    {
-        var binDir = new DirectoryInfo(Path.Combine(ctx.ProjectDirectory.FullName, "bin"));
-        if (!binDir.Exists)
-        {
-            return [];
-        }
-
-        var primaryAssemblyName = ctx.AssemblyName + ".dll";
-        var primaryAssembly = binDir.EnumerateFiles(primaryAssemblyName, SearchOption.AllDirectories)
-            .Where(static f => !IsReferenceAssemblyPath(f.FullName))
-            .OrderByDescending(static f => f.LastWriteTimeUtc)
-            .FirstOrDefault();
-
-        if (primaryAssembly?.Directory is null)
-        {
-            return [];
-        }
-
-        return [.. primaryAssembly.Directory.EnumerateFiles("*.dll", SearchOption.TopDirectoryOnly)];
-    }
-
-    private static bool IsReferenceAssemblyPath(string path)
-        => path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(static seg => seg is "ref" or "refint");
 
     private static string RenderClient(string className, SliceRouteInfo[] routes, FileInfo[] assemblyFiles)
     {
@@ -167,7 +141,7 @@ internal static partial class GenerateTypeScriptClientCommand
             sb.AppendLine(CultureInfo.InvariantCulture, $"export interface {schema.TsName} {{");
             foreach (var (propName, propType) in schema.Properties)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"  readonly {LowerFirst(propName)}: {propType};");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"  readonly '{EscapeSingleQuotedText(propName)}': {propType};");
             }
 
             sb.AppendLine("}");
@@ -206,6 +180,7 @@ internal static partial class GenerateTypeScriptClientCommand
         var bodyParameter = ClientGenerationHelpers.FindBodyParameter(route);
         var routeParameters = ClientGenerationHelpers.FindRouteParameters(route);
         var queryParameters = ClientGenerationHelpers.FindQueryParameters(route, routeParameters, bodyParameter);
+        var headerParameters = ClientGenerationHelpers.FindHeaderParameters(route);
 
         var methodParams = routeParameters
             .Select(static p => $"{LowerFirst(p.Name)}: {PrimitiveDotNetTypeToTs(p.Type)}")
@@ -213,6 +188,11 @@ internal static partial class GenerateTypeScriptClientCommand
         foreach (var qp in queryParameters)
         {
             methodParams.Add($"{LowerFirst(qp.Name)}: {PrimitiveDotNetTypeToTs(qp.Type)}");
+        }
+
+        foreach (var hp in headerParameters)
+        {
+            methodParams.Add($"{LowerFirst(hp.Name)}: {PrimitiveDotNetTypeToTs(hp.Type)}");
         }
 
         if (bodyParameter is not null)
@@ -241,12 +221,12 @@ internal static partial class GenerateTypeScriptClientCommand
                 if (qp.Type.TrimEnd('?').EndsWith("[]", StringComparison.Ordinal))
                 {
                     sb.AppendLine(CultureInfo.InvariantCulture,
-                        $"    if ({name} != null) for (const v of {name}) params.append('{EscapeSingleQuotedText(qp.Name)}', String(v));");
+                        $"    if ({name} != null) for (const v of {name}) params.append('{EscapeSingleQuotedText(qp.WireName)}', String(v));");
                 }
                 else
                 {
                     sb.AppendLine(CultureInfo.InvariantCulture,
-                        $"    if ({name} != null) params.set('{EscapeSingleQuotedText(qp.Name)}', String({name}));");
+                        $"    if ({name} != null) params.set('{EscapeSingleQuotedText(qp.WireName)}', String({name}));");
                 }
             }
 
@@ -254,13 +234,25 @@ internal static partial class GenerateTypeScriptClientCommand
             sb.AppendLine("    if (qs) url += '?' + qs;");
         }
 
+        if (headerParameters.Length > 0 || bodyParameter is not null)
+        {
+            sb.AppendLine("    const headers = new Headers(this.init?.headers);");
+            foreach (var hp in headerParameters)
+            {
+                var name = LowerFirst(hp.Name);
+                sb.AppendLine(CultureInfo.InvariantCulture,
+                    $"    if ({name} != null) headers.set('{EscapeSingleQuotedText(hp.WireName)}', String({name}));");
+            }
+        }
+
         if (route.Method == "GET" && bodyParameter is null)
         {
-            sb.AppendLine("    const response = await fetch(url, { ...this.init, signal: signal ?? this.init?.signal });");
+            var headersInit = headerParameters.Length > 0 ? ", headers" : "";
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"    const response = await fetch(url, {{ ...this.init{headersInit}, signal: signal ?? this.init?.signal }});");
         }
         else if (bodyParameter is not null)
         {
-            sb.AppendLine("    const headers = new Headers(this.init?.headers);");
             sb.AppendLine("    headers.set('Content-Type', 'application/json');");
             sb.AppendLine("    const response = await fetch(url, {");
             sb.AppendLine("      ...this.init,");
@@ -272,12 +264,16 @@ internal static partial class GenerateTypeScriptClientCommand
         }
         else
         {
+            var headersInit = headerParameters.Length > 0 ? ", headers" : "";
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"    const response = await fetch(url, {{ ...this.init, method: '{route.Method}', signal: signal ?? this.init?.signal }});");
+                $"    const response = await fetch(url, {{ ...this.init, method: '{route.Method}'{headersInit}, signal: signal ?? this.init?.signal }});");
         }
 
+        sb.AppendLine("    if (!response.ok) {");
+        sb.AppendLine("      await response.body?.cancel();");
         sb.AppendLine(CultureInfo.InvariantCulture,
-            $"    if (!response.ok) throw new Error(`{methodName}Async failed: ${{response.status}} ${{response.statusText}}`);");
+            $"      throw new Error(`{methodName}Async failed: ${{response.status}} ${{response.statusText}}`);");
+        sb.AppendLine("    }");
 
         if (returnTsType != "void")
         {
@@ -293,7 +289,7 @@ internal static partial class GenerateTypeScriptClientCommand
     private static string BuildPathExpression(string pattern, SliceRouteParameter[] routeParameters)
     {
         var paramMap = routeParameters.ToDictionary(
-            static p => p.Name,
+            static p => p.WireName,
             static p => LowerFirst(p.Name),
             StringComparer.OrdinalIgnoreCase);
 
@@ -332,7 +328,7 @@ internal static partial class GenerateTypeScriptClientCommand
         }
 
         var reader = TypeSchemaReader.Create(assemblyFiles);
-        var discovered = new Dictionary<string, IReadOnlyList<(string Name, string Type)>>(StringComparer.Ordinal);
+        var discovered = new Dictionary<string, IReadOnlyList<TypeSchemaProperty>>(StringComparer.Ordinal);
         var pending = new Queue<string>(routes
             .SelectMany(static route => new[] { route.RequestType, ClientGenerationHelpers.UnwrapReturnType(route.ReturnType) })
             .Where(static t => t is not null and not "void")
@@ -348,7 +344,7 @@ internal static partial class GenerateTypeScriptClientCommand
                 continue;
             }
 
-            var props = reader.ReadPublicProperties(typeName);
+            var props = reader.ReadPublicPropertySchemas(typeName);
             if (props.Count == 0)
             {
                 continue;
@@ -368,7 +364,7 @@ internal static partial class GenerateTypeScriptClientCommand
         foreach (var (typeName, props) in discovered)
         {
             var tsProps = props
-                .Select(p => (p.Name, TsType: DotNetTypeToTs(p.Type, interfaceNames)))
+                .Select(p => (Name: p.JsonName, TsType: p.IsStringEnum ? AddNullable("string", p.IsNullable) : DotNetTypeToTs(p.Type, interfaceNames)))
                 .ToArray();
             result[typeName] = new TypeSchema(typeName, interfaceNames[typeName], tsProps);
         }
@@ -386,6 +382,11 @@ internal static partial class GenerateTypeScriptClientCommand
     {
         var isNullable = TryUnwrapNullable(dotNetType, out var nullableInner);
         var normalized = NormalizeTypeName(isNullable ? nullableInner : dotNetType);
+
+        if (IsBinaryType(normalized))
+        {
+            return AddNullable("string", isNullable);
+        }
 
         if (TryUnwrapDictionary(normalized, out _, out var valueType))
         {
@@ -444,6 +445,11 @@ internal static partial class GenerateTypeScriptClientCommand
         var isNullable = TryUnwrapNullable(dotNetType, out var nullableInner);
         var normalized = NormalizeTypeName(isNullable ? nullableInner : dotNetType);
 
+        if (IsBinaryType(normalized))
+        {
+            return AddNullable("string", isNullable);
+        }
+
         if (normalized.EndsWith("[]", StringComparison.Ordinal))
         {
             var element = PrimitiveDotNetTypeToTs(normalized[..^2]);
@@ -484,6 +490,11 @@ internal static partial class GenerateTypeScriptClientCommand
     private static bool IsKnownPrimitive(string typeName)
     {
         var normalized = ClientGenerationHelpers.NormalizeParameterType(typeName);
+        if (IsBinaryType(normalized))
+        {
+            return true;
+        }
+
         return normalized switch
         {
             "string" or "String" or "System.String" or
@@ -503,6 +514,14 @@ internal static partial class GenerateTypeScriptClientCommand
             "void" or "object" or "System.Object" => true,
             _ => false,
         };
+    }
+
+    private static bool IsBinaryType(string typeName)
+    {
+        var normalized = ClientGenerationHelpers.NormalizeParameterType(typeName);
+        return normalized is "byte[]" or "Byte[]" or "System.Byte[]" or
+            "Memory<byte>" or "System.Memory<byte>" or "ReadOnlyMemory<byte>" or "System.ReadOnlyMemory<byte>" or
+            "Memory<System.Byte>" or "System.Memory<System.Byte>" or "ReadOnlyMemory<System.Byte>" or "System.ReadOnlyMemory<System.Byte>";
     }
 
     private static string TypeNameToTsInterfaceName(string qualifiedName)

@@ -30,6 +30,7 @@ var root = new RootCommand("Slice CLI — vertical slice scaffolding.")
     clientCmd,
     manifestCmd,
     packageCmd,
+    GenerateOpenApiCommand.Build(),
     ListRoutesCommand.Build()
 };
 

@@ -429,7 +429,7 @@
                     <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up border border-slate-700" style="animation-delay: 0.2s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-cyan-400 border border-slate-700"><i data-lucide="route"></i></div>
                         <h3 class="text-xl font-bold mb-3"><span class="lang-ja">API契約がずれにくい</span><span class="lang-en">API contracts stay aligned</span></h3>
-                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">ルートメタデータ、互換性レポート、型付きクライアントを、同じ機能ファイルから生成します。</span><span class="lang-en">Route metadata, compatibility reports, and typed clients are generated from the same feature files.</span></p>
+                        <p class="text-slate-400 leading-relaxed"><span class="lang-ja">ルートメタデータ、互換性レポート、型付きクライアント、OpenAPI projection を、同じ機能ファイルから生成します。</span><span class="lang-en">Route metadata, compatibility reports, typed clients, and OpenAPI projections are generated from the same feature files.</span></p>
                     </article>
                     <article class="glass-panel p-8 rounded-2xl opacity-0 animate-fade-in-up border border-slate-700" style="animation-delay: 0.3s;">
                         <div class="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-emerald-400 border border-slate-700"><i data-lucide="zap"></i></div>
@@ -462,7 +462,7 @@
                     </div>
                     <div class="grid md:grid-cols-[180px_1fr]">
                         <div class="p-5 font-bold text-brand-400 bg-brand-900/20">Slice</div>
-                        <div class="p-5 text-slate-300"><span class="lang-ja">機能のまとまり、<code>SLICE001</code> などのビルド時診断、<code data-kind="command">slice routes</code>、<code data-kind="command">slice client csharp</code> を同じメタデータでつなぎます。</span><span class="lang-en">Uses the same metadata for feature locality, build-time diagnostics such as <code>SLICE001</code>, <code data-kind="command">slice routes</code>, and <code data-kind="command">slice client csharp</code>.</span></div>
+                        <div class="p-5 text-slate-300"><span class="lang-ja">機能のまとまり、<code>SLICE001</code> などのビルド時診断、<code data-kind="command">slice routes</code>、<code data-kind="command">slice client csharp</code>、<code data-kind="command">slice openapi</code> を同じメタデータでつなぎます。</span><span class="lang-en">Uses the same metadata for feature locality, build-time diagnostics such as <code>SLICE001</code>, <code data-kind="command">slice routes</code>, <code data-kind="command">slice client csharp</code>, and <code data-kind="command">slice openapi</code>.</span></div>
                     </div>
                 </div>
             </div>
@@ -525,7 +525,7 @@
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
                             <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ルートマニフェスト</span><span class="lang-en">Route-manifest tooling</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja">ルートマニフェストをもとに、<code data-kind="command">slice routes</code>、<code data-kind="command">slice client csharp</code>、<code data-kind="command">slice client typescript</code> が同じ定義を使います。</span><span class="lang-en">The route manifest powers <code data-kind="command">slice routes</code>, <code data-kind="command">slice client csharp</code>, and <code data-kind="command">slice client typescript</code> from the same definitions.</span></p>
+                            <p class="text-slate-400"><span class="lang-ja">ルートマニフェストをもとに、<code data-kind="command">slice routes</code>、<code data-kind="command">slice client csharp</code>、<code data-kind="command">slice client typescript</code>、<code data-kind="command">slice openapi</code> が同じ定義を使います。</span><span class="lang-en">The route manifest powers <code data-kind="command">slice routes</code>, <code data-kind="command">slice client csharp</code>, <code data-kind="command">slice client typescript</code>, and <code data-kind="command">slice openapi</code> from the same definitions.</span></p>
                         </div>
                     </div>
                 </div>
@@ -618,7 +618,8 @@ app.Run();</code></pre>
 <pre><code class="language-bash">slice routes
 slice routes --format json
 slice client csharp --output SliceApiClient.g.cs
-slice client typescript --output slice-api-client.ts</code></pre>
+slice client typescript --output slice-api-client.ts
+slice openapi --output openapi.json</code></pre>
                 </div>
             </div>
         </section>
@@ -666,7 +667,7 @@ slice client typescript --output slice-api-client.ts</code></pre>
                     <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Lambda</h3><p class="text-sm text-slate-400"><span class="lang-ja">ASP.NET Core 上で AWS Lambda ホスティングを使うための連携パッケージです。</span><span class="lang-en">AWS Lambda hosting integration over ASP.NET Core.</span></p></div>
                     <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Wasi</h3><p class="text-sm text-slate-400"><span class="lang-ja">Cloudflare Workers や Fermyon Spin などの wasi:http ホスト向けに、ASP.NET に依存しない実験的なディスパッチを提供します。</span><span class="lang-en">Experimental ASP.NET-independent dispatch for wasi:http hosts such as Cloudflare Workers and Fermyon Spin.</span></p></div>
                     <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.TestHost</h3><p class="text-sm text-slate-400"><span class="lang-ja">Slice アプリをインプロセスで HTTP テストするためのヘルパーです。</span><span class="lang-en">In-process HTTP testing helpers for Slice apps.</span></p></div>
-                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400"><span class="lang-ja"><code data-kind="command">slice</code> コマンドで、スキャフォールディング、ルート確認、互換性レポート、型付きクライアント生成を実行できます。</span><span class="lang-en">Scaffolding, route inspection, compatibility reports, and typed client generation through the <code data-kind="command">slice</code> command.</span></p></div>
+                    <div class="glass-panel p-6 rounded-xl border border-slate-700"><h3 class="font-bold mb-2">Slice.Cli</h3><p class="text-sm text-slate-400"><span class="lang-ja"><code data-kind="command">slice</code> コマンドで、スキャフォールディング、ルート確認、互換性レポート、型付きクライアント生成、OpenAPI projection を実行できます。</span><span class="lang-en">Scaffolding, route inspection, compatibility reports, typed client generation, and OpenAPI projections through the <code data-kind="command">slice</code> command.</span></p></div>
                 </div>
             </div>
         </section>
@@ -704,8 +705,8 @@ slice client typescript --output slice-api-client.ts</code></pre>
                 </a>
             </div>
             <div class="mt-8 text-center text-sm text-slate-500">
-                <span class="lang-ja">GitHub ドキュメント: <a href="https://github.com/sano-suguru/slice/blob/main/docs/cli.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">CLI コマンド</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/lambda.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Lambda ホスティング</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/product-direction.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">プロダクト方針</a></span>
-                <span class="lang-en">GitHub docs: <a href="https://github.com/sano-suguru/slice/blob/main/docs/cli.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">CLI commands</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/lambda.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Lambda hosting</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/product-direction.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Product direction</a></span>
+                <span class="lang-ja">GitHub ドキュメント: <a href="https://github.com/sano-suguru/slice/blob/main/docs/cli.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">CLI コマンド</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/guides/openapi.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">OpenAPI</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/lambda.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Lambda ホスティング</a> ・ <a href="https://github.com/sano-suguru/slice/blob/main/docs/product-direction.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">プロダクト方針</a></span>
+                <span class="lang-en">GitHub docs: <a href="https://github.com/sano-suguru/slice/blob/main/docs/cli.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">CLI commands</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/guides/openapi.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">OpenAPI</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/lambda.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Lambda hosting</a> · <a href="https://github.com/sano-suguru/slice/blob/main/docs/product-direction.md" class="text-brand-400 hover:text-brand-300 underline-offset-4 hover:underline">Product direction</a></span>
             </div>
         </section>
     </main>

@@ -6,4 +6,9 @@ internal sealed class CliException : Exception
         : base(message)
     {
     }
+
+    public CliException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

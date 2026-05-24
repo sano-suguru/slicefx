@@ -17,10 +17,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\samples\Slice.Sample\Slice.Sample.csproj"
+                      Aliases="SliceSample" />
+    <ProjectReference Include="..\..\src\Slice.TestHost\Slice.TestHost.csproj" />
     <ProjectReference Include="..\..\tools\Slice.Cli\Slice.Cli.csproj" />
   </ItemGroup>
 

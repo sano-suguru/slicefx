@@ -275,7 +275,8 @@ internal static class RouteManifestEmitter
         var parameters = feature.GetParams();
         return parameters.IsEmpty
             ? null
-            : string.Join("\n", parameters.Select(static p => $"{SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn)}|{p.Name}"));
+            : string.Join("\n", parameters.Select(static p =>
+                $"{SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn)}|{p.Name}|{(p.IsNullable ? "N" : "-")}|{p.BindingSource ?? ""}|{p.BindingName ?? ""}"));
     }
 
     private static string BoolLiteral(bool value) => value ? "true" : "false";

@@ -15,7 +15,7 @@ internal sealed record FeatureModel(
     string? Summary,
     string ReturnTypeFqn,
     bool ReturnsAspNetResult,
-    // Serialised as "typeFqn|name;typeFqn|name" so the record uses primitive equality.
+    // Serialised as "typeFqn|name|kind|nullable|bindingSource|bindingName" so the record uses primitive equality.
     string SerializedParams,
     // Serialised as "fqn1;fqn2" — order is declaration order.
     string SerializedFilterFqns,
@@ -56,15 +56,30 @@ internal sealed record FeatureModel(
             var sep2 = entry.LastIndexOf('|');
             if (sep2 <= sep)
             {
-                // Legacy format (no kind flag) — default to concrete.
-                builder.Add(new HandleParamModel(entry.Substring(0, sep), entry.Substring(sep + 1), IsInterfaceOrAbstract: false));
+                // Legacy format (no kind flag) — default to concrete, non-null, and inferred binding.
+                builder.Add(new HandleParamModel(
+                    entry.Substring(0, sep),
+                    entry.Substring(sep + 1),
+                    IsInterfaceOrAbstract: false,
+                    IsNullable: false,
+                    BindingSource: null,
+                    BindingName: null));
             }
             else
             {
-                var typeFqn = entry.Substring(0, sep);
-                var name = entry.Substring(sep + 1, sep2 - sep - 1);
-                var kind = entry.Substring(sep2 + 1);
-                builder.Add(new HandleParamModel(typeFqn, name, IsInterfaceOrAbstract: kind == "I"));
+                var parts = entry.Split('|');
+                if (parts.Length < 3)
+                {
+                    continue;
+                }
+
+                builder.Add(new HandleParamModel(
+                    parts[0],
+                    parts[1],
+                    IsInterfaceOrAbstract: parts[2] == "I",
+                    IsNullable: parts.Length > 3 && parts[3] == "N",
+                    BindingSource: parts.Length > 4 && parts[4].Length > 0 ? parts[4] : null,
+                    BindingName: parts.Length > 5 && parts[5].Length > 0 ? parts[5] : null));
             }
         }
         return builder.ToImmutable();
@@ -164,4 +179,10 @@ internal readonly record struct DiagnosticLocationModel(
     }
 }
 
-internal sealed record HandleParamModel(string TypeFqn, string Name, bool IsInterfaceOrAbstract);
+internal sealed record HandleParamModel(
+    string TypeFqn,
+    string Name,
+    bool IsInterfaceOrAbstract,
+    bool IsNullable,
+    string? BindingSource,
+    string? BindingName);

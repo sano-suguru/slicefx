@@ -109,7 +109,7 @@ public sealed class SliceFeatureRouteAttribute : Attribute
     public string? SerializedFilterTypes { get; }
 
     /// <summary>
-    /// Gets newline-separated handler parameters serialized as <c>Type|Name</c>.
+    /// Gets newline-separated handler parameters serialized as <c>Type|Name|Nullability|BindingSource|BindingName</c>.
     /// </summary>
     public string? SerializedParameters { get; }
 

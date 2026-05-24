@@ -44,6 +44,12 @@ internal static partial class ClientGenerationHelpers
 
     internal static SliceRouteParameter? FindBodyParameter(SliceRouteInfo route)
     {
+        var explicitBody = route.Parameters.FirstOrDefault(static parameter => parameter.BindingSource == "body");
+        if (explicitBody is not null)
+        {
+            return explicitBody;
+        }
+
         if (route.RequestType is null)
         {
             return null;
@@ -59,9 +65,15 @@ internal static partial class ClientGenerationHelpers
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return [.. route.Parameters
-            .Where(parameter => parameters.Contains(parameter.Name))
+            .Where(parameter => parameter.BindingSource == "route" || parameters.Contains(parameter.WireName))
         ];
     }
+
+    internal static SliceRouteParameter[] FindHeaderParameters(SliceRouteInfo route)
+        => [.. route.Parameters
+            .Where(static parameter => parameter.BindingSource == "header")
+            .Where(static parameter => IsSupportedQueryParameterType(parameter.Type))
+        ];
 
     internal static SliceRouteParameter[] FindQueryParameters(
         SliceRouteInfo route,
@@ -74,6 +86,7 @@ internal static partial class ClientGenerationHelpers
 
         return [.. route.Parameters
             .Where(parameter => !routeParameterNames.Contains(parameter.Name))
+            .Where(static parameter => parameter.BindingSource is null or "query")
             .Where(parameter => bodyParameter is null || parameter.Name != bodyParameter.Name)
             .Where(static parameter => parameter.Type is not ("CancellationToken" or "System.Threading.CancellationToken"))
             .Where(static parameter => IsSupportedQueryParameterType(parameter.Type))

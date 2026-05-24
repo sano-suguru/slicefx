@@ -176,7 +176,22 @@ That path is intentionally experimental. `Slice.Wasi` depends on preview tooling
 
 ## OpenAPI
 
-Slice endpoints work with ASP.NET Core's standard OpenAPI support out of the box — add `Microsoft.AspNetCore.OpenApi` and call `app.MapOpenApi()` after `app.MapSlices()`. The Slice route manifest is a separate build-time artifact for portability classification and client generation; it complements rather than replaces the OpenAPI document.
+Slice endpoints work with ASP.NET Core's standard OpenAPI support out of the box. Add `Microsoft.AspNetCore.OpenApi`, call `builder.Services.AddOpenApi()`, and map `app.MapOpenApi()` in the ASP.NET host:
+
+```csharp
+builder.Services.AddSlice();
+builder.Services.AddOpenApi();
+
+var app = builder.Build();
+app.MapSlices();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+```
+
+The Slice route manifest is a separate build-time artifact for portability classification, client generation, and `slice openapi` manifest projections. It complements rather than replaces the ASP.NET Core OpenAPI document. See [docs/guides/openapi.md](docs/guides/openapi.md).
 
 ## Tooling and adapters
 
@@ -184,6 +199,7 @@ Slice endpoints work with ASP.NET Core's standard OpenAPI support out of the box
 | --- | --- |
 | Source generator and route manifest | [docs/source-generator.md](docs/source-generator.md) |
 | CLI commands | [docs/cli.md](docs/cli.md) |
+| OpenAPI integration | [docs/guides/openapi.md](docs/guides/openapi.md) |
 | Lambda hosting and per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | WASI deploy path | [samples/Slice.WasiSample/README.md](samples/Slice.WasiSample/README.md) |
 | Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |

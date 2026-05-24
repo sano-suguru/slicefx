@@ -1,5 +1,9 @@
+extern alias SliceSample;
+
+using System.Text.Json;
 using Slice.Cli.Commands;
 using Slice.Cli.Internal;
+using Slice.Testing;
 
 namespace Slice.Cli.Tests;
 
@@ -531,6 +535,7 @@ public class CliFixtureTests
         fixture.WriteFeature(
             "Features/Items/CreateItem.cs",
             """
+            using System.Text.Json.Serialization;
             using System.Threading;
             using System.Threading.Tasks;
             using Slice;
@@ -540,7 +545,10 @@ public class CliFixtureTests
             [Feature("POST /items")]
             public static class CreateItem
             {
-                public record Request(string Name);
+                public record Request(
+                    [property: JsonPropertyName("display_name")] string Name,
+                    byte[] Payload,
+                    [property: JsonIgnore] string Secret);
                 public record Response(int Id, string Name);
 
                 public static Task<Response> Handle(Request req, CancellationToken ct)
@@ -564,6 +572,9 @@ public class CliFixtureTests
         Assert.Contains("async createItemAsync(", client);
         Assert.Contains("encodeURIComponent(String(id))", client);
         Assert.Contains("JSON.stringify(body)", client);
+        Assert.Contains("readonly 'display_name': string;", client);
+        Assert.Contains("readonly 'payload': string;", client);
+        Assert.DoesNotContain("secret", client, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -712,9 +723,9 @@ public class CliFixtureTests
 
         Assert.Contains("export interface GetResponse", client);
         Assert.Contains("export interface UsersGetResponse", client);
-        Assert.Contains("readonly items: UsersGetUser[];", client);
-        Assert.Contains("readonly recent: UsersGetUser[];", client);
-        Assert.Contains("readonly byId: Record<string, UsersGetUser>;", client);
+        Assert.Contains("readonly 'items': UsersGetUser[];", client);
+        Assert.Contains("readonly 'recent': UsersGetUser[];", client);
+        Assert.Contains("readonly 'byId': Record<string, UsersGetUser>;", client);
         Assert.DoesNotContain("unknown[]", client);
     }
 
@@ -783,6 +794,163 @@ public class CliFixtureTests
 
         Assert.Contains("getItemAsync", client);
         Assert.DoesNotContain("deleteItemAsync", client);
+    }
+
+    [Fact]
+    public async Task Openapi_command_generates_manifest_projection_for_portable_routes()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "openapi-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>OpenApi.Client.App</RootNamespace>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Items/CreateItem.cs",
+            """
+            using System.Text.Json.Serialization;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace OpenApi.Client.App.Features.Items;
+
+            [Feature("POST /items/{id:int}", Summary = "Create item")]
+            public static class CreateItem
+            {
+                [JsonConverter(typeof(JsonStringEnumConverter))]
+                public enum Priority
+                {
+                    Low = 0,
+                    High = 1,
+                }
+
+                public sealed record Request(
+                    [property: JsonPropertyName("display_name")] string Name,
+                    int? Notes,
+                    Priority Priority,
+                    byte[] Payload,
+                    [property: JsonIgnore] string Secret,
+                    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Optional);
+
+                public sealed record Response(int Id, string Name, int? Notes, Priority Priority);
+
+                public static Task<Response> Handle(int id, string? filter, Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(id, req.Name, req.Notes, req.Priority));
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Items/DeleteItem.cs",
+            """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace OpenApi.Client.App.Features.Items;
+
+            [Feature("DELETE /items/{id:int}", Summary = "Delete item")]
+            public static class DeleteItem
+            {
+                public static Task<IResult> Handle(int id)
+                    => Task.FromResult(Results.NoContent());
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "openapi.json");
+        var exitCode = await GenerateOpenApiCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(outputFile));
+        var root = document.RootElement;
+
+        Assert.Equal("3.1.1", root.GetProperty("openapi").GetString());
+        Assert.Equal("manifest", root.GetProperty("x-slice-source").GetString());
+        Assert.Equal("Items.DeleteItem", root.GetProperty("x-slice-omitted")[0].GetProperty("operationId").GetString());
+
+        var post = root.GetProperty("paths").GetProperty("/items/{id}").GetProperty("post");
+        Assert.Equal("Items.CreateItem", post.GetProperty("operationId").GetString());
+        Assert.Equal("Create item", post.GetProperty("summary").GetString());
+        Assert.Equal("portable", post.GetProperty("x-slice-portability").GetString());
+        Assert.False(root.GetProperty("paths").GetProperty("/items/{id}").TryGetProperty("delete", out _));
+
+        var parameters = post.GetProperty("parameters");
+        Assert.Contains(parameters.EnumerateArray(), static parameter =>
+            parameter.GetProperty("name").GetString() == "id" &&
+            parameter.GetProperty("in").GetString() == "path" &&
+            parameter.GetProperty("required").GetBoolean());
+        Assert.Contains(parameters.EnumerateArray(), static parameter =>
+            parameter.GetProperty("name").GetString() == "filter" &&
+            parameter.GetProperty("in").GetString() == "query" &&
+            !parameter.GetProperty("required").GetBoolean());
+
+        var schemas = root.GetProperty("components").GetProperty("schemas");
+        var request = schemas.GetProperty("Request");
+        var required = request.GetProperty("required").EnumerateArray()
+            .Select(static item => item.GetString())
+            .ToArray();
+        Assert.Contains("display_name", required);
+        Assert.Contains("priority", required);
+        Assert.Contains("payload", required);
+        Assert.DoesNotContain("notes", required);
+        Assert.DoesNotContain("optional", required);
+
+        Assert.True(request.GetProperty("properties").TryGetProperty("display_name", out _));
+        Assert.False(request.GetProperty("properties").TryGetProperty("secret", out _));
+        var notesType = request.GetProperty("properties").GetProperty("notes").GetProperty("type");
+        Assert.Contains(notesType.EnumerateArray(), static item => item.GetString() == "null");
+        var payload = request.GetProperty("properties").GetProperty("payload");
+        Assert.Equal("string", payload.GetProperty("type").GetString());
+        Assert.Equal("byte", payload.GetProperty("format").GetString());
+        var priorityRef = request.GetProperty("properties").GetProperty("priority").GetProperty("$ref").GetString()!;
+        var priority = schemas.GetProperty(priorityRef[(priorityRef.LastIndexOf('/') + 1)..]);
+        Assert.Equal("string", priority.GetProperty("type").GetString());
+        Assert.Contains(priority.GetProperty("enum").EnumerateArray(), static item => item.GetString() == "High");
+        Assert.Contains(priority.GetProperty("x-enumNames").EnumerateArray(), static item => item.GetString() == "High");
+    }
+
+    [Fact]
+    public async Task Sample_openapi_document_exposes_generated_slice_routes()
+    {
+        var contentRoot = Path.Combine(FindRepoRoot(), "samples", "Slice.Sample");
+        await using var host = SliceTestHost.Create<SliceSample::Program>(contentRoot: contentRoot);
+
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("/openapi/v1.json"));
+        var root = document.RootElement;
+        Assert.Equal("3.1.1", root.GetProperty("openapi").GetString());
+
+        var paths = root.GetProperty("paths");
+        Assert.Equal("Health.GetHealth", paths.GetProperty("/health").GetProperty("get").GetProperty("operationId").GetString());
+        Assert.Equal("Users.CreateUser", paths.GetProperty("/users").GetProperty("post").GetProperty("operationId").GetString());
+        Assert.Equal("Users.GetUser", paths.GetProperty("/users/{id}").GetProperty("get").GetProperty("operationId").GetString());
+        Assert.Equal("Users.DeleteUser", paths.GetProperty("/users/{id}").GetProperty("delete").GetProperty("operationId").GetString());
+    }
+
+    [Fact]
+    public void Openapi_dependency_stays_in_aspnet_sample()
+    {
+        var root = FindRepoRoot();
+        var references = Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)
+            .Where(static file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
+                !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(static file => File.ReadAllText(file).Contains("Microsoft.AspNetCore.OpenApi", StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["samples/Slice.Sample/Slice.Sample.csproj"], references);
     }
 
     [Fact]

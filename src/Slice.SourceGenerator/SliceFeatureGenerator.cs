@@ -540,14 +540,22 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         ct.ThrowIfCancellationRequested();
 
-        // Serialise params as "typeFqn|name|K;..." where K = 'I' (interface/abstract) or 'C' (concrete).
+        // Serialise params as "typeFqn|name|K|N-|bindingSource|bindingName;..." where
+        // K = 'I' (interface/abstract) or 'C' (concrete), and N marks nullable.
         var paramParts = new string[handle.Parameters.Length];
         for (var i = 0; i < handle.Parameters.Length; i++)
         {
             var p = handle.Parameters[i];
             var kind = (p.Type.TypeKind == TypeKind.Interface
                         || (p.Type is INamedTypeSymbol nt && nt.IsAbstract)) ? "I" : "C";
-            paramParts[i] = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "|" + p.Name + "|" + kind;
+            var nullable = IsNullableParameter(p) ? "N" : "-";
+            var (bindingSource, bindingName) = GetBindingMetadata(p);
+            paramParts[i] = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "|" +
+                p.Name + "|" +
+                kind + "|" +
+                nullable + "|" +
+                bindingSource + "|" +
+                bindingName;
         }
         var serializedParams = string.Join(";", paramParts);
 
@@ -622,6 +630,49 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
                 featureType.Name))
             : new FeatureResult(model, null);
+    }
+
+    private static bool IsNullableParameter(IParameterSymbol parameter)
+        => parameter.NullableAnnotation == NullableAnnotation.Annotated ||
+           parameter.Type.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Nullable<T>";
+
+    private static (string Source, string Name) GetBindingMetadata(IParameterSymbol parameter)
+    {
+        foreach (var attribute in parameter.GetAttributes())
+        {
+            var attributeName = attribute.AttributeClass?.Name;
+            if (attributeName is null)
+            {
+                continue;
+            }
+
+            var source = attributeName switch
+            {
+                "FromQueryAttribute" => "query",
+                "FromRouteAttribute" => "route",
+                "FromHeaderAttribute" => "header",
+                "FromBodyAttribute" => "body",
+                _ => null,
+            };
+            if (source is null)
+            {
+                continue;
+            }
+
+            var name = "";
+            foreach (var arg in attribute.NamedArguments)
+            {
+                if (arg.Key == "Name" && arg.Value.Value is string value)
+                {
+                    name = value;
+                    break;
+                }
+            }
+
+            return (source, name);
+        }
+
+        return ("", "");
     }
 
     private static (string SerializedRules, bool RequiresReflectionValidation) CreateValidationRules(
