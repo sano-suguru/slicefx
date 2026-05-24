@@ -10,7 +10,9 @@ internal static class RouteTargetCapabilities
     {
         var wasi = !string.IsNullOrWhiteSpace(route.WasiDispatchStatus)
             ? new RouteCapability(route.WasiDispatchStatus, route.WasiDispatchReason)
-            : new RouteCapability(route.Portability, route.PortabilityReason);
+            : route.HasGeneratedMetadata
+                ? new RouteCapability(Unknown, "WASI dispatch metadata missing")
+                : new RouteCapability(route.Portability, route.PortabilityReason);
         var lambdaHostedApp = new RouteCapability(Eligible, null);
         var lambdaPerFeature = ClassifyLambdaPerFeature(route);
 

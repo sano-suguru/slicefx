@@ -4,59 +4,10 @@ namespace Slice;
 /// Identifies one source-generated Slice route for cross-assembly diagnostics.
 /// </summary>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
-public sealed class SliceFeatureRouteAttribute(
-    string endpointName,
-    string featureType,
-    string httpMethod,
-    string pattern) : Attribute
+public sealed class SliceFeatureRouteAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with full route metadata.
-    /// </summary>
-    public SliceFeatureRouteAttribute(
-        string endpointName,
-        string featureType,
-        string httpMethod,
-        string pattern,
-        string? tag,
-        string? summary,
-        string? requestType,
-        string? returnType,
-        string? portability,
-        string? portabilityReason,
-        string? serializedFilterTypes,
-        string? serializedParameters,
-        string? lambdaPerFeatureStatus,
-        string? lambdaPerFeatureReason,
-        string? lambdaPerFeatureHandlerAssembly,
-        string? lambdaPerFeatureHandlerType,
-        string? lambdaPerFeatureHandlerMethod)
-        : this(
-            endpointName,
-            featureType,
-            httpMethod,
-            pattern,
-            tag,
-            summary,
-            requestType,
-            returnType,
-            portability,
-            portabilityReason,
-            serializedFilterTypes,
-            serializedParameters,
-            lambdaPerFeatureStatus,
-            lambdaPerFeatureReason,
-            lambdaPerFeatureHandlerAssembly,
-            lambdaPerFeatureHandlerType,
-            lambdaPerFeatureHandlerMethod,
-            manifestSchemaVersion: "1",
-            wasiDispatchStatus: null,
-            wasiDispatchReason: null)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with target capability metadata.
+    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with route metadata.
     /// </summary>
     public SliceFeatureRouteAttribute(
         string endpointName,
@@ -76,11 +27,14 @@ public sealed class SliceFeatureRouteAttribute(
         string? lambdaPerFeatureHandlerAssembly,
         string? lambdaPerFeatureHandlerType,
         string? lambdaPerFeatureHandlerMethod,
-        string? manifestSchemaVersion,
+        string manifestSchemaVersion,
         string? wasiDispatchStatus,
         string? wasiDispatchReason)
-        : this(endpointName, featureType, httpMethod, pattern)
     {
+        EndpointName = endpointName;
+        FeatureType = featureType;
+        HttpMethod = httpMethod;
+        Pattern = pattern;
         Tag = tag;
         Summary = summary;
         RequestType = requestType;
@@ -102,22 +56,22 @@ public sealed class SliceFeatureRouteAttribute(
     /// <summary>
     /// Gets the endpoint name generated for the feature.
     /// </summary>
-    public string EndpointName { get; } = endpointName;
+    public string EndpointName { get; }
 
     /// <summary>
     /// Gets the feature type name.
     /// </summary>
-    public string FeatureType { get; } = featureType;
+    public string FeatureType { get; }
 
     /// <summary>
     /// Gets the route HTTP method.
     /// </summary>
-    public string HttpMethod { get; } = httpMethod;
+    public string HttpMethod { get; }
 
     /// <summary>
     /// Gets the route pattern.
     /// </summary>
-    public string Pattern { get; } = pattern;
+    public string Pattern { get; }
 
     /// <summary>
     /// Gets the generated route tag.
@@ -187,7 +141,7 @@ public sealed class SliceFeatureRouteAttribute(
     /// <summary>
     /// Gets the generated route manifest schema version.
     /// </summary>
-    public string? ManifestSchemaVersion { get; }
+    public string ManifestSchemaVersion { get; }
 
     /// <summary>
     /// Gets whether WASI dispatch was emitted for the route.

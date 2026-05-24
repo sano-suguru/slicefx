@@ -145,6 +145,28 @@ public class CliFixtureTests
         Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(typedAspNetRoute).LambdaPerFeature.Status);
         Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(filteredRoute).LambdaPerFeature.Status);
         Assert.Equal(RouteTargetCapabilities.Eligible, RouteTargetCapabilities.Classify(portableRoute).LambdaPerFeature.Status);
+
+        var generatedRoute = portableRoute with
+        {
+            ManifestSchemaVersion = "2",
+            WasiDispatchStatus = RouteTargetCapabilities.Eligible,
+            WasiDispatchReason = null,
+            Portability = RouteCatalog.PortabilityPartial,
+            PortabilityReason = "ignored",
+        };
+        Assert.Equal(RouteTargetCapabilities.Eligible, RouteTargetCapabilities.Classify(generatedRoute).WasiDispatch.Status);
+
+        var generatedRouteWithoutWasiMetadata = portableRoute with
+        {
+            ManifestSchemaVersion = "2",
+            WasiDispatchStatus = null,
+            WasiDispatchReason = null,
+            HasGeneratedMetadata = true,
+        };
+
+        var capabilities = RouteTargetCapabilities.Classify(generatedRouteWithoutWasiMetadata);
+        Assert.Equal("unknown", capabilities.WasiDispatch.Status);
+        Assert.Equal("WASI dispatch metadata missing", capabilities.WasiDispatch.Reason);
     }
 
     [Fact]
@@ -245,6 +267,104 @@ public class CliFixtureTests
 
         var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
         Assert.Contains("Unsupported Slice route manifest schema '999'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Route_catalog_fails_clearly_for_invalid_generated_manifest_shape()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "legacy-manifest-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Legacy.Manifest.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Remove="OldSliceCore/**/*.cs" />
+              </ItemGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine("OldSliceCore", "Slice.Core.csproj")}}" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "OldSliceCore/Slice.Core.csproj",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "OldSliceCore/SliceFeatureRouteAttribute.cs",
+            """
+            namespace Slice;
+
+            [global::System.AttributeUsage(global::System.AttributeTargets.Assembly, AllowMultiple = true)]
+            public sealed class SliceFeatureRouteAttribute : global::System.Attribute
+            {
+                public SliceFeatureRouteAttribute(
+                    string endpointName,
+                    string featureType,
+                    string httpMethod,
+                    string pattern,
+                    string? tag,
+                    string? summary,
+                    string? requestType,
+                    string? returnType,
+                    string? portability,
+                    string? portabilityReason,
+                    string? serializedFilterTypes,
+                    string? serializedParameters,
+                    string? lambdaPerFeatureStatus,
+                    string? lambdaPerFeatureReason,
+                    string? lambdaPerFeatureHandlerAssembly,
+                    string? lambdaPerFeatureHandlerType,
+                    string? lambdaPerFeatureHandlerMethod)
+                {
+                }
+            }
+            """);
+        fixture.WriteFeature(
+            "RouteMetadata.cs",
+            """
+            using Slice;
+
+            [assembly: SliceFeatureRouteAttribute(
+                "Health.GetHealth",
+                "Legacy.Manifest.App.Features.Health.GetHealth",
+                "GET",
+                "/health",
+                "Health",
+                null,
+                null,
+                "Legacy.Manifest.App.Features.Health.GetHealth.Response",
+                "portable",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null)]
+
+            namespace Legacy.Manifest.App.Features.Health;
+
+            public static class GetHealth
+            {
+                public sealed record Response(string Status);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        Assert.Contains("Invalid Slice route manifest", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("expected 20 constructor arguments but found 17", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Rebuild the project", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

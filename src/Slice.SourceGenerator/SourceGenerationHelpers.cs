@@ -1,9 +1,11 @@
+using Slice.Shared;
+
 namespace Slice.SourceGenerator;
 
 internal static class SourceGenerationHelpers
 {
     public const string SliceValidatorFilterPrefix = "global::Slice.SliceValidatorFilter<";
-    public const string ManifestSchemaVersion = "2";
+    public const string ManifestSchemaVersion = SliceRouteManifestSchema.CurrentVersion;
     public const string ManifestEligible = "eligible";
     public const string ManifestIneligible = "ineligible";
     public const string PortabilityPortable = "portable";

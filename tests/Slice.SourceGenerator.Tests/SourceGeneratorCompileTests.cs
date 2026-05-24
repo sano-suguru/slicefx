@@ -495,7 +495,7 @@ public class SourceGeneratorCompileTests
             .Replace("\n", "", StringComparison.Ordinal);
         Assert.Contains("string? LambdaPerFeatureStatus", manifestSource, StringComparison.Ordinal);
         Assert.Contains("string? WasiDispatchStatus", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("null,null,null,null,null,\"2\"", compactManifestSource, StringComparison.Ordinal);
+        Assert.Contains("null,null,null,null,null,\"2\",\"eligible\",null)]", compactManifestSource, StringComparison.Ordinal);
         Assert.Contains("\"2\",true,\"portable\",null,\"eligible\",null,null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
     }
 

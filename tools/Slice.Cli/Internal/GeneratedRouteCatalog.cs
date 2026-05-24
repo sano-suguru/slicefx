@@ -1,12 +1,11 @@
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using Slice.Shared;
 
 namespace Slice.Cli.Internal;
 
 internal static class GeneratedRouteCatalog
 {
-    private const string CurrentManifestSchemaVersion = "2";
-
     internal static GeneratedRouteDiscovery Discover(ProjectContext ctx)
     {
         var assemblyFiles = FindAssemblyFiles(ctx);
@@ -29,6 +28,11 @@ internal static class GeneratedRouteCatalog
             {
                 throw new CliException(
                     $"Unsupported Slice route manifest schema '{ex.SchemaVersion}' in {assemblyFile.FullName}. Update the slice CLI to read this project.");
+            }
+            catch (InvalidRouteManifestException ex)
+            {
+                throw new CliException(
+                    $"Invalid Slice route manifest in {assemblyFile.FullName}: {ex.Message}. Rebuild the project with the current Slice source generator.");
             }
             catch (BadImageFormatException)
             {
@@ -268,9 +272,10 @@ internal static class GeneratedRouteCatalog
     {
         var value = attribute.DecodeValue(StringAttributeTypeProvider.Instance);
         var args = value.FixedArguments;
-        if (args.Length < 17)
+        if (args.Length != SliceRouteManifestSchema.AttributeConstructorArgumentCount)
         {
-            return null;
+            throw new InvalidRouteManifestException(
+                $"expected {SliceRouteManifestSchema.AttributeConstructorArgumentCount} constructor arguments but found {args.Length}");
         }
 
         var endpointName = GetString(args[0]);
@@ -283,28 +288,33 @@ internal static class GeneratedRouteCatalog
         }
 
         var (featureNamespace, featureName) = SplitFeatureType(featureType);
-        var tag = args.Length > 4 ? GetString(args[4]) : null;
+        var tag = GetString(args[4]);
         tag = string.IsNullOrWhiteSpace(tag) ? InferTag(featureNamespace) : tag;
-        var summary = args.Length > 5 ? GetString(args[5]) : null;
-        var requestType = args.Length > 6 ? GetString(args[6]) : null;
-        var returnType = args.Length > 7 ? GetString(args[7]) ?? "" : "";
-        var portability = args.Length > 8 ? GetString(args[8]) : null;
-        var portabilityReason = args.Length > 9 ? GetString(args[9]) : null;
-        var filters = args.Length > 10 ? SplitLines(GetString(args[10])) : [];
-        var parameters = args.Length > 11 ? ReadParameters(GetString(args[11])) : [];
-        var lambdaStatus = args.Length > 12 ? GetString(args[12]) : null;
-        var lambdaReason = args.Length > 13 ? GetString(args[13]) : null;
+        var summary = GetString(args[5]);
+        var requestType = GetString(args[6]);
+        var returnType = GetString(args[7]) ?? "";
+        var portability = GetString(args[8]);
+        var portabilityReason = GetString(args[9]);
+        var filters = SplitLines(GetString(args[10]));
+        var parameters = ReadParameters(GetString(args[11]));
+        var lambdaStatus = GetString(args[12]);
+        var lambdaReason = GetString(args[13]);
         var lambdaHandlerAssembly = GetString(args[14]);
         var lambdaHandlerType = TrimGlobalPrefix(GetString(args[15]));
         var lambdaHandlerMethod = GetString(args[16]);
-        var manifestSchemaVersion = args.Length > 17 ? GetString(args[17]) : null;
-        if (manifestSchemaVersion is not (null or "1" or CurrentManifestSchemaVersion))
+        var manifestSchemaVersion = GetString(args[17]);
+        if (string.IsNullOrWhiteSpace(manifestSchemaVersion))
+        {
+            throw new InvalidRouteManifestException("manifest schema version is missing");
+        }
+
+        if (manifestSchemaVersion != SliceRouteManifestSchema.CurrentVersion)
         {
             throw new UnsupportedRouteManifestSchemaException(manifestSchemaVersion);
         }
 
-        var wasiStatus = args.Length > 18 ? GetString(args[18]) : null;
-        var wasiReason = args.Length > 19 ? GetString(args[19]) : null;
+        var wasiStatus = GetString(args[18]);
+        var wasiReason = GetString(args[19]);
 
         return new SliceRouteInfo(
             method.ToUpperInvariant(),
@@ -327,7 +337,8 @@ internal static class GeneratedRouteCatalog
             lambdaHandlerMethod,
             manifestSchemaVersion,
             wasiStatus,
-            wasiReason);
+            wasiReason,
+            HasGeneratedMetadata: true);
     }
 
     private static string? GetString(CustomAttributeTypedArgument<string> argument)
@@ -425,3 +436,5 @@ internal sealed class UnsupportedRouteManifestSchemaException(string schemaVersi
 {
     internal string SchemaVersion { get; } = schemaVersion;
 }
+
+internal sealed class InvalidRouteManifestException(string message) : Exception(message);

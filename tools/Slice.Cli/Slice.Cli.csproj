@@ -15,4 +15,9 @@
     <PackageReference Include="System.CommandLine" Version="2.0.8" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\src\Shared\SliceRouteManifestSchema.cs"
+             Link="Shared\SliceRouteManifestSchema.cs" />
+  </ItemGroup>
+
 </Project>
