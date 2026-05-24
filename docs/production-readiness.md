@@ -93,7 +93,7 @@ These recommendations apply to experiments, pilots, and preview evaluation. Prod
 
 | Project shape | Recommendation |
 |---|---|
-| Serverless / WASI microservices | **Preview candidate** — evaluate portability rules and upstream WASI tooling first |
+| Serverless / WASI microservices | **Preview candidate** — evaluate portability rules and unstable upstream WASI tooling first |
 | Full-stack C# (Blazor / .NET client) with typed-client needs | **Preview candidate** — evaluate generated clients against the actual route set |
 | Small-to-medium web API (< 50 endpoints) | **Acceptable for experiments** |
 | Large internal monolith (> 200 endpoints, complex domain) | **PoC required** — decide after measuring with phase 0 benchmarks |
@@ -102,4 +102,5 @@ These recommendations apply to experiments, pilots, and preview evaluation. Prod
 ## Known constraints (beyond gate values)
 
 - DataAnnotations attributes such as `Range`, `RegularExpression`, and `EmailAddress` fall back to reflection on the **WASI path**. The ASP.NET path was always reflection-based, so this is invisible there.
+- WASI deployment depends on preview upstream build/transpile tools. Spin consumes the generated `wasi:http` component directly; Cloudflare Workers adds `jco`, `preview2-shim`, Wrangler, and a compatibility-date-sensitive JS shim.
 - `[Filter<T>]` takes a type parameter only (configuration arrives through constructor DI). This is an intentional constraint that protects strength-preservation principle #1. See `docs/patterns/filter-configuration.md`.

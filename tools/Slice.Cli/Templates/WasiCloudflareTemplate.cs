@@ -56,6 +56,9 @@ internal static class WasiCloudflareTemplate
           "name": "__COMPONENT_NAME__-host",
           "private": true,
           "type": "module",
+          "engines": {
+            "node": ">=22.0.0"
+          },
           "scripts": {
             "build": "dotnet publish __PROJECT_PATH_ARG__ -r wasi-wasm -c Release && npm run transpile",
             "transpile": "jco transpile __WASM_INPUT_PATH_ARG__ -o component --name __COMPONENT_NAME__ --tla-compat --no-namespaced-exports --instantiation async --map 'wasi:sockets/tcp@0.2.0=../stubs/tcp.js' --map 'wasi:sockets/udp@0.2.0=../stubs/udp.js' && wasm-opt -Oz component/__COMPONENT_NAME__.core.wasm -o component/__COMPONENT_NAME__.core.wasm && node generate-module-map.mjs",
@@ -67,7 +70,7 @@ internal static class WasiCloudflareTemplate
           "devDependencies": {
             "@bytecodealliance/jco": "1.19.0",
             "binaryen": "129.0.0",
-            "wrangler": "^4.93.1"
+            "wrangler": "4.93.1"
           }
         }
         """;

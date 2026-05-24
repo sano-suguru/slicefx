@@ -1423,7 +1423,10 @@ public class CliFixtureTests
         Assert.Contains("\"name\": \"my-wasi-app-host\"", packageJson);
         Assert.Contains("dotnet publish \\\"../My.Wasi.App.csproj\\\" -r wasi-wasm", packageJson);
         Assert.Contains("jco transpile \\\"my-wasi-app.wasm\\\"", packageJson);
+        Assert.Contains("\"node\": \">=22.0.0\"", packageJson);
         Assert.Contains("\"binaryen\": \"129.0.0\"", packageJson);
+        Assert.Contains("\"wrangler\": \"4.93.1\"", packageJson);
+        Assert.DoesNotContain("\"wrangler\": \"^", packageJson);
         Assert.DoesNotContain("npx wasm-opt", packageJson);
         Assert.Contains("import { instantiate } from \"./component/my-wasi-app.js\";", shim);
         Assert.Contains("_setArgs([\"My.Wasi.App\"]);", shim);

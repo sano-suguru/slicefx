@@ -79,7 +79,7 @@ slice client csharp --output SliceApiClient.g.cs
 
 `slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes: write the server feature once, then let tooling produce the client entrypoint instead of manually maintaining endpoint strings and DTO wiring.
 
-`slice new wasi-cloudflare` scaffolds Cloudflare Workers deployment glue for the WASI path. The primary WASI sample also deploys natively to Fermyon Cloud / Spin because it emits a standard `wasi:http/incoming-handler` component. Runtime docs should present this as wasi:http portability first, with Cloudflare glue and Spin deployment as target-specific details.
+`slice new wasi-cloudflare` scaffolds Cloudflare Workers deployment glue for the WASI path. The primary WASI sample also deploys natively to Fermyon Cloud / Spin because it emits a standard `wasi:http/incoming-handler` component. Runtime docs should present this as wasi:http portability first, with Cloudflare glue and Spin deployment as target-specific details. Keep the support language precise: `Slice.Wasi` is experimental 0.x API surface, while the upstream WASI build/transpile stack is preview/unstable and can break independently of Slice.
 
 ## Non-goals
 

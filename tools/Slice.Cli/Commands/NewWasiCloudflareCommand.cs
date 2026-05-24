@@ -19,7 +19,7 @@ internal static class NewWasiCloudflareCommand
             Description = "Output directory. Defaults to dist in the project directory.",
         };
 
-        var cmd = new Command("wasi-cloudflare", "Scaffold Cloudflare Workers host files for a Slice.Wasi component.")
+        var cmd = new Command("wasi-cloudflare", "Scaffold experimental Cloudflare Workers host files for a Slice.Wasi component.")
         {
             projectOpt,
             componentNameOpt,

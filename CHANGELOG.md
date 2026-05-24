@@ -24,6 +24,7 @@ This project follows semantic versioning once stable packages are published. Bef
 - Added GitHub Pages landing page under `docs/`.
 - Added NuGet package metadata for the framework, source generator, adapters, and CLI.
 - Added CI test and package verification gates for preview readiness.
+- Documented the WASI host support matrix, unstable upstream toolchain boundary, and reproducible Cloudflare Workers dependency pins.
 
 ### Fixed before first publish
 

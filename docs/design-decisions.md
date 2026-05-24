@@ -74,6 +74,8 @@ The manifest classification is surfaced by `slice routes` and consumed by `slice
 
 Each satellite (`Slice.Lambda`, `Slice.TestHost`, `Slice.Wasi`) brings its own NuGet dependencies. Forcing them on every consumer would erode the zero-dep value of `Slice.Core` and pull in transitive packages that AOT publishers don't want. Opt-in by package reference keeps the dependency graph honest: if you reference `Slice.Wasi`, the WASI generator path activates; otherwise, the WASI emitter is skipped entirely and produces no output.
 
+`Slice.Wasi` is still experimental, and publishing a WASI component also depends on preview upstream tooling (`componentize-dotnet`, NativeAOT-LLVM, WASI Preview 2, and Cloudflare's JS shim path when targeting Workers). Keeping it as an opt-in satellite makes that toolchain risk explicit instead of imposing it on ASP.NET-only apps.
+
 This is why the source generator emits separate files for each active surface (`{Asm}_SliceRegistrations.g.cs`, `{Asm}_SliceWasiRegistrations.g.cs`, `{Asm}_SliceRouteManifest.g.cs`, and `{Asm}.SliceLambdaPerFunctionHandlers.g.cs` when Lambda per-feature handlers are enabled) instead of one combined output.
 
 ## How is warm-run kept faster than cold-run?

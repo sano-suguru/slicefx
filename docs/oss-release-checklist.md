@@ -42,6 +42,7 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
   - `docs/product-direction.md` product claims and non-goals.
   - `CHANGELOG.md` release notes for the chosen preview version.
   - Sample ports, commands, and expected outputs.
+  - WASI docs distinguish experimental Slice.Wasi APIs from the unstable upstream WASI build/transpile toolchain.
 - [ ] Keep public release messaging honest until NuGet publish is verified.
   - Do not claim that `dotnet add package Slice.Core` works before the package page exists.
   - Keep the website and README explicit that `0.1.0-preview.1` is unreleased.

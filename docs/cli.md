@@ -41,6 +41,8 @@ Generated feature templates return a nested `Response` record by default. `POST`
 
 `slice new wasi-cloudflare` scaffolds Cloudflare Workers host files for a `Slice.Wasi` component into `dist/`: `shim.mjs`, `package.json`, Wrangler config, socket stubs, and module-map generation. App-specific pieces such as `IncomingHandlerImpl.cs` and a `[SliceJsonContext(SliceJsonTarget.Wasi)]` JSON context remain in the app because they depend on WIT-generated types and user DTO metadata.
 
+The scaffold pins the Cloudflare JS tool versions and declares Node.js 22+ because the pinned Wrangler release requires it. It does not emit a lockfile, so run `npm install` the first time, review and commit the generated `package-lock.json`, then use `npm ci` for subsequent installs. The checked-in `samples/Slice.WasiSample/dist` directory already includes `package-lock.json` and uses `npm ci` for reproducible sample installs. The upstream WASI build/transpile toolchain remains preview/unstable even though the `Slice.Wasi` API is tracked as experimental 0.x surface.
+
 ## Route inspection
 
 `slice routes` reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs`.

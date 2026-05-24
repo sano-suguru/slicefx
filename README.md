@@ -45,7 +45,7 @@ Slice is pre-1.0 experimental software. Preview packages use `0.x` versions unti
 
 **Release status:** `0.1.0-preview.1` is still unreleased and is not available on NuGet yet. Until the release checklist, local verification, smoke tests, and final NuGet publish are complete, use the repository samples or local project references from a checkout instead of `dotnet add package`.
 
-WASI support (`Slice.Wasi`) depends on [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet), a preview package targeting the WASI Preview 2 / `wasi:http@0.2` interface. Native WASI publish requires Linux x64 or Windows x64; macOS requires a Docker cross-build. The WASI toolchain is actively evolving and may introduce breaking changes between preview releases. Treat any project targeting `Slice.Wasi` as experimental until the upstream tooling stabilizes.
+WASI support (`Slice.Wasi`) is experimental and depends on an unstable upstream toolchain: [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet), NativeAOT-LLVM preview packages, WASI Preview 2 / `wasi:http@0.2`, and Cloudflare's JS transpile/shim path when targeting Workers. Native WASI publish requires Linux x64 or Windows x64; macOS requires a Linux x64 Docker cross-build. "Experimental" means Slice.Wasi's own 0.x API may change; "unstable upstream toolchain" means those external build and deployment tools may break independently of Slice runtime code.
 
 | Package | Purpose |
 | --- | --- |
