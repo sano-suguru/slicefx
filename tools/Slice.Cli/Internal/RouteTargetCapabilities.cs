@@ -8,7 +8,9 @@ internal static class RouteTargetCapabilities
 
     internal static RouteCapabilities Classify(SliceRouteInfo route)
     {
-        var wasi = new RouteCapability(route.Portability, route.PortabilityReason);
+        var wasi = !string.IsNullOrWhiteSpace(route.WasiDispatchStatus)
+            ? new RouteCapability(route.WasiDispatchStatus, route.WasiDispatchReason)
+            : new RouteCapability(route.Portability, route.PortabilityReason);
         var lambdaHostedApp = new RouteCapability(Eligible, null);
         var lambdaPerFeature = ClassifyLambdaPerFeature(route);
 

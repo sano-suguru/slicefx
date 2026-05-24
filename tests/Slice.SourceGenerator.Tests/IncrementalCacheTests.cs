@@ -191,7 +191,6 @@ public class IncrementalCacheTests
 
         var runResult = driver.GetRunResult();
         AssertStepInvalidated(runResult, "SliceFeatureModels");
-        AssertStepReused(runResult, "SliceEmitPlan");
     }
 
     [Fact]

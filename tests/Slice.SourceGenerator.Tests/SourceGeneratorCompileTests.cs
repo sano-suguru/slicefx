@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -41,7 +43,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("123.My-App", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var runResult = driver.GetRunResult();
@@ -88,7 +90,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("EmptyHost", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var runResult = driver.GetRunResult();
@@ -134,7 +136,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("WasiHostApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var runResult = driver.GetRunResult();
@@ -154,18 +156,19 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using Slice;
+            using Slice.Wasi;
 
             namespace WasiEscapingApp.Features.Diagnostics;
 
             [Feature("GET /control\0")]
             public static class GetControl
             {
-                public static string Handle() => "ok";
+                public static WasiResponse Handle() => SliceResult.NoContent();
             }
             """;
 
         var compilation = CreateHostCompilation("WasiEscapingApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
@@ -182,18 +185,19 @@ public class SourceGeneratorCompileTests
         var source = """
             using System;
             using Slice;
+            using Slice.Wasi;
 
             namespace WasiRouteApp.Features.Users;
 
             [Feature("GET /users/{Id:guid}")]
             public static class GetUser
             {
-                public static string Handle(Guid id) => id.ToString();
+                public static WasiResponse Handle(Guid id) => SliceResult.NoContent();
             }
             """;
 
         var compilation = CreateHostCompilation("WasiRouteApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
@@ -216,6 +220,7 @@ public class SourceGeneratorCompileTests
 
             namespace WasiValidationApp
             {
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
                 public sealed class WasiJsonContext : JsonSerializerContext
                 {
                     public static WasiJsonContext Default { get; } = new();
@@ -251,7 +256,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("WasiValidationApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
@@ -292,6 +297,8 @@ public class SourceGeneratorCompileTests
 
                 public sealed class Clock;
 
+                [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+
                 public sealed class LambdaJsonContext : JsonSerializerContext
                 {
                     public static LambdaJsonContext Default { get; } = new();
@@ -330,7 +337,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("LambdaApp", source, includeLambdaReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
@@ -370,7 +377,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("MissingJsonLambdaApp", source, includeLambdaReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
@@ -378,8 +385,85 @@ public class SourceGeneratorCompileTests
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE014");
         Assert.Contains("\"ineligible\"", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("LambdaJsonContext is required", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("explicit [SliceJsonContext] JsonSerializerContext", manifestSource, StringComparison.Ordinal);
         Assert.DoesNotContain("Slice.MissingJsonLambdaApp_SliceLambdaPerFunctionHandlers", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_duplicate_slice_json_context_overrides()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Slice;
+
+            namespace DuplicateJsonContextApp;
+
+            [SliceJsonContext(SliceJsonTarget.Wasi)]
+            public sealed class FirstWasiJsonContext : JsonSerializerContext
+            {
+                public static FirstWasiJsonContext Default { get; } = new();
+
+                private FirstWasiJsonContext()
+                    : base(null)
+                {
+                }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+
+            [SliceJsonContext(SliceJsonTarget.Wasi)]
+            public sealed class SecondWasiJsonContext : JsonSerializerContext
+            {
+                public static SecondWasiJsonContext Default { get; } = new();
+
+                private SecondWasiJsonContext()
+                    : base(null)
+                {
+                }
+
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """;
+
+        var compilation = CreateHostCompilation("DuplicateJsonContextApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic =>
+            diagnostic.Id == "SLICE018" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Generator_reports_invalid_slice_json_context_override()
+    {
+        var source = """
+            using Slice;
+
+            namespace InvalidJsonContextApp;
+
+            [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+            public sealed class NotAJsonContext
+            {
+            }
+            """;
+
+        var compilation = CreateHostCompilation("InvalidJsonContextApp", source, includeLambdaReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic =>
+            diagnostic.Id == "SLICE019" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
@@ -398,7 +482,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("NoLambdaHandlersApp", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
@@ -410,9 +494,9 @@ public class SourceGeneratorCompileTests
             .Replace("\r", "", StringComparison.Ordinal)
             .Replace("\n", "", StringComparison.Ordinal);
         Assert.Contains("string? LambdaPerFeatureStatus", manifestSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"eligible\"", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("null,null,null,null,null)]", compactManifestSource, StringComparison.Ordinal);
-        Assert.Contains("null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
+        Assert.Contains("string? WasiDispatchStatus", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("null,null,null,null,null,\"2\"", compactManifestSource, StringComparison.Ordinal);
+        Assert.Contains("\"2\",true,\"portable\",null,\"eligible\",null,null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -430,6 +514,7 @@ public class SourceGeneratorCompileTests
 
             namespace LambdaCatchAllApp
             {
+                [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
                 public sealed class LambdaJsonContext : JsonSerializerContext
                 {
                     public static LambdaJsonContext Default { get; } = new();
@@ -456,7 +541,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("LambdaCatchAllApp", source, includeLambdaReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
@@ -498,7 +583,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("InvalidStartupApp", source, includeLambdaReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
@@ -526,7 +611,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("WasiMissingJsonContextApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
@@ -550,6 +635,7 @@ public class SourceGeneratorCompileTests
 
             namespace WasiValidatorApp
             {
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
                 public sealed class WasiJsonContext : JsonSerializerContext
                 {
                     public static WasiJsonContext Default { get; } = new();
@@ -581,7 +667,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("WasiValidatorApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
@@ -613,7 +699,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("WasiReflectionValidationApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
@@ -681,7 +767,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("WasiTypedResultsApp", source, includeWasiReference: true);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
@@ -737,7 +823,7 @@ public class SourceGeneratorCompileTests
             "HostApp",
             hostSource,
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
         var runResult = driver.GetRunResult();
@@ -799,7 +885,7 @@ public class SourceGeneratorCompileTests
             "HostApp",
             hostSource,
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
 
@@ -957,7 +1043,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("OrderedApp", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGenerators(compilation);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
@@ -1003,7 +1089,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("OrderHintApp", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
@@ -1047,7 +1133,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateHostCompilation("OrderHintOkApp", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
@@ -1070,7 +1156,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateCompilation("App", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
@@ -1095,7 +1181,7 @@ public class SourceGeneratorCompileTests
             """;
 
         var compilation = CreateCompilation("App", source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
@@ -1179,7 +1265,7 @@ public class SourceGeneratorCompileTests
     private static MemoryStream CompileGeneratedAssembly(string assemblyName, string source)
     {
         var compilation = CreateCompilation(assemblyName, source);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new SliceFeatureGenerator());
+        GeneratorDriver driver = CreateDriver();
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -1193,8 +1279,29 @@ public class SourceGeneratorCompileTests
 
     private static CSharpGeneratorDriver CreateDriver(params (string Name, string Value)[] properties)
         => CSharpGeneratorDriver.Create(
-            [new SliceFeatureGenerator().AsSourceGenerator()],
+            [new SliceFeatureGenerator().AsSourceGenerator(), CreateSystemTextJsonGenerator().AsSourceGenerator()],
             optionsProvider: new TestAnalyzerConfigOptionsProvider(properties));
+
+    private static IIncrementalGenerator CreateSystemTextJsonGenerator()
+    {
+        var jsonAssemblyPath = typeof(JsonSerializer).Assembly.Location;
+        var runtimeVersion = new DirectoryInfo(Path.GetDirectoryName(jsonAssemblyPath)!).Name;
+        var dotnetRoot = Directory.GetParent(Path.GetDirectoryName(jsonAssemblyPath)!)!
+            .Parent!
+            .Parent!
+            .FullName;
+        var generatorPath = Path.Combine(
+            dotnetRoot,
+            "packs",
+            "Microsoft.NETCore.App.Ref",
+            runtimeVersion,
+            "analyzers",
+            "dotnet",
+            "cs",
+            "System.Text.Json.SourceGeneration.dll");
+        var generatorType = Assembly.LoadFrom(generatorPath).GetType("System.Text.Json.SourceGeneration.JsonSourceGenerator", throwOnError: true)!;
+        return (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
+    }
 
     private static void AssertBefore(string value, string before, string after)
     {

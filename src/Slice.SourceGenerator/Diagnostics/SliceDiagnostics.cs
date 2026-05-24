@@ -84,12 +84,12 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a WASI body route is missing source-generated JSON metadata.
+    /// Diagnostic reported when generated WASI JSON metadata cannot be produced safely.
     /// </summary>
     public static readonly DiagnosticDescriptor MissingWasiJsonContext = new(
         "SLICE009",
-        "WASI JSON source-generation context not found",
-        "Feature '{0}' has a request body but no WasiJsonContext was found and will be excluded from the WASI route table. Add a source-generated WasiJsonContext for AOT-safe body binding.",
+        "WASI JSON source-generation metadata cannot be generated",
+        "Feature '{0}' needs WASI JSON metadata but Slice cannot generate it safely: {1}",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -140,12 +140,12 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a Lambda per-feature route is missing source-generated JSON metadata.
+    /// Diagnostic reported when Lambda per-feature JSON metadata cannot be produced safely.
     /// </summary>
     public static readonly DiagnosticDescriptor MissingLambdaJsonContext = new(
         "SLICE014",
-        "Lambda JSON source-generation context not found",
-        "Feature '{0}' needs JSON body or response metadata but no LambdaJsonContext was found and will be excluded from Lambda per-feature handlers. Add a source-generated LambdaJsonContext for AOT-safe JSON.",
+        "Lambda JSON source-generation metadata cannot be generated",
+        "Feature '{0}' needs Lambda JSON metadata but Slice cannot generate it safely: {1}",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -179,6 +179,28 @@ internal static class SliceDiagnostics
         "SLICE017",
         "Lambda per-feature startup type is invalid",
         "Lambda per-feature startup type '{0}' must implement ILambdaPerFunctionStartup and define a public parameterless constructor",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when multiple explicit JSON context overrides target the same Slice adapter.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicateJsonContextOverride = new(
+        "SLICE018",
+        "Duplicate Slice JSON context override",
+        "Slice JSON target '{0}' has multiple explicit context overrides: '{1}' and '{2}'. Use exactly one context per target.",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when an explicit JSON context override is not a JsonSerializerContext.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidJsonContextOverride = new(
+        "SLICE019",
+        "Invalid Slice JSON context override",
+        "Slice JSON context override '{0}' must derive from System.Text.Json.Serialization.JsonSerializerContext",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

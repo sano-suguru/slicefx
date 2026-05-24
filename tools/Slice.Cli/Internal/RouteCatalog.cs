@@ -381,7 +381,10 @@ internal sealed record SliceRouteInfo(
     string? LambdaPerFeatureReason = null,
     string? SourceAssemblyName = null,
     string? LambdaPerFeatureHandlerType = null,
-    string? LambdaPerFeatureHandlerMethod = null)
+    string? LambdaPerFeatureHandlerMethod = null,
+    string? ManifestSchemaVersion = null,
+    string? WasiDispatchStatus = null,
+    string? WasiDispatchReason = null)
 {
     internal string FeatureType => $"{Namespace}.{FeatureName}";
 

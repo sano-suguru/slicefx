@@ -32,7 +32,7 @@ Satellite projects (`Slice.SourceGenerator`, `Slice.Lambda`, `Slice.TestHost`, `
 Three reasons, in order of importance:
 
 1. **Generated route discovery and dispatch avoid reflection.** Anything that runs at request time must avoid reflection; the source generator emits the route registration and dispatch code, so `AddSlice()` and `MapSlices()` contain direct method calls instead of assembly scanning. DataAnnotations validation still builds its ASP.NET validation plan at endpoint-build time. The generated path stays AOT-friendly and avoids route-discovery startup cost that scales with assembly count.
-2. **Convention violations surface at compile time.** The generator emits 16 categories of diagnostics (SLICE001–006 and SLICE008–017) — missing `Handle` method, ambiguous overloads, non-public handler, invalid filter type, unsupported WASI body binding, missing JsonContext for AOT, duplicate endpoint names across aggregated modules, and so on. A reflection-based scanner would either silently skip these cases or throw at startup.
+2. **Convention violations surface at compile time.** The generator emits 18 categories of diagnostics (SLICE001–006 and SLICE008–019) — missing `Handle` method, ambiguous overloads, non-public handler, invalid filter type, unsupported WASI body binding, missing JsonContext metadata for AOT, duplicate endpoint names across aggregated modules, and so on. A reflection-based scanner would either silently skip these cases or throw at startup.
 3. **Tooling reuse.** The same generator emits a route manifest (`{Asm}_SliceRouteManifest.g.cs`) consumed by `slice routes` and `slice client csharp`. Reflection would require runtime introspection of a running app to produce the same output.
 
 Implementation lives in `src/Slice.SourceGenerator/`. The pipeline is incremental — see "Why incremental?" below.
@@ -66,7 +66,7 @@ Instead, filters are scoped services. Configure them through constructor DI by b
 WASI exclusions and route-manifest portability use the same vocabulary, but they are checked at different layers:
 
 - **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-based DataAnnotations validation (SLICE011) or non-validator endpoint filters prevent full WASI behavior.
-- **WASI route table emission**: body-binding routes additionally need `WasiJsonContext` for AOT-safe deserialization. Without it, SLICE009 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
+- **WASI route table emission**: JSON body/response routes additionally need a source-generated `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]` for AOT-safe serialization. Without it, SLICE009 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
 
 The manifest classification is surfaced by `slice routes` and consumed by `slice client csharp`; the WASI source-generator path applies its own route-table eligibility checks using the same portability vocabulary where applicable.
 

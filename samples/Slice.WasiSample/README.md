@@ -95,7 +95,7 @@ curl -X POST https://<worker-name>.<account>.workers.dev/echo \
 ## Known limitations
 
 - Features returning `IResult` / `Task<IResult>` are excluded from WASI routes (SLICE008 diagnostic).
-- Body-binding routes must have `WasiJsonContext` source-generated JSON metadata; routes without it are excluded from WASI routes (SLICE009 diagnostic).
+- JSON body/response routes must have source-generated JSON metadata from a `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]`; routes without it are excluded from WASI routes (SLICE009 diagnostic).
 - `[Filter<T>]` filters (other than `SliceValidatorFilter<T>`) do not run in the WASI path — they require ASP.NET's `IEndpointFilter` pipeline.
 - WASI DataAnnotations validation is source-generated for `RequiredAttribute`, `StringLengthAttribute`, `MinLengthAttribute` on strings, arrays, and types with a public `Count` property. Other validation rules cause the route to be excluded (SLICE011 diagnostic).
 - .NET NativeAOT imports `wasi:sockets/tcp` and `wasi:sockets/udp` at the WASM ABI level even when unused. The Cloudflare transpile pipeline stubs these with `stubs/tcp.js` and `stubs/udp.js`; Spin ignores unused socket imports natively.
@@ -108,7 +108,7 @@ These files intentionally live in the sample. `Slice.Wasi` owns the reusable run
 | File | Purpose |
 | --- | --- |
 | [`IncomingHandlerImpl.cs`](IncomingHandlerImpl.cs) | `wasi:http/incoming-handler` → `WasiApp.DispatchAsync` bridge (compiled only under `-r wasi-wasm`; depends on WIT-generated `ProxyWorld` types from the app's componentize-dotnet build) |
-| [`WasiJsonContext.cs`](WasiJsonContext.cs) | App-specific `JsonSerializerContext` for AOT/trim-safe serialization |
+| [`WasiJsonContext.cs`](WasiJsonContext.cs) | App-specific `[SliceJsonContext(SliceJsonTarget.Wasi)]` context for AOT/trim-safe serialization |
 | [`Features/`](Features/) | `[Feature]` classes — identical shape to ASP.NET features |
 | [`spin.toml`](spin.toml) | Fermyon Cloud / Spin deployment manifest |
 | [`dist/shim.mjs`](dist/shim.mjs) | Cloudflare Workers fetch handler; bridges `fetch(Request)` → wasi:http |

@@ -5,34 +5,19 @@ namespace Slice.SourceGenerator;
 
 internal static class WasiRegistrationEmitter
 {
-    private static readonly HashSet<string> s_simpleTypes = new(StringComparer.Ordinal)
-    {
-        "global::System.String", "global::System.Guid",
-        "global::System.Int32", "global::System.Int64", "global::System.Int16",
-        "global::System.UInt32", "global::System.UInt64", "global::System.UInt16",
-        "global::System.Boolean", "global::System.Double", "global::System.Single",
-        "global::System.Decimal", "global::System.Byte", "global::System.Char",
-        "global::System.DateTime", "global::System.DateTimeOffset",
-        "global::System.DateOnly", "global::System.TimeOnly", "global::System.TimeSpan",
-        "global::System.Uri",
-        "string", "int", "long", "short", "bool", "double", "float", "decimal",
-    };
-
-    private const string SliceValidatorFilterPrefix = "global::Slice.SliceValidatorFilter<";
-
     /// <summary>
     /// Emits Slice WASI registration source for the specified feature models.
     /// </summary>
     /// <param name="features">The feature models to include in generated registrations.</param>
     /// <param name="assemblyName">The target assembly name used to form the generated class name.</param>
-    /// <param name="wasiJsonContextFqn">The fully qualified JSON source-generation context type, when available.</param>
+    /// <param name="jsonContextPlan">The JSON source-generation context plan for WASI dispatch.</param>
     /// <param name="referencedModules">The referenced Slice modules to aggregate from user-facing extension methods.</param>
     /// <param name="emitExtensions">Whether to emit the user-facing WASI extension method for this compilation.</param>
     /// <returns>The generated C# source and any diagnostics produced while emitting it.</returns>
     public static (string Source, ImmutableArray<EquatableDiagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
         string assemblyName,
-        string? wasiJsonContextFqn,
+        JsonContextPlan jsonContextPlan,
         ImmutableArray<ReferencedSliceModule> referencedModules,
         bool emitExtensions)
     {
@@ -101,6 +86,7 @@ internal static class WasiRegistrationEmitter
             sb.AppendLine();
         }
 
+        var wasiJsonContextFqn = jsonContextPlan.ContextFqn;
         if (wasiJsonContextFqn is not null)
         {
             EmitJsonTypeInfoHelper(sb, wasiJsonContextFqn);
@@ -118,9 +104,8 @@ internal static class WasiRegistrationEmitter
 
         foreach (var f in features)
         {
-            var @params = f.GetParams();
-            var bodyParam = FindBodyParam(f, @params);
-            var skipReason = GetSkipReason(f);
+            var jsonExclusion = JsonContextPlanner.FindExclusion(jsonContextPlan, f);
+            var skipReason = GetSkipReason(f) ?? jsonExclusion?.Reason;
             if (skipReason is not null)
             {
                 if (f.ReturnsAspNetResult)
@@ -132,6 +117,10 @@ internal static class WasiRegistrationEmitter
                         f.ReturnTypeFqn));
                     sb.AppendLine($"        // SLICE008: {ToSingleLineComment(f.EndpointName)} — return type '{f.ReturnTypeFqn}' not supported in WASI; skipped.");
                 }
+                else if (jsonExclusion is not null)
+                {
+                    sb.AppendLine($"        // SLICE009: {ToSingleLineComment(f.EndpointName)} — {skipReason}; skipped.");
+                }
                 else
                 {
                     diagnostics.Add(EquatableDiagnostic.Create(
@@ -141,17 +130,6 @@ internal static class WasiRegistrationEmitter
                     sb.AppendLine($"        // SLICE011: {ToSingleLineComment(f.EndpointName)} — {skipReason}; skipped.");
                 }
 
-                continue;
-            }
-
-            if (wasiJsonContextFqn is null && bodyParam is not null)
-            {
-                diagnostics.Add(EquatableDiagnostic.Create(
-                    SliceDiagnostics.MissingWasiJsonContext,
-                    f.GetDiagnosticLocationModel(),
-                    f.TypeName));
-                sb.AppendLine($"        // SLICE009: {ToSingleLineComment(f.EndpointName)} — body binding requires WasiJsonContext; skipped.");
-                sb.AppendLine();
                 continue;
             }
 
@@ -280,14 +258,14 @@ internal static class WasiRegistrationEmitter
             sb.AppendLine($"                    {callExpr};");
             sb.AppendLine($"                    return global::Slice.Wasi.SliceResult.NoContent();");
         }
-        else if (IsNonGenericAwaitable(f.ReturnTypeFqn))
+        else if (SourceGenerationHelpers.IsNonGenericAwaitable(f.ReturnTypeFqn))
         {
             sb.AppendLine($"                    await {callExpr};");
             sb.AppendLine($"                    return global::Slice.Wasi.SliceResult.NoContent();");
         }
         else
         {
-            if (IsGenericAwaitable(f.ReturnTypeFqn))
+            if (SourceGenerationHelpers.IsGenericAwaitable(f.ReturnTypeFqn))
             {
                 sb.AppendLine($"                    var __result = await {callExpr};");
             }
@@ -296,13 +274,13 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine($"                    var __result = {callExpr};");
             }
 
-            if (IsWasiResponseType(GetAwaitedReturnType(f.ReturnTypeFqn)))
+            if (IsWasiResponseType(SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn)))
             {
                 sb.AppendLine($"                    return __result;");
             }
             else
             {
-                var resultType = GetAwaitedReturnType(f.ReturnTypeFqn);
+                var resultType = SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn);
                 if (wasiJsonContextFqn is not null)
                 {
                     sb.AppendLine($"                    return global::Slice.Wasi.SliceResult.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>());");
@@ -485,39 +463,6 @@ internal static class WasiRegistrationEmitter
         return null;
     }
 
-    private static bool IsNonGenericAwaitable(string returnTypeFqn)
-        => returnTypeFqn is "global::System.Threading.Tasks.Task"
-        or "global::System.Threading.Tasks.ValueTask";
-
-    private static bool IsGenericAwaitable(string returnTypeFqn)
-        => returnTypeFqn.StartsWith("global::System.Threading.Tasks.Task<", StringComparison.Ordinal)
-        || returnTypeFqn.StartsWith("global::System.Threading.Tasks.ValueTask<", StringComparison.Ordinal);
-
-    private static string? GetAwaitedReturnType(string returnTypeFqn)
-    {
-        if (returnTypeFqn is "void"
-            or "global::System.Threading.Tasks.Task"
-            or "global::System.Threading.Tasks.ValueTask")
-        {
-            return null;
-        }
-
-        if (returnTypeFqn.StartsWith("global::System.Threading.Tasks.Task<", StringComparison.Ordinal))
-        {
-            return GetSingleGenericArgument(returnTypeFqn, "global::System.Threading.Tasks.Task<");
-        }
-
-        if (returnTypeFqn.StartsWith("global::System.Threading.Tasks.ValueTask<", StringComparison.Ordinal))
-        {
-            return GetSingleGenericArgument(returnTypeFqn, "global::System.Threading.Tasks.ValueTask<");
-        }
-
-        return returnTypeFqn;
-    }
-
-    private static string GetSingleGenericArgument(string typeFqn, string prefix)
-        => typeFqn.Substring(prefix.Length, typeFqn.Length - prefix.Length - 1);
-
     private static bool IsWasiResponseType(string? typeFqn)
         => typeFqn == "global::Slice.Wasi.WasiResponse";
 
@@ -530,7 +475,7 @@ internal static class WasiRegistrationEmitter
 
         foreach (var fqn in filterFqns)
         {
-            if (fqn.StartsWith(SliceValidatorFilterPrefix, StringComparison.Ordinal))
+            if (fqn.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal))
             {
                 return fqn;
             }
@@ -542,56 +487,9 @@ internal static class WasiRegistrationEmitter
 
     private static ParamSource ClassifyNonBodyParam(HandleParamModel p, string pattern)
     {
-        return !s_simpleTypes.Contains(p.TypeFqn) && !IsSimpleGenericTypeFqn(p.TypeFqn)
+        return !SourceGenerationHelpers.IsSimpleType(p.TypeFqn)
             ? ParamSource.DI
-            : IsRouteParam(p.Name, pattern) ? ParamSource.Route : ParamSource.Query;
-    }
-
-    private static bool IsRouteParam(string name, string pattern)
-    {
-        for (var i = 0; i < pattern.Length; i++)
-        {
-            if (pattern[i] != '{')
-            {
-                continue;
-            }
-
-            if (i + 1 < pattern.Length && pattern[i + 1] == '{')
-            {
-                i++;
-                continue;
-            }
-
-            var end = pattern.IndexOf('}', i + 1);
-            if (end < 0)
-            {
-                return false;
-            }
-
-            var token = pattern.Substring(i + 1, end - i - 1);
-            var colon = token.IndexOf(':');
-            var parameterName = colon >= 0 ? token.Substring(0, colon) : token;
-            if (string.Equals(parameterName, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            i = end;
-        }
-
-        return false;
-    }
-
-    private static bool IsSimpleGenericTypeFqn(string fqn)
-    {
-        // Handle Nullable<T> wrapper: "global::System.Nullable<global::System.Guid>" etc.
-        if (!fqn.StartsWith("global::System.Nullable<", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var inner = fqn.Substring("global::System.Nullable<".Length).TrimEnd('>');
-        return s_simpleTypes.Contains(inner);
+            : SourceGenerationHelpers.IsRouteParam(p.Name, pattern) ? ParamSource.Route : ParamSource.Query;
     }
 
     private static string Str(string value) => CSharpLiteral.String(value);

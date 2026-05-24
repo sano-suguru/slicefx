@@ -74,29 +74,53 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             })
             .WithTrackingName("SliceEmitExtensions");
 
-        var wasiJsonContextFqn = validModels
-            .Combine(context.CompilationProvider)
-            .Combine(hasWasiRef)
-            .Select(static (pair, _) => pair.Right ? FindWasiJsonContext(pair.Left.Left, pair.Left.Right) : null)
-            .WithTrackingName("SliceWasiJsonContext");
+        var jsonContextOverrides = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                "Slice.SliceJsonContextAttribute",
+                predicate: static (node, _) => node is TypeDeclarationSyntax,
+                transform: static (ctx, _) => JsonContextPlanner.CreateOverrideCandidate(ctx))
+            .Collect()
+            .Select(static (candidates, _) => JsonContextPlanner.CreateOverrides(candidates))
+            .WithTrackingName("SliceJsonContextOverrides");
 
-        var lambdaJsonContextFqn = validModels
-            .Combine(context.CompilationProvider)
+        var wasiJsonContextPlan = validModels
+            .Combine(jsonContextOverrides)
+            .Combine(hasWasiRef)
+            .Select(static (pair, _) =>
+                pair.Right
+                    ? JsonContextPlanner.CreateWasiPlan(pair.Left.Left, pair.Left.Right.WasiContextFqn)
+                    : new JsonContextPlan(JsonContextTarget.Wasi, null, [], []))
+            .WithTrackingName("SliceWasiJsonContextPlan");
+
+        var lambdaJsonContextPlan = validModels
+            .Combine(jsonContextOverrides)
             .Combine(lambdaPerFunctionOptions)
-            .Select(static (pair, _) => pair.Right.Enabled ? FindLambdaJsonContext(pair.Left.Left, pair.Left.Right) : null)
-            .WithTrackingName("SliceLambdaJsonContext");
+            .Select(static (pair, _) =>
+                pair.Right.Enabled
+                    ? JsonContextPlanner.CreateLambdaPlan(pair.Left.Left, pair.Left.Right.LambdaPerFeatureContextFqn)
+                    : new JsonContextPlan(JsonContextTarget.LambdaPerFeature, null, [], []))
+            .WithTrackingName("SliceLambdaJsonContextPlan");
 
         var emitPlan = validModels.Combine(assemblyName)
             .Combine(hasAspNetRef)
             .Combine(hasWasiRef)
             .Combine(referencedModules)
             .Combine(emitExtensions)
-            .Combine(wasiJsonContextFqn)
+            .Combine(jsonContextOverrides)
+            .Combine(wasiJsonContextPlan)
             .Combine(lambdaPerFunctionOptions)
-            .Combine(lambdaJsonContextFqn)
+            .Combine(lambdaJsonContextPlan)
             .Select(static (pair, _) =>
             {
-                var ((((((((models, asmName), emitAspNet), emitWasi), referencedModules), emitExtensions), wasiJsonContextFqn), lambdaOptions), lambdaJsonContextFqn) = pair;
+                var (lambdaOptionsPair, lambdaJsonContextPlan) = pair;
+                var (wasiPlanPair, lambdaOptions) = lambdaOptionsPair;
+                var (overridesPair, wasiJsonContextPlan) = wasiPlanPair;
+                var (emitExtensionsPair, jsonContextOverrides) = overridesPair;
+                var (referencedModulesPair, emitExtensions) = emitExtensionsPair;
+                var (emitWasiPair, referencedModules) = referencedModulesPair;
+                var (emitAspNetPair, emitWasi) = emitWasiPair;
+                var (modelsPair, emitAspNet) = emitAspNetPair;
+                var (models, asmName) = modelsPair;
                 return CreateEmitPlan(
                     models,
                     asmName,
@@ -104,9 +128,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     emitWasi,
                     referencedModules,
                     emitExtensions,
-                    wasiJsonContextFqn,
+                    jsonContextOverrides,
+                    wasiJsonContextPlan,
                     lambdaOptions,
-                    lambdaJsonContextFqn);
+                    lambdaJsonContextPlan);
             })
             .WithTrackingName("SliceEmitPlan");
 
@@ -135,9 +160,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         bool emitWasi,
         ImmutableArray<ReferencedSliceModule> referencedModules,
         bool emitExtensions,
-        string? wasiJsonContextFqn,
+        JsonContextOverrides jsonContextOverrides,
+        JsonContextPlan wasiJsonContextPlan,
         LambdaPerFunctionOptions lambdaOptions,
-        string? lambdaJsonContextFqn)
+        JsonContextPlan lambdaJsonContextPlan)
     {
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
         var duplicateDiagnostics = FindDuplicateEndpointNameDiagnostics(models, referencedModules);
@@ -149,6 +175,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         diagnostics.AddRange(FindFilterOrderDiagnostics(models));
         diagnostics.AddRange(lambdaOptions.Diagnostics);
+        diagnostics.AddRange(jsonContextOverrides.Diagnostics);
+        diagnostics.AddRange(wasiJsonContextPlan.Diagnostics);
+        diagnostics.AddRange(lambdaJsonContextPlan.Diagnostics);
 
         var sources = ImmutableArray.CreateBuilder<GeneratedSource>();
         sources.Add(new GeneratedSource(
@@ -157,7 +186,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 models,
                 asmName,
                 lambdaOptions.Enabled,
-                lambdaJsonContextFqn)));
+                wasiJsonContextPlan,
+                lambdaJsonContextPlan)));
 
         if (emitAspNet)
         {
@@ -171,7 +201,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             var (lambdaSource, lambdaDiagnostics) = LambdaPerFunctionEmitter.Emit(
                 models,
                 asmName,
-                lambdaJsonContextFqn,
+                lambdaJsonContextPlan,
                 lambdaOptions.StartupTypeFqn);
             diagnostics.AddRange(lambdaDiagnostics);
             sources.Add(new GeneratedSource(
@@ -184,7 +214,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             var (wasiSource, wasiDiagnostics) = WasiRegistrationEmitter.Emit(
                 models,
                 asmName,
-                wasiJsonContextFqn,
+                wasiJsonContextPlan,
                 referencedModules,
                 emitExtensions);
             diagnostics.AddRange(wasiDiagnostics);
@@ -847,85 +877,6 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             lineSpan.EndLinePosition.Character);
     }
 
-    // Looks up WasiJsonContext by namespace convention only. Slice.Wasi projects
-    // should place it at <RootNamespace>.WasiJsonContext; SLICE009 excludes body
-    // routes when the conventional location turns up nothing.
-    private static string? FindWasiJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
-    {
-        var jsonContextType = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
-        foreach (var model in models)
-        {
-            var typeName = model.FullyQualifiedTypeName;
-            if (typeName.StartsWith("global::", StringComparison.Ordinal))
-            {
-                typeName = typeName.Substring("global::".Length);
-            }
-
-            var featuresIndex = typeName.IndexOf(".Features.", StringComparison.Ordinal);
-            if (featuresIndex < 0)
-            {
-                continue;
-            }
-
-            var rootNamespace = typeName.Substring(0, featuresIndex);
-            var candidate = rootNamespace + ".WasiJsonContext";
-            var candidateType = compilation.GetTypeByMetadataName(candidate);
-            if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
-            {
-                return "global::" + candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static string? FindLambdaJsonContext(ImmutableArray<FeatureModel> models, Compilation compilation)
-    {
-        var jsonContextType = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
-        foreach (var model in models)
-        {
-            var typeName = model.FullyQualifiedTypeName;
-            if (typeName.StartsWith("global::", StringComparison.Ordinal))
-            {
-                typeName = typeName.Substring("global::".Length);
-            }
-
-            var featuresIndex = typeName.IndexOf(".Features.", StringComparison.Ordinal);
-            if (featuresIndex < 0)
-            {
-                continue;
-            }
-
-            var rootNamespace = typeName.Substring(0, featuresIndex);
-            var candidate = rootNamespace + ".LambdaJsonContext";
-            var candidateType = compilation.GetTypeByMetadataName(candidate);
-            if (candidateType is not null && InheritsFrom(candidateType, jsonContextType))
-            {
-                return "global::" + candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol? baseType)
-    {
-        if (baseType is null)
-        {
-            return false;
-        }
-
-        for (var current = type.BaseType; current is not null; current = current.BaseType)
-        {
-            if (SymbolEqualityComparer.Default.Equals(current, baseType))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     // Mirrors SliceExtensions.InferTag: same IndexOf(".Features.") string logic.
     private static string InferTag(INamedTypeSymbol type)
     {
@@ -976,17 +927,14 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                         SliceDiagnostics.FilterOrderViolation,
                         model.GetDiagnosticLocationModel(),
                         model.FullyQualifiedTypeName,
-                        TrimGlobalPrefix(hint.FilterFqn),
-                        TrimGlobalPrefix(hint.AfterFqn)));
+                        SourceGenerationHelpers.TrimGlobalAlias(hint.FilterFqn),
+                        SourceGenerationHelpers.TrimGlobalAlias(hint.AfterFqn)));
                 }
             }
         }
 
         return diagnostics.ToImmutable();
     }
-
-    private static string TrimGlobalPrefix(string value)
-        => value.StartsWith("global::", StringComparison.Ordinal) ? value.Substring("global::".Length) : value;
 
     private static ImmutableArray<EquatableDiagnostic> FindDuplicateEndpointNameDiagnostics(
         ImmutableArray<FeatureModel> models,

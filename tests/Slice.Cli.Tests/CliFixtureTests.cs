@@ -191,6 +191,63 @@ public class CliFixtureTests
     }
 
     [Fact]
+    public async Task Route_catalog_fails_clearly_for_unsupported_generated_manifest_schema()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "unsupported-schema-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Unsupported.Schema.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "RouteMetadata.cs",
+            """
+            using Slice;
+
+            [assembly: SliceFeatureRouteAttribute(
+                "Health.GetHealth",
+                "Unsupported.Schema.App.Features.Health.GetHealth",
+                "GET",
+                "/health",
+                "Health",
+                null,
+                null,
+                "Unsupported.Schema.App.Features.Health.GetHealth.Response",
+                "portable",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "999",
+                "eligible",
+                null)]
+
+            namespace Unsupported.Schema.App.Features.Health;
+
+            public static class GetHealth
+            {
+                public sealed record Response(string Status);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        Assert.Contains("Unsupported Slice route manifest schema '999'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Route_catalog_returns_empty_when_built_project_has_empty_generated_metadata()
     {
         using var fixture = CliProjectFixture.Create(
@@ -952,6 +1009,8 @@ public class CliFixtureTests
 
             namespace Lambda.PerFeature.App;
 
+            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaPerFeature)]
+
             public sealed class LambdaJsonContext : JsonSerializerContext
             {
                 public static LambdaJsonContext Default { get; } = new();
@@ -1073,6 +1132,8 @@ public class CliFixtureTests
 
             public sealed class Marker;
 
+            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaPerFeature)]
+
             public sealed class LambdaJsonContext : JsonSerializerContext
             {
                 public static LambdaJsonContext Default { get; } = new();
@@ -1155,6 +1216,8 @@ public class CliFixtureTests
             [assembly: LambdaPerFunction]
 
             namespace Lambda.Package.App;
+
+            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaPerFeature)]
 
             public sealed class LambdaJsonContext : JsonSerializerContext
             {

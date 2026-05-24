@@ -5,6 +5,8 @@ namespace Slice.Cli.Internal;
 
 internal static class GeneratedRouteCatalog
 {
+    private const string CurrentManifestSchemaVersion = "2";
+
     internal static GeneratedRouteDiscovery Discover(ProjectContext ctx)
     {
         var assemblyFiles = FindAssemblyFiles(ctx);
@@ -22,6 +24,11 @@ internal static class GeneratedRouteCatalog
                 var metadata = ReadMetadata(assemblyFile);
                 routes.AddRange(metadata.Routes);
                 hasLambdaPerFunctionHandlers |= metadata.LambdaPerFunctionHandlerTypeName is not null;
+            }
+            catch (UnsupportedRouteManifestSchemaException ex)
+            {
+                throw new CliException(
+                    $"Unsupported Slice route manifest schema '{ex.SchemaVersion}' in {assemblyFile.FullName}. Update the slice CLI to read this project.");
             }
             catch (BadImageFormatException)
             {
@@ -290,6 +297,14 @@ internal static class GeneratedRouteCatalog
         var lambdaHandlerAssembly = GetString(args[14]);
         var lambdaHandlerType = TrimGlobalPrefix(GetString(args[15]));
         var lambdaHandlerMethod = GetString(args[16]);
+        var manifestSchemaVersion = args.Length > 17 ? GetString(args[17]) : null;
+        if (manifestSchemaVersion is not (null or "1" or CurrentManifestSchemaVersion))
+        {
+            throw new UnsupportedRouteManifestSchemaException(manifestSchemaVersion);
+        }
+
+        var wasiStatus = args.Length > 18 ? GetString(args[18]) : null;
+        var wasiReason = args.Length > 19 ? GetString(args[19]) : null;
 
         return new SliceRouteInfo(
             method.ToUpperInvariant(),
@@ -309,7 +324,10 @@ internal static class GeneratedRouteCatalog
             lambdaReason,
             lambdaHandlerAssembly,
             lambdaHandlerType,
-            lambdaHandlerMethod);
+            lambdaHandlerMethod,
+            manifestSchemaVersion,
+            wasiStatus,
+            wasiReason);
     }
 
     private static string? GetString(CustomAttributeTypedArgument<string> argument)
@@ -402,3 +420,8 @@ internal static class GeneratedRouteCatalog
 internal sealed record GeneratedRouteDiscovery(bool Found, SliceRouteInfo[] Routes, bool HasLambdaPerFunctionHandlers);
 
 internal sealed record GeneratedAssemblyRouteMetadata(SliceRouteInfo[] Routes, string? LambdaPerFunctionHandlerTypeName);
+
+internal sealed class UnsupportedRouteManifestSchemaException(string schemaVersion) : Exception
+{
+    internal string SchemaVersion { get; } = schemaVersion;
+}

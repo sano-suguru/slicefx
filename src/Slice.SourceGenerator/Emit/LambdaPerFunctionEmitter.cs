@@ -5,13 +5,10 @@ namespace Slice.SourceGenerator;
 
 internal static class LambdaPerFunctionEmitter
 {
-    private const string SliceValidatorFilterPrefix = "global::Slice.SliceValidatorFilter<";
-    private const string LambdaJsonContextMissingReason = "LambdaJsonContext is required for AOT-safe JSON body or response serialization";
-
     public static (string Source, ImmutableArray<EquatableDiagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
         string assemblyName,
-        string? lambdaJsonContextFqn,
+        JsonContextPlan jsonContextPlan,
         string? startupTypeFqn)
     {
         var className = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaPerFunctionHandlers");
@@ -36,6 +33,7 @@ internal static class LambdaPerFunctionEmitter
         sb.AppendLine($"public static class {className}");
         sb.AppendLine("{");
         EmitServiceProvider(sb, startupTypeFqn);
+        var lambdaJsonContextFqn = jsonContextPlan.ContextFqn;
         if (lambdaJsonContextFqn is not null)
         {
             sb.AppendLine();
@@ -44,7 +42,7 @@ internal static class LambdaPerFunctionEmitter
 
         foreach (var feature in features)
         {
-            EmitFeatureHandler(sb, feature, lambdaJsonContextFqn, diagnostics);
+            EmitFeatureHandler(sb, feature, jsonContextPlan, diagnostics);
         }
 
         EmitValidationHelpers(sb, features);
@@ -68,10 +66,18 @@ internal static class LambdaPerFunctionEmitter
     private static void EmitFeatureHandler(
         StringBuilder sb,
         FeatureModel feature,
-        string? lambdaJsonContextFqn,
+        JsonContextPlan jsonContextPlan,
         ImmutableArray<EquatableDiagnostic>.Builder diagnostics)
     {
         var skip = GetSkipReason(feature);
+        var jsonExclusion = JsonContextPlanner.FindExclusion(jsonContextPlan, feature);
+        if (jsonExclusion is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    // SLICE014: {ToSingleLineComment(feature.EndpointName)} — {jsonExclusion.Value.Reason}; skipped.");
+            return;
+        }
+
         if (skip is not null)
         {
             ReportSkipDiagnostic(feature, skip.Value, diagnostics);
@@ -82,17 +88,7 @@ internal static class LambdaPerFunctionEmitter
 
         var @params = feature.GetParams();
         var bodyParam = FindBodyParam(feature, @params);
-        var awaitedReturnType = GetAwaitedReturnType(feature.ReturnTypeFqn);
-        if (lambdaJsonContextFqn is null && (bodyParam is not null || awaitedReturnType is not null))
-        {
-            diagnostics.Add(EquatableDiagnostic.Create(
-                SliceDiagnostics.MissingLambdaJsonContext,
-                feature.GetDiagnosticLocationModel(),
-                feature.TypeName));
-            sb.AppendLine();
-            sb.AppendLine($"    // SLICE014: {ToSingleLineComment(feature.EndpointName)} — {LambdaJsonContextMissingReason}; skipped.");
-            return;
-        }
+        var awaitedReturnType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
 
         var filterFqns = feature.GetFilterFqns();
         var validatorTypeFqn = FindSliceValidatorType(filterFqns, bodyParam?.TypeFqn);
@@ -164,14 +160,14 @@ internal static class LambdaPerFunctionEmitter
             sb.AppendLine($"        {callExpr};");
             sb.AppendLine("        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.NoContent();");
         }
-        else if (IsNonGenericAwaitable(feature.ReturnTypeFqn))
+        else if (SourceGenerationHelpers.IsNonGenericAwaitable(feature.ReturnTypeFqn))
         {
             sb.AppendLine($"        await {callExpr}.ConfigureAwait(false);");
             sb.AppendLine("        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.NoContent();");
         }
         else
         {
-            if (IsGenericAwaitable(feature.ReturnTypeFqn))
+            if (SourceGenerationHelpers.IsGenericAwaitable(feature.ReturnTypeFqn))
             {
                 sb.AppendLine($"        var __result = await {callExpr}.ConfigureAwait(false);");
             }
@@ -215,9 +211,9 @@ internal static class LambdaPerFunctionEmitter
                 continue;
             }
 
-            if (IsRouteParam(p.Name, feature.Pattern) && !IsSimpleType(p.TypeFqn))
+            if (SourceGenerationHelpers.IsRouteParam(p.Name, feature.Pattern) && !SourceGenerationHelpers.IsSimpleType(p.TypeFqn))
             {
-                return new LambdaSkipReason("SLICE015", $"route parameter '{p.Name}' has unsupported type '{TrimGlobalPrefix(p.TypeFqn)}'");
+                return new LambdaSkipReason("SLICE015", $"route parameter '{p.Name}' has unsupported type '{SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn)}'");
             }
         }
 
@@ -438,7 +434,7 @@ internal static class LambdaPerFunctionEmitter
 
         foreach (var fqn in filterFqns)
         {
-            if (fqn.StartsWith(SliceValidatorFilterPrefix, StringComparison.Ordinal))
+            if (fqn.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal))
             {
                 return fqn;
             }
@@ -448,7 +444,7 @@ internal static class LambdaPerFunctionEmitter
     }
 
     private static bool IsSliceValidatorFilter(string filter)
-        => filter.StartsWith(SliceValidatorFilterPrefix, StringComparison.Ordinal)
+        => filter.StartsWith(SourceGenerationHelpers.SliceValidatorFilterPrefix, StringComparison.Ordinal)
            || filter.StartsWith("Slice.SliceValidatorFilter<", StringComparison.Ordinal)
            || filter.StartsWith("SliceValidatorFilter<", StringComparison.Ordinal);
 
@@ -456,110 +452,10 @@ internal static class LambdaPerFunctionEmitter
 
     private static ParamSource ClassifyNonBodyParam(HandleParamModel p, string pattern)
     {
-        return !IsSimpleType(p.TypeFqn)
+        return !SourceGenerationHelpers.IsSimpleType(p.TypeFqn)
             ? ParamSource.DI
-            : IsRouteParam(p.Name, pattern) ? ParamSource.Route : ParamSource.Query;
+            : SourceGenerationHelpers.IsRouteParam(p.Name, pattern) ? ParamSource.Route : ParamSource.Query;
     }
-
-    private static bool IsSimpleType(string typeFqn)
-        => RouteManifestSimpleTypes.Contains(typeFqn) || IsSimpleNullableType(typeFqn);
-
-    private static bool IsSimpleNullableType(string typeFqn)
-    {
-        if (!typeFqn.StartsWith("global::System.Nullable<", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var inner = typeFqn.Substring("global::System.Nullable<".Length).TrimEnd('>');
-        return RouteManifestSimpleTypes.Contains(inner);
-    }
-
-    private static readonly HashSet<string> RouteManifestSimpleTypes = new(StringComparer.Ordinal)
-    {
-        "global::System.String", "global::System.Guid",
-        "global::System.Int32", "global::System.Int64", "global::System.Int16",
-        "global::System.UInt32", "global::System.UInt64", "global::System.UInt16",
-        "global::System.Boolean", "global::System.Double", "global::System.Single",
-        "global::System.Decimal", "global::System.Byte", "global::System.Char",
-        "global::System.DateTime", "global::System.DateTimeOffset",
-        "global::System.DateOnly", "global::System.TimeOnly", "global::System.TimeSpan",
-        "global::System.Uri",
-        "string", "int", "long", "short", "bool", "double", "float", "decimal",
-    };
-
-    private static bool IsRouteParam(string name, string pattern)
-    {
-        for (var i = 0; i < pattern.Length; i++)
-        {
-            if (pattern[i] != '{')
-            {
-                continue;
-            }
-
-            if (i + 1 < pattern.Length && pattern[i + 1] == '{')
-            {
-                i++;
-                continue;
-            }
-
-            var end = pattern.IndexOf('}', i + 1);
-            if (end < 0)
-            {
-                return false;
-            }
-
-            var parameterName = NormalizeRouteParameterName(pattern.Substring(i + 1, end - i - 1));
-            if (string.Equals(parameterName, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            i = end;
-        }
-
-        return false;
-    }
-
-    private static string NormalizeRouteParameterName(string token)
-    {
-        token = token.TrimStart('*');
-        var terminator = token.IndexOfAny([':', '?', '=']);
-        return terminator >= 0 ? token.Substring(0, terminator) : token;
-    }
-
-    private static bool IsNonGenericAwaitable(string returnTypeFqn)
-        => returnTypeFqn is "global::System.Threading.Tasks.Task"
-        or "global::System.Threading.Tasks.ValueTask";
-
-    private static bool IsGenericAwaitable(string returnTypeFqn)
-        => returnTypeFqn.StartsWith("global::System.Threading.Tasks.Task<", StringComparison.Ordinal)
-        || returnTypeFqn.StartsWith("global::System.Threading.Tasks.ValueTask<", StringComparison.Ordinal);
-
-    private static string? GetAwaitedReturnType(string returnTypeFqn)
-    {
-        if (returnTypeFqn is "void"
-            or "global::System.Threading.Tasks.Task"
-            or "global::System.Threading.Tasks.ValueTask")
-        {
-            return null;
-        }
-
-        if (returnTypeFqn.StartsWith("global::System.Threading.Tasks.Task<", StringComparison.Ordinal))
-        {
-            return GetSingleGenericArgument(returnTypeFqn, "global::System.Threading.Tasks.Task<");
-        }
-
-        if (returnTypeFqn.StartsWith("global::System.Threading.Tasks.ValueTask<", StringComparison.Ordinal))
-        {
-            return GetSingleGenericArgument(returnTypeFqn, "global::System.Threading.Tasks.ValueTask<");
-        }
-
-        return returnTypeFqn;
-    }
-
-    private static string GetSingleGenericArgument(string typeFqn, string prefix)
-        => typeFqn.Substring(prefix.Length, typeFqn.Length - prefix.Length - 1);
 
     private static string SanitizeIdentifier(string value)
     {
@@ -571,9 +467,6 @@ internal static class LambdaPerFunctionEmitter
 
         return sb.ToString();
     }
-
-    private static string TrimGlobalPrefix(string value)
-        => value.StartsWith("global::", StringComparison.Ordinal) ? value.Substring("global::".Length) : value;
 
     private static string Str(string value) => CSharpLiteral.String(value);
 

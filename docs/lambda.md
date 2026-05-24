@@ -44,7 +44,7 @@ For DI setup, pass a startup type:
 [assembly: LambdaPerFunction(typeof(MyStartup))]
 ```
 
-The app must provide a source-generated `LambdaJsonContext` in the app root namespace for AOT-safe JSON body and response metadata.
+JSON body and response routes must provide a source-generated `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]`. The context can have any name or namespace, but it must include `[JsonSerializable]` roots for the request and response types used by eligible per-feature handlers.
 
 Supported handler inputs:
 
@@ -66,9 +66,9 @@ Unsupported routes are excluded with generator diagnostics and CLI reasons. Comm
 - Non-validator endpoint filters
 - Reflection-only validation
 - Unsupported route parameter types
-- JSON body or response routes without `LambdaJsonContext`
+- JSON body or response routes without a marked Lambda per-feature `SliceJsonContext`
 
-The generator reports `SLICE012`-`SLICE017` for per-feature Lambda eligibility issues.
+The generator reports `SLICE012`-`SLICE017` for per-feature Lambda eligibility issues, plus `SLICE018`/`SLICE019` for invalid explicit JSON context overrides.
 
 ## CLI integration
 

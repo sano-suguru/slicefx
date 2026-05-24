@@ -39,7 +39,7 @@ Generated feature templates return a nested `Response` record by default. `POST`
 
 `slice new filter` scaffolds an `IEndpointFilter`.
 
-`slice new wasi-cloudflare` scaffolds Cloudflare Workers host files for a `Slice.Wasi` component into `dist/`: `shim.mjs`, `package.json`, Wrangler config, socket stubs, and module-map generation. App-specific pieces such as `IncomingHandlerImpl.cs` and `WasiJsonContext.cs` remain in the app because they depend on WIT-generated types and user DTO metadata.
+`slice new wasi-cloudflare` scaffolds Cloudflare Workers host files for a `Slice.Wasi` component into `dist/`: `shim.mjs`, `package.json`, Wrangler config, socket stubs, and module-map generation. App-specific pieces such as `IncomingHandlerImpl.cs` and a `[SliceJsonContext(SliceJsonTarget.Wasi)]` JSON context remain in the app because they depend on WIT-generated types and user DTO metadata.
 
 ## Route inspection
 

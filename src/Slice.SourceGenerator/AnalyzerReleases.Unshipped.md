@@ -18,3 +18,5 @@ SLICE014 | Slice | Warning | MissingLambdaJsonContext
 SLICE015 | Slice | Warning | UnsupportedParameterForLambdaPerFeature
 SLICE016 | Slice | Warning | UnsupportedValidationForLambdaPerFeature
 SLICE017 | Slice | Error | InvalidLambdaPerFeatureStartupType
+SLICE018 | Slice | Error | DuplicateJsonContextOverride
+SLICE019 | Slice | Error | InvalidJsonContextOverride

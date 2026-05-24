@@ -31,6 +31,54 @@ public sealed class SliceFeatureRouteAttribute(
         string? lambdaPerFeatureHandlerAssembly,
         string? lambdaPerFeatureHandlerType,
         string? lambdaPerFeatureHandlerMethod)
+        : this(
+            endpointName,
+            featureType,
+            httpMethod,
+            pattern,
+            tag,
+            summary,
+            requestType,
+            returnType,
+            portability,
+            portabilityReason,
+            serializedFilterTypes,
+            serializedParameters,
+            lambdaPerFeatureStatus,
+            lambdaPerFeatureReason,
+            lambdaPerFeatureHandlerAssembly,
+            lambdaPerFeatureHandlerType,
+            lambdaPerFeatureHandlerMethod,
+            manifestSchemaVersion: "1",
+            wasiDispatchStatus: null,
+            wasiDispatchReason: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with target capability metadata.
+    /// </summary>
+    public SliceFeatureRouteAttribute(
+        string endpointName,
+        string featureType,
+        string httpMethod,
+        string pattern,
+        string? tag,
+        string? summary,
+        string? requestType,
+        string? returnType,
+        string? portability,
+        string? portabilityReason,
+        string? serializedFilterTypes,
+        string? serializedParameters,
+        string? lambdaPerFeatureStatus,
+        string? lambdaPerFeatureReason,
+        string? lambdaPerFeatureHandlerAssembly,
+        string? lambdaPerFeatureHandlerType,
+        string? lambdaPerFeatureHandlerMethod,
+        string? manifestSchemaVersion,
+        string? wasiDispatchStatus,
+        string? wasiDispatchReason)
         : this(endpointName, featureType, httpMethod, pattern)
     {
         Tag = tag;
@@ -46,6 +94,9 @@ public sealed class SliceFeatureRouteAttribute(
         LambdaPerFeatureHandlerAssembly = lambdaPerFeatureHandlerAssembly;
         LambdaPerFeatureHandlerType = lambdaPerFeatureHandlerType;
         LambdaPerFeatureHandlerMethod = lambdaPerFeatureHandlerMethod;
+        ManifestSchemaVersion = manifestSchemaVersion;
+        WasiDispatchStatus = wasiDispatchStatus;
+        WasiDispatchReason = wasiDispatchReason;
     }
 
     /// <summary>
@@ -132,4 +183,19 @@ public sealed class SliceFeatureRouteAttribute(
     /// Gets the generated Lambda per-feature handler method when emitted.
     /// </summary>
     public string? LambdaPerFeatureHandlerMethod { get; }
+
+    /// <summary>
+    /// Gets the generated route manifest schema version.
+    /// </summary>
+    public string? ManifestSchemaVersion { get; }
+
+    /// <summary>
+    /// Gets whether WASI dispatch was emitted for the route.
+    /// </summary>
+    public string? WasiDispatchStatus { get; }
+
+    /// <summary>
+    /// Gets why WASI dispatch was not emitted when excluded.
+    /// </summary>
+    public string? WasiDispatchReason { get; }
 }

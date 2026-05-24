@@ -72,12 +72,13 @@ internal static partial class ListRoutesCommand
 
     private static void WriteTable(SliceRouteInfo[] routes)
     {
-        Console.WriteLine("METHOD  ROUTE                         ENDPOINT                    PORTABILITY   NOTE");
-        Console.WriteLine("------  ----------------------------  --------------------------  ------------  --------------------------------------------");
+        Console.WriteLine("METHOD  ROUTE                         ENDPOINT                    PORTABILITY   WASI        NOTE");
+        Console.WriteLine("------  ----------------------------  --------------------------  ------------  ----------  --------------------------------------------");
         foreach (var route in routes)
         {
+            var capabilities = RouteTargetCapabilities.Classify(route);
             Console.WriteLine(
-                $"{Pad(route.Method, 6)}  {Pad(route.Pattern, 28)}  {Pad(route.EndpointName, 26)}  {Pad(route.Portability, 12)}  {route.PortabilityReason ?? "-"}");
+                $"{Pad(route.Method, 6)}  {Pad(route.Pattern, 28)}  {Pad(route.EndpointName, 26)}  {Pad(route.Portability, 12)}  {Pad(capabilities.WasiDispatch.Status, 10)}  {capabilities.WasiDispatch.Reason ?? route.PortabilityReason ?? "-"}");
         }
 
         var portable = routes.Count(static route => route.Portability == RouteCatalog.PortabilityPortable);

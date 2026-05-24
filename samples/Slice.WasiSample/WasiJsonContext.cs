@@ -14,6 +14,7 @@ namespace Slice.WasiSample;
 [JsonSerializable(typeof(Features.Validation.PostArrayMinLength.Response), TypeInfoPropertyName = "ArrayMinLengthResponse")]
 [JsonSerializable(typeof(Features.Validation.PostValidationFallback.Request), TypeInfoPropertyName = "ValidationFallbackRequest")]
 [JsonSerializable(typeof(Features.Validation.PostValidationFallback.Response), TypeInfoPropertyName = "ValidationFallbackResponse")]
+[SliceJsonContext(SliceJsonTarget.Wasi)]
 public sealed partial class WasiJsonContext : JsonSerializerContext
 {
 }
