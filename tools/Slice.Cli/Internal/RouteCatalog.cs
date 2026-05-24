@@ -1,8 +1,10 @@
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Slice.Cli.Internal;
 
-internal static partial class RouteCatalog
+internal static class RouteCatalog
 {
     internal const string PortabilityPortable = "portable";
     internal const string PortabilityPartial = "partial";
@@ -56,36 +58,42 @@ internal static partial class RouteCatalog
     private static IEnumerable<SliceRouteInfo> ReadRoutes(string file)
     {
         var source = File.ReadAllText(file);
-        foreach (Match featureMatch in FeatureAttributeRegex().Matches(source))
+        var root = CSharpSyntaxTree.ParseText(source).GetCompilationUnitRoot();
+        foreach (var classDeclaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
         {
-            var route = UnescapeCSharpString(featureMatch.Groups["route"].Value);
+            if (!IsPublicStaticClass(classDeclaration))
+            {
+                continue;
+            }
+
+            var featureAttribute = FindAttribute(classDeclaration.AttributeLists, "Feature");
+            if (featureAttribute is null)
+            {
+                continue;
+            }
+
+            var route = ReadPositionalStringArgument(featureAttribute, 0);
+            if (route is null)
+            {
+                continue;
+            }
+
             var parts = route.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length != 2)
             {
                 continue;
             }
 
-            var classMatch = ClassRegex().Match(source, featureMatch.Index);
-            if (!classMatch.Success)
-            {
-                continue;
-            }
-
-            var namespaceMatch = NamespaceRegex().Match(source);
-            var @namespace = namespaceMatch.Success ? namespaceMatch.Groups["namespace"].Value : "";
-            var args = featureMatch.Groups["args"].Value;
-            var tag = ReadNamedStringArgument(args, "Tag") ?? InferTag(@namespace);
-            var summary = ReadNamedStringArgument(args, "Summary");
-            var handleMatch = HandleRegex().Match(source, classMatch.Index);
-            var returnType = handleMatch.Success ? NormalizeWhitespace(handleMatch.Groups["return"].Value) : "";
-            var parameters = handleMatch.Success ? ReadParameters(handleMatch.Groups["params"].Value) : [];
+            var @namespace = FindNamespace(classDeclaration);
+            var tag = ReadNamedStringArgument(featureAttribute, "Tag") ?? InferTag(@namespace);
+            var summary = ReadNamedStringArgument(featureAttribute, "Summary");
+            var handleMethod = FindHandleMethod(classDeclaration);
+            var returnType = handleMethod is null ? "" : NormalizeWhitespace(handleMethod.ReturnType.ToString());
+            var parameters = handleMethod is null ? [] : ReadParameters(handleMethod.ParameterList);
             var requestType = FindRequestType(parameters);
-            var attributeBlock = ReadClassAttributeBlock(source, classMatch.Index);
-            var filters = FilterRegex().Matches(attributeBlock)
-                .Select(static match => match.Groups["filter"].Value.Trim())
-                .ToArray();
+            var filters = ReadFilters(classDeclaration.AttributeLists);
             var (portability, portabilityReason) = ClassifyPortability(returnType, filters);
-            var featureName = classMatch.Groups["class"].Value;
+            var featureName = classDeclaration.Identifier.ValueText;
             var lambda = ClassifyLambdaPerFeature(returnType, filters, parameters, parts[1]);
 
             yield return new SliceRouteInfo(
@@ -107,102 +115,161 @@ internal static partial class RouteCatalog
         }
     }
 
-    private static SliceRouteParameter[] ReadParameters(string parameters)
+    private static bool IsPublicStaticClass(ClassDeclarationSyntax classDeclaration)
+        => classDeclaration.Modifiers.Any(SyntaxKind.PublicKeyword)
+           && classDeclaration.Modifiers.Any(SyntaxKind.StaticKeyword);
+
+    private static string FindNamespace(SyntaxNode node)
     {
-        return [.. SplitParameterList(parameters)
+        for (var current = node.Parent; current is not null; current = current.Parent)
+        {
+            if (current is BaseNamespaceDeclarationSyntax namespaceDeclaration)
+            {
+                return namespaceDeclaration.Name.ToString();
+            }
+        }
+
+        return "";
+    }
+
+    private static AttributeSyntax? FindAttribute(SyntaxList<AttributeListSyntax> attributeLists, string name)
+        => attributeLists
+            .SelectMany(static list => list.Attributes)
+            .FirstOrDefault(attribute => IsAttribute(attribute, name));
+
+    private static bool IsAttribute(AttributeSyntax attribute, string name)
+        => string.Equals(NormalizeAttributeName(GetAttributeIdentifier(attribute.Name)), name, StringComparison.Ordinal);
+
+    private static string GetAttributeIdentifier(NameSyntax name)
+        => name switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax generic => generic.Identifier.ValueText,
+            QualifiedNameSyntax qualified => GetAttributeIdentifier(qualified.Right),
+            AliasQualifiedNameSyntax aliasQualified => GetAttributeIdentifier(aliasQualified.Name),
+            _ => name.ToString(),
+        };
+
+    private static string NormalizeAttributeName(string name)
+        => name.EndsWith("Attribute", StringComparison.Ordinal)
+            ? name[..^"Attribute".Length]
+            : name;
+
+    private static string? ReadPositionalStringArgument(AttributeSyntax attribute, int index)
+    {
+        var arguments = attribute.ArgumentList?.Arguments;
+        if (arguments is null)
+        {
+            return null;
+        }
+
+        var positionalArguments = arguments.Value
+            .Where(static argument => argument.NameEquals is null && argument.NameColon is null)
+            .ToArray();
+        return positionalArguments.Length <= index
+            ? null
+            : ReadStringLiteral(positionalArguments[index].Expression);
+    }
+
+    private static string? ReadNamedStringArgument(AttributeSyntax attribute, string name)
+    {
+        foreach (var argument in attribute.ArgumentList?.Arguments ?? [])
+        {
+            if (argument.NameEquals?.Name.Identifier.ValueText == name)
+            {
+                return ReadStringLiteral(argument.Expression);
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadStringLiteral(ExpressionSyntax expression)
+        => expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression)
+            ? literal.Token.ValueText
+            : null;
+
+    private static MethodDeclarationSyntax? FindHandleMethod(ClassDeclarationSyntax classDeclaration)
+        => classDeclaration.Members
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(static method =>
+                method.Identifier.ValueText == "Handle"
+                && method.Modifiers.Any(SyntaxKind.PublicKeyword)
+                && method.Modifiers.Any(SyntaxKind.StaticKeyword));
+
+    private static string[] ReadFilters(SyntaxList<AttributeListSyntax> attributeLists)
+        => [.. attributeLists
+            .SelectMany(static list => list.Attributes)
+            .Select(ReadFilter)
+            .Where(static filter => filter is not null)
+            .Cast<string>()];
+
+    private static string? ReadFilter(AttributeSyntax attribute)
+    {
+        var attributeName = attribute.Name switch
+        {
+            GenericNameSyntax generic => generic,
+            QualifiedNameSyntax { Right: GenericNameSyntax generic } => generic,
+            AliasQualifiedNameSyntax { Name: GenericNameSyntax generic } => generic,
+            _ => null,
+        };
+        if (attributeName is not { TypeArgumentList.Arguments.Count: 1 }
+            || NormalizeAttributeName(attributeName.Identifier.ValueText) != "Filter")
+        {
+            return null;
+        }
+
+        return attributeName.TypeArgumentList.Arguments[0].ToString().Trim();
+    }
+
+    private static SliceRouteParameter[] ReadParameters(ParameterListSyntax parameterList)
+        => [.. parameterList.Parameters
             .Select(ReadParameter)
             .Where(static parameter => parameter is not null)
             .Cast<SliceRouteParameter>()];
-    }
 
-    private static SliceRouteParameter? ReadParameter(string parameter)
+    private static SliceRouteParameter? ReadParameter(ParameterSyntax parameter)
     {
-        var normalized = NormalizeWhitespace(parameter);
-        if (normalized.StartsWith("this ", StringComparison.Ordinal))
+        if (parameter.Type is null)
         {
-            normalized = normalized["this ".Length..];
+            return null;
         }
 
-        var (bindingSource, bindingName, parameterWithoutAttributes) = ReadParameterBinding(normalized);
-        normalized = parameterWithoutAttributes;
-        var separator = normalized.LastIndexOf(' ');
-        return separator < 0
-            ? null
-            : new SliceRouteParameter(
-                normalized[..separator],
-                normalized[(separator + 1)..],
-                IsNullableTypeName(normalized[..separator]),
-                bindingSource,
-                bindingName);
+        var type = NormalizeWhitespace(parameter.Type.ToString());
+        var (bindingSource, bindingName) = ReadParameterBinding(parameter);
+        return new SliceRouteParameter(
+            type,
+            parameter.Identifier.ValueText,
+            IsNullableTypeName(type),
+            bindingSource,
+            bindingName);
     }
 
-    private static (string? Source, string? Name, string Parameter) ReadParameterBinding(string parameter)
+    private static (string? Source, string? Name) ReadParameterBinding(ParameterSyntax parameter)
     {
         string? source = null;
         string? name = null;
-        while (parameter.StartsWith('['))
+        foreach (var attribute in parameter.AttributeLists.SelectMany(static list => list.Attributes))
         {
-            var end = parameter.IndexOf(']');
-            if (end < 0)
-            {
-                break;
-            }
-
-            var attribute = parameter[1..end];
-            var attributeName = attribute.Split(['(', ' '], 2)[0];
+            var attributeName = NormalizeAttributeName(GetAttributeIdentifier(attribute.Name));
             source ??= attributeName switch
             {
-                "FromQuery" or "FromQueryAttribute" => "query",
-                "FromRoute" or "FromRouteAttribute" => "route",
-                "FromHeader" or "FromHeaderAttribute" => "header",
-                "FromBody" or "FromBodyAttribute" => "body",
+                "FromQuery" => "query",
+                "FromRoute" => "route",
+                "FromHeader" => "header",
+                "FromBody" => "body",
                 _ => null,
             };
 
-            var nameMatch = ParameterBindingNameRegex().Match(attribute);
-            if (nameMatch.Success)
+            var nameArgument = attribute.ArgumentList?.Arguments
+                .FirstOrDefault(static argument => argument.NameEquals?.Name.Identifier.ValueText == "Name");
+            if (nameArgument is not null)
             {
-                name = UnescapeCSharpString(nameMatch.Groups["name"].Value);
-            }
-
-            parameter = parameter[(end + 1)..].TrimStart();
-        }
-
-        return (source, name, parameter);
-    }
-
-    private static IEnumerable<string> SplitParameterList(string parameters)
-    {
-        var start = 0;
-        var genericDepth = 0;
-        for (var i = 0; i < parameters.Length; i++)
-        {
-            var ch = parameters[i];
-            if (ch == '<')
-            {
-                genericDepth++;
-            }
-            else if (ch == '>' && genericDepth > 0)
-            {
-                genericDepth--;
-            }
-            else if (ch == ',' && genericDepth == 0)
-            {
-                var segment = parameters[start..i].Trim();
-                if (segment.Length > 0)
-                {
-                    yield return segment;
-                }
-
-                start = i + 1;
+                name = ReadStringLiteral(nameArgument.Expression);
             }
         }
 
-        var last = parameters[start..].Trim();
-        if (last.Length > 0)
-        {
-            yield return last;
-        }
+        return (source, name);
     }
 
     private static string? FindRequestType(SliceRouteParameter[] parameters)
@@ -216,12 +283,6 @@ internal static partial class RouteCatalog
         }
 
         return null;
-    }
-
-    private static string? ReadNamedStringArgument(string args, string name)
-    {
-        var match = Regex.Match(args, $@"\b{name}\s*=\s*""(?<value>(?:\\.|[^""\\])*)""");
-        return match.Success ? UnescapeCSharpString(match.Groups["value"].Value) : null;
     }
 
     private static string InferTag(string @namespace)
@@ -358,46 +419,6 @@ internal static partial class RouteCatalog
         var terminator = token.IndexOfAny([':', '?', '=']);
         return terminator >= 0 ? token[..terminator] : token;
     }
-
-    private static string ReadClassAttributeBlock(string source, int classIndex)
-    {
-        var blockStart = 0;
-        for (var index = classIndex - 1; index >= 0; index--)
-        {
-            if (source[index] is '}' or ';')
-            {
-                blockStart = index + 1;
-                break;
-            }
-        }
-
-        return source[blockStart..classIndex];
-    }
-
-    private static string UnescapeCSharpString(string value)
-    {
-        return value
-            .Replace("\\\"", "\"", StringComparison.Ordinal)
-            .Replace(@"\\", @"\", StringComparison.Ordinal);
-    }
-
-    [GeneratedRegex(@"\[Feature\(\s*""(?<route>(?:\\.|[^""\\])*)""(?<args>(?:[^\)""]|""(?:\\.|[^""\\])*"")*)\)\]")]
-    private static partial Regex FeatureAttributeRegex();
-
-    [GeneratedRegex(@"\bpublic\s+(?=[A-Za-z0-9_\s]*\bstatic\b)(?:(?:static|partial|unsafe)\s+)+class\s+(?<class>[A-Za-z_][A-Za-z0-9_]*)\b")]
-    private static partial Regex ClassRegex();
-
-    [GeneratedRegex(@"\bnamespace\s+(?<namespace>[A-Za-z_][A-Za-z0-9_.]*)\s*;")]
-    private static partial Regex NamespaceRegex();
-
-    [GeneratedRegex(@"\[Filter<(?<filter>[^\]]+)>\]")]
-    private static partial Regex FilterRegex();
-
-    [GeneratedRegex(@"\bpublic\s+static\s+(?:async\s+)?(?<return>[A-Za-z0-9_<>,\.\?\s:\[\]]+?)\s+Handle\s*\((?<params>[^)]*)\)")]
-    private static partial Regex HandleRegex();
-
-    [GeneratedRegex(@"\bName\s*=\s*""(?<name>(?:\\.|[^""\\])*)""")]
-    private static partial Regex ParameterBindingNameRegex();
 }
 
 internal sealed record SliceRouteInfo(

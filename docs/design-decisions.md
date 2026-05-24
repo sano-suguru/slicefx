@@ -57,9 +57,9 @@ Both APIs live in `Slice.Core` and require zero extra NuGet packages.
 
 ## Why does `[Filter<T>]` take a type parameter only — no constructor args?
 
-The constraint is intentional and protects strength-preservation invariant #1 ("100% pure ASP.NET Core Minimal API expansion"). If `[Filter]` accepted instance state, the generator would have to either (a) lift values into a generated singleton — runtime magic — or (b) emit a closure that captures attribute values, breaking the "generated code only chains standard APIs" rule.
+The constraint is intentional and protects strength-preservation invariant #1 ("100% pure ASP.NET Core Minimal API expansion"). Filters are composable — declare multiple `[Filter<T>]` attributes when a feature needs a chain — but the attribute itself is not parameterized. If `[Filter]` accepted instance state, the generator would have to either (a) lift values into a generated singleton — runtime magic — or (b) emit a closure that captures attribute values, breaking the "generated code only chains standard APIs" rule.
 
-Instead, filters are scoped services. Configure them through constructor DI by binding `IOptions<T>` or any other service. See [`docs/patterns/filter-configuration.md`](patterns/filter-configuration.md) for the recipe.
+Instead, filters are scoped services. Configure them through constructor DI by binding `IOptions<T>` or any other service. When several endpoint-filter variants share the same behavior, use a closed generic filter such as `[Filter<AuditFilter<AdminAuditPolicy>>]` to keep the policy identity type-safe without adding stringly-typed attribute arguments. See [`docs/patterns/filter-configuration.md`](patterns/filter-configuration.md) for the recipe.
 
 ## Why are some features classified `aspnet-only` and excluded from WASI?
 

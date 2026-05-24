@@ -1,8 +1,8 @@
 namespace Slice.Sample.Filters;
 
 /// <summary>
-/// Demonstrates a per-feature auth filter. Requires the request to carry
-/// <c>X-API-Key: secret</c>. Returns 401 otherwise.
+/// Demonstrates a per-feature endpoint filter. Requires the request to carry
+/// <c>X-API-Key: secret</c>. Use ASP.NET Core Authorization for production auth policies.
 /// </summary>
 public sealed class RequireApiKeyFilter : IEndpointFilter
 {

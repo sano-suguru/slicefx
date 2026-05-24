@@ -20,7 +20,7 @@ If 20 features declare the same filter, ask:
 
 1. **Is this filter truly required on every endpoint?**
    - Logging only? An ASP.NET Core middleware (e.g. `app.UseSerilogRequestLogging()`) is the right layer.
-   - Authentication only? Standard `RequireAuthorization()` is more idiomatic.
+   - Authorization only? ASP.NET Core Authorization middleware, fallback policies, or `RequireAuthorization()` on a route group are more idiomatic.
 2. **Is it shared, but specific to the Minimal API filter layer?**
    - Example: per-request `Activity` start, or shape-specific endpoint filters. See the `MapGroup` option below.
 
@@ -102,10 +102,12 @@ Practical value is limited — `[Filter<T>]` is still declared per type.
 **Mostly, it looks like a flaw but is actually a feature.**
 
 - Truly global concerns → middleware.
-- Group-level concerns → declare per feature (the duplication is the cost of being explicit).
+- Authorization concerns → ASP.NET Core Authorization.
+- Group-level endpoint-filter concerns → declare per feature (the duplication is the cost of being explicit) or use a route group when the grouping is real.
+- Repeated endpoint-filter variants with identical filter logic → use closed generic filters such as `[Filter<AuditFilter<AdminAuditPolicy>>]`.
 - Remaining cases → the copy-paste maintenance cost is lower than the risk of surprise behavior from implicit injection.
 
-"No implicit magic" is a Slice **strength**, not a missing feature. Group-scoped filter injection was considered for the framework and intentionally dropped (see the plan file `velvet-spinning-alpaca.md`).
+"No implicit magic" is a Slice **strength**, not a missing feature. Filter classes are infrastructure types, not feature files, so a small number of shared filters or typed policy markers does not violate the "one endpoint = one feature file" model. Group-scoped filter injection was considered for the framework and intentionally dropped (see the plan file `velvet-spinning-alpaca.md`).
 
 ## Related patterns
 

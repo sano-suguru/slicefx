@@ -53,7 +53,7 @@ public class CliFixtureTests
         using var fixture = CliProjectFixture.Create("my-app");
         fixture.WriteFeature(
             "Features/Things/ThingFeatures.cs",
-            """
+            """"
             namespace My.App.Features.Things;
 
             [Feature("GET /things")]
@@ -73,7 +73,7 @@ public class CliFixtureTests
 
                 public sealed record Response();
             }
-            """);
+            """");
 
         var routes = RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile));
 
@@ -105,6 +105,71 @@ public class CliFixtureTests
 
         Assert.Equal(RouteCatalog.PortabilityPartial, route.Portability);
         Assert.Contains("RequestLoggingFilter", route.Filters);
+    }
+
+    [Fact]
+    public void Route_catalog_discovers_closed_generic_filters_in_fallback_mode()
+    {
+        using var fixture = CliProjectFixture.Create("my-app");
+        fixture.WriteFeature(
+            "Features/Things/DeleteThing.cs",
+            """
+            namespace My.App.Features.Things;
+
+            [Filter<RequireApiKeyFilter<AdminPolicy>>]
+            [Feature("DELETE /things/{id:guid}")]
+            public static class DeleteThing
+            {
+                public static Response Handle(Guid id) => new(id);
+
+                public sealed record Response(Guid Id);
+            }
+            """);
+
+        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+
+        Assert.Contains("RequireApiKeyFilter<AdminPolicy>", route.Filters);
+        Assert.Equal(RouteCatalog.PortabilityPartial, route.Portability);
+        Assert.Equal(RouteCatalog.LambdaIneligible, route.LambdaPerFeatureStatus);
+        Assert.Equal("endpoint filters require the ASP.NET endpoint filter pipeline", route.LambdaPerFeatureReason);
+    }
+
+    [Fact]
+    public void Route_catalog_ignores_filter_like_text_in_comments_and_literals_in_fallback_mode()
+    {
+        using var fixture = CliProjectFixture.Create("my-app");
+        fixture.WriteFeature(
+            "Features/Things/DeleteThing.cs",
+            """"
+            namespace My.App.Features.Things;
+
+            public static class Noise
+            {
+                private const char Quote = '"';
+                private const string Verbatim = @"[Filter<VerbatimFilter>]; }";
+                private const string Raw = """
+                    [Filter<RawFilter>]
+                    ; }
+                    """;
+            }
+
+            // [Filter<CommentFilter>]; }
+            /* [Filter<BlockCommentFilter>]; } */
+            [Filter<RequireApiKeyFilter<AdminPolicy>>]
+            [Feature("DELETE /things/{id:guid}")]
+            public static class DeleteThing
+            {
+                public static Response Handle(Guid id) => new(id);
+
+                public sealed record Response(Guid Id);
+            }
+            """");
+
+        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+
+        var filter = Assert.Single(route.Filters);
+        Assert.Equal("RequireApiKeyFilter<AdminPolicy>", filter);
+        Assert.Equal(RouteCatalog.PortabilityPartial, route.Portability);
     }
 
     [Fact]

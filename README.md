@@ -121,6 +121,8 @@ public static class DeleteUser
 
 `AddSlice()` registers referenced filters and matching validators as scoped services, and `[Filter<T>]` applies filters in declaration order. DataAnnotations validation runs first; closed `ISliceValidator<TRequest>` implementations are discovered when `TRequest` is a Slice request parameter and run automatically before feature filters for rules that need code. A request type can have one Slice validator; orphan validators fail the build so validation is never skipped silently.
 
+For production authorization policies, prefer ASP.NET Core Authorization. Slice filters are best for explicit per-feature endpoint filter behavior.
+
 Read more:
 
 - [Filter declarations](docs/guides/filter-declarations.md)

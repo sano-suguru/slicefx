@@ -6,7 +6,7 @@ namespace Slice.Sample.Features.Users;
 /// <summary>
 /// Deletes a user after request logging and API-key filters run.
 /// </summary>
-[Feature("DELETE /users/{id:guid}", Summary = "Delete a user (requires API key)")]
+[Feature("DELETE /users/{id:guid}", Summary = "Delete a user (demo API key filter)")]
 [Filter<RequestLoggingFilter>]
 [Filter<RequireApiKeyFilter>]
 public static class DeleteUser

@@ -1535,6 +1535,195 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_emits_closed_generic_filter_registrations()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace GenericFilterApp.Features.Security;
+
+            [Feature("DELETE /users/{id:guid}")]
+            [Filter<RequireApiKeyFilter<AdminPolicy>>]
+            public static class DeleteUser
+            {
+                public static string Handle() => "deleted";
+            }
+
+            [Feature("POST /users/{id:guid}/lock")]
+            [Filter<RequireApiKeyFilter<AdminPolicy>>]
+            public static class LockUser
+            {
+                public static string Handle() => "locked";
+            }
+
+            [Feature("GET /reports")]
+            [Filter<RequireApiKeyFilter<ReadOnlyPolicy>>]
+            public static class GetReports
+            {
+                public static string Handle() => "reports";
+            }
+
+            public sealed class RequireApiKeyFilter<TPolicy> : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+
+            public sealed class AdminPolicy;
+            public sealed class ReadOnlyPolicy;
+            """;
+
+        var compilation = CreateHostCompilation("GenericFilterApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+        var adminFilter = "global::GenericFilterApp.Features.Security.RequireApiKeyFilter<global::GenericFilterApp.Features.Security.AdminPolicy>";
+        var readOnlyFilter = "global::GenericFilterApp.Features.Security.RequireApiKeyFilter<global::GenericFilterApp.Features.Security.ReadOnlyPolicy>";
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Equal(1, CountOccurrences(generatedSource, $"services.AddScoped<{adminFilter}>();"));
+        Assert.Equal(1, CountOccurrences(generatedSource, $"services.AddScoped<{readOnlyFilter}>();"));
+        Assert.Equal(2, CountOccurrences(generatedSource, $".AddEndpointFilter<{adminFilter}>()"));
+        Assert.Equal(1, CountOccurrences(generatedSource, $".AddEndpointFilter<{readOnlyFilter}>()"));
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE010_when_FilterOrderHint_targets_closed_generic_filter()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading.Tasks;
+            using Slice;
+
+            namespace GenericOrderHintApp.Features.Security;
+
+            [Feature("DELETE /users/{id:guid}")]
+            [Filter<AuditFilter>]
+            [Filter<RequireApiKeyFilter<AdminPolicy>>]
+            public static class DeleteUser
+            {
+                public static string Handle() => "deleted";
+            }
+
+            public sealed class RequireApiKeyFilter<TPolicy> : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+
+            [FilterOrderHint(After = typeof(RequireApiKeyFilter<AdminPolicy>))]
+            public sealed class AuditFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+
+            public sealed class AdminPolicy;
+            """;
+
+        var compilation = CreateHostCompilation("GenericOrderHintApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE010"));
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Contains("RequireApiKeyFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("AdminPolicy", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generated_closed_generic_filter_resolves_from_DI_and_runs()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Builder;
+            using Microsoft.AspNetCore.Http;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.AspNetCore.Routing;
+            using Microsoft.Extensions.DependencyInjection;
+            using Slice;
+            using System.IO;
+            using System.Linq;
+            using System.Threading.Tasks;
+
+            #nullable enable
+
+            namespace RuntimeFilterApp.Features.Health;
+
+            [Feature("GET /health")]
+            [Filter<RecordingFilter<AdminPolicy>>]
+            public static class GetHealth
+            {
+                public static string Handle([FromServices] InvocationLog log)
+                {
+                    log.Value += "handler";
+                    return "ok";
+                }
+            }
+
+            public sealed class RecordingFilter<TPolicy>(InvocationLog log) : IEndpointFilter
+            {
+                public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                {
+                    log.Value += "filter:";
+                    var result = await next(context).ConfigureAwait(false);
+                    log.Value += ":after";
+                    return result;
+                }
+            }
+
+            public sealed class AdminPolicy;
+
+            public sealed class InvocationLog
+            {
+                public string Value { get; set; } = "";
+            }
+
+            public static class RuntimeHarness
+            {
+                public static async Task<string> InvokeAsync()
+                {
+                    var builder = WebApplication.CreateSlimBuilder();
+                    builder.Services.AddSlice();
+                    builder.Services.AddScoped<InvocationLog>();
+                    await using var app = builder.Build();
+                    app.MapSlices();
+
+                    var endpoint = ((IEndpointRouteBuilder)app)
+                        .DataSources
+                        .SelectMany(static dataSource => dataSource.Endpoints)
+                        .OfType<RouteEndpoint>()
+                        .Single();
+
+                    await using var scope = app.Services.CreateAsyncScope();
+                    var log = scope.ServiceProvider.GetRequiredService<InvocationLog>();
+                    var context = new DefaultHttpContext
+                    {
+                        RequestServices = scope.ServiceProvider,
+                    };
+                    context.Response.Body = new MemoryStream();
+
+                    await endpoint.RequestDelegate!(context).ConfigureAwait(false);
+                    return log.Value;
+                }
+            }
+            """;
+
+        using var assemblyStream = CompileGeneratedHostAssembly("RuntimeFilterApp", source);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harnessType = assembly.GetType("RuntimeFilterApp.Features.Health.RuntimeHarness", throwOnError: true)!;
+        var invokeAsync = harnessType.GetMethod("InvokeAsync", BindingFlags.Public | BindingFlags.Static)!;
+
+        var log = await (Task<string>)invokeAsync.Invoke(null, null)!;
+
+        Assert.Equal("filter:handler:after", log);
+    }
+
+    [Fact]
     public void Generator_reports_SLICE001_for_feature_missing_handle_method()
     {
         var source = """
@@ -1657,8 +1846,13 @@ public class SourceGeneratorCompileTests
     }
 
     private static MemoryStream CompileGeneratedAssembly(string assemblyName, string source)
+        => CompileGeneratedAssembly(CreateCompilation(assemblyName, source));
+
+    private static MemoryStream CompileGeneratedHostAssembly(string assemblyName, string source)
+        => CompileGeneratedAssembly(CreateHostCompilation(assemblyName, source));
+
+    private static MemoryStream CompileGeneratedAssembly(CSharpCompilation compilation)
     {
-        var compilation = CreateCompilation(assemblyName, source);
         GeneratorDriver driver = CreateDriver();
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
