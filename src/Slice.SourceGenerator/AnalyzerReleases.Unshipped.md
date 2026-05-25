@@ -23,3 +23,4 @@ SLICE019 | Slice | Error | InvalidJsonContextOverride
 SLICE020 | Slice | Error | InvalidSliceValidator
 SLICE021 | Slice | Error | DuplicateSliceValidator
 SLICE022 | Slice | Error | UnmatchedSliceValidator
+SLICE023 | Slice | Warning | UnsupportedParameterForWasi

@@ -21,7 +21,10 @@
   <Folder Name="/tests/">
     <Project Path="tests/Slice.Core.Tests/Slice.Core.Tests.csproj" />
     <Project Path="tests/Slice.Cli.Tests/Slice.Cli.Tests.csproj" />
+    <Project Path="tests/Slice.Lambda.PerFunction.Tests/Slice.Lambda.PerFunction.Tests.csproj" />
+    <Project Path="tests/Slice.Lambda.Tests/Slice.Lambda.Tests.csproj" />
     <Project Path="tests/Slice.SourceGenerator.Tests/Slice.SourceGenerator.Tests.csproj" />
+    <Project Path="tests/Slice.TestHost.Tests/Slice.TestHost.Tests.csproj" />
     <Project Path="tests/Slice.Wasi.Tests/Slice.Wasi.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

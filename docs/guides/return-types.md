@@ -31,6 +31,14 @@ Advantages:
 - **Direct testability** — `var r = await CreateUser.Handle(...); Assert.Equal(...)`.
 - **Accurate OpenAPI schema** — Minimal API infers the response type.
 
+For generated non-ASP.NET paths such as WASI and per-feature Lambda, a direct
+typed return value of `null` is still a JSON value: the response is
+`200 application/json` with body `null`. If `null` means "not found" or "no
+content", return an explicit platform-specific result instead. In WASI, use
+`WasiResponse` helpers such as `SliceResult.NotFound()` or
+`SliceResult.NoContent()`. In per-feature Lambda, return
+`APIGatewayHttpApiV2ProxyResponse` directly.
+
 See `samples/Slice.Sample/Features/Users/CreateUser.cs`.
 
 ### `IResult` (when HTTP details matter)
@@ -72,7 +80,8 @@ See `samples/Slice.Sample/Features/Users/GetUser.cs`.
 
 1. **Default: direct response.**
 2. **Reach for `IResult` when 404 / 401 / etc. are required**, accepting that the endpoint is no longer WASI-portable (or switch to `WasiResponse`).
-3. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** Note that `Generator_excludes_aspnet_typed_results_from_wasi_routes_and_manifest` (in `SourceGeneratorCompileTests.cs`) confirms that `TypedResults` returns are still classified as `aspnet-only` and excluded from WASI routes.
+3. **Use adapter-specific response types for generated non-ASP.NET paths.** `WasiResponse` is passed through by WASI dispatch, and `APIGatewayHttpApiV2ProxyResponse` is passed through by per-feature Lambda handlers.
+4. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** Note that `Generator_excludes_aspnet_typed_results_from_wasi_routes_and_manifest` (in `SourceGeneratorCompileTests.cs`) confirms that `TypedResults` returns are still classified as `aspnet-only` and excluded from WASI routes.
 
 ## When SLICE008 appears
 

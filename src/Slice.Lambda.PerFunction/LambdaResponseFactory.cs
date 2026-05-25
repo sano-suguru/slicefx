@@ -14,7 +14,7 @@ public static partial class LambdaResponseFactory
         new(StringComparer.Ordinal) { ["Content-Type"] = "application/json" };
 
     /// <summary>
-    /// Creates a 200 OK response with an optional JSON response body.
+    /// Creates a 200 OK response with a JSON response body.
     /// </summary>
     public static APIGatewayHttpApiV2ProxyResponse Ok<T>(T value, JsonTypeInfo<T> jsonTypeInfo)
         => Json(200, value, jsonTypeInfo);
@@ -26,21 +26,16 @@ public static partial class LambdaResponseFactory
         => new() { StatusCode = 204 };
 
     /// <summary>
-    /// Creates a response with the specified status code and optional JSON body.
+    /// Creates a response with the specified status code and a JSON body.
     /// </summary>
     public static APIGatewayHttpApiV2ProxyResponse Json<T>(int status, T value, JsonTypeInfo<T> jsonTypeInfo)
     {
         ArgumentNullException.ThrowIfNull(jsonTypeInfo);
-        if (value is null)
-        {
-            return new APIGatewayHttpApiV2ProxyResponse { StatusCode = status };
-        }
-
         return new APIGatewayHttpApiV2ProxyResponse
         {
             StatusCode = status,
             Headers = new Dictionary<string, string>(s_jsonHeaders, StringComparer.Ordinal),
-            Body = JsonSerializer.Serialize(value, jsonTypeInfo),
+            Body = value is null ? "null" : JsonSerializer.Serialize(value, jsonTypeInfo),
         };
     }
 
@@ -75,5 +70,6 @@ public static partial class LambdaResponseFactory
         IReadOnlyDictionary<string, string[]>? Errors);
 
     [JsonSerializable(typeof(ProblemDto))]
+    [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
     private sealed partial class LambdaResponseJsonContext : JsonSerializerContext;
 }

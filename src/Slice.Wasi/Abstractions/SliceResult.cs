@@ -17,62 +17,74 @@ public static partial class SliceResult
     private static readonly byte[] s_emptyBody = [];
 
     /// <summary>
-    /// Creates a 200 OK response, optionally serializing a JSON response body.
+    /// Creates a 200 OK response with an empty body.
     /// </summary>
-    /// <param name="value">The value to serialize as JSON, or <c>null</c> to return an empty body.</param>
+    /// <returns>A 200 OK WASI response.</returns>
+    public static WasiResponse Ok() => new(200, s_emptyHeaders, s_emptyBody);
+
+    /// <summary>
+    /// Creates a 200 OK response with a JSON response body.
+    /// </summary>
+    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
     /// <returns>A 200 OK WASI response.</returns>
     /// <remarks>This overload uses reflection-based JSON serialization. Use <see cref="Ok{T}(T, JsonTypeInfo{T})"/> for NativeAOT and trimming.</remarks>
     [RequiresDynamicCode("Use Ok<T>(T, JsonTypeInfo<T>) for NativeAOT-compatible WASI responses.")]
     [RequiresUnreferencedCode("Use Ok<T>(T, JsonTypeInfo<T>) for trim-compatible WASI responses.")]
-    public static WasiResponse Ok(object? value = null) => value is null ? new(200, s_emptyHeaders, s_emptyBody) : new(200, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value));
+    public static WasiResponse Ok(object? value)
+        => new(200, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value));
 
     /// <summary>
-    /// Creates a 200 OK response, optionally serializing a JSON response body with source-generated metadata.
+    /// Creates a 200 OK response with a JSON response body using source-generated metadata.
     /// </summary>
     /// <typeparam name="T">The response body type.</typeparam>
-    /// <param name="value">The value to serialize as JSON, or <c>null</c> to return an empty body.</param>
+    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
     /// <param name="jsonTypeInfo">The JSON metadata to use when serializing <paramref name="value"/>.</param>
     /// <returns>A 200 OK WASI response.</returns>
     public static WasiResponse Ok<T>(T value, JsonTypeInfo<T> jsonTypeInfo)
-        => value is null ? new(200, s_emptyHeaders, s_emptyBody) : new(200, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value, jsonTypeInfo));
+        => new(200, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value, jsonTypeInfo));
 
     /// <summary>
-    /// Creates a 201 Created response with a <c>Location</c> header and optional JSON response body.
+    /// Creates a 201 Created response with a <c>Location</c> header and empty body.
     /// </summary>
     /// <param name="location">The resource location to write to the <c>Location</c> header.</param>
-    /// <param name="value">The value to serialize as JSON, or <c>null</c> to return an empty body.</param>
+    /// <returns>A 201 Created WASI response.</returns>
+    public static WasiResponse Created(string location)
+        => new(201, new Dictionary<string, string>(StringComparer.Ordinal) { ["Location"] = location }, s_emptyBody);
+
+    /// <summary>
+    /// Creates a 201 Created response with a <c>Location</c> header and JSON response body.
+    /// </summary>
+    /// <param name="location">The resource location to write to the <c>Location</c> header.</param>
+    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
     /// <returns>A 201 Created WASI response.</returns>
     /// <remarks>This overload uses reflection-based JSON serialization. Use <see cref="Created{T}(string, T, JsonTypeInfo{T})"/> for NativeAOT and trimming.</remarks>
     [RequiresDynamicCode("Use Created<T>(string, T, JsonTypeInfo<T>) for NativeAOT-compatible WASI responses.")]
     [RequiresUnreferencedCode("Use Created<T>(string, T, JsonTypeInfo<T>) for trim-compatible WASI responses.")]
-    public static WasiResponse Created(string location, object? value = null)
+    public static WasiResponse Created(string location, object? value)
     {
-        var headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Location"] = location };
-        if (value is not null)
+        var headers = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            headers["Content-Type"] = "application/json";
-            return new(201, headers, JsonSerializer.SerializeToUtf8Bytes(value));
-        }
-        return new(201, headers, s_emptyBody);
+            ["Location"] = location,
+            ["Content-Type"] = "application/json",
+        };
+        return new(201, headers, JsonSerializer.SerializeToUtf8Bytes(value));
     }
 
     /// <summary>
-    /// Creates a 201 Created response with a <c>Location</c> header and optional JSON response body using source-generated metadata.
+    /// Creates a 201 Created response with a <c>Location</c> header and JSON response body using source-generated metadata.
     /// </summary>
     /// <typeparam name="T">The response body type.</typeparam>
     /// <param name="location">The resource location to write to the <c>Location</c> header.</param>
-    /// <param name="value">The value to serialize as JSON, or <c>null</c> to return an empty body.</param>
+    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
     /// <param name="jsonTypeInfo">The JSON metadata to use when serializing <paramref name="value"/>.</param>
     /// <returns>A 201 Created WASI response.</returns>
     public static WasiResponse Created<T>(string location, T value, JsonTypeInfo<T> jsonTypeInfo)
     {
-        var headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["Location"] = location };
-        if (value is null)
+        var headers = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            return new(201, headers, s_emptyBody);
-        }
-
-        headers["Content-Type"] = "application/json";
+            ["Location"] = location,
+            ["Content-Type"] = "application/json",
+        };
         return new(201, headers, JsonSerializer.SerializeToUtf8Bytes(value, jsonTypeInfo));
     }
 
@@ -124,35 +136,27 @@ public static partial class SliceResult
     }
 
     /// <summary>
-    /// Creates a response with the specified status code and optional JSON response body.
+    /// Creates a response with the specified status code and a JSON response body.
     /// </summary>
     /// <param name="status">The HTTP status code for the response.</param>
-    /// <param name="value">The value to serialize as JSON, or <c>null</c> to return an empty body.</param>
+    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
     /// <returns>A WASI response with the specified status code.</returns>
     /// <remarks>This overload uses reflection-based JSON serialization. Use <see cref="Json{T}(int, T, JsonTypeInfo{T})"/> for NativeAOT and trimming.</remarks>
     [RequiresDynamicCode("Use Json<T>(int, T, JsonTypeInfo<T>) for NativeAOT-compatible WASI responses.")]
     [RequiresUnreferencedCode("Use Json<T>(int, T, JsonTypeInfo<T>) for trim-compatible WASI responses.")]
     public static WasiResponse Json(int status, object? value)
-    {
-        return value is null
-            ? new(status, s_emptyHeaders, s_emptyBody)
-            : new(status, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value));
-    }
+        => new(status, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value));
 
     /// <summary>
-    /// Creates a response with the specified status code and optional JSON response body using source-generated metadata.
+    /// Creates a response with the specified status code and a JSON response body using source-generated metadata.
     /// </summary>
     /// <typeparam name="T">The response body type.</typeparam>
     /// <param name="status">The HTTP status code for the response.</param>
-    /// <param name="value">The value to serialize as JSON, or <c>null</c> to return an empty body.</param>
+    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
     /// <param name="jsonTypeInfo">The JSON metadata to use when serializing <paramref name="value"/>.</param>
     /// <returns>A WASI response with the specified status code.</returns>
     public static WasiResponse Json<T>(int status, T value, JsonTypeInfo<T> jsonTypeInfo)
-    {
-        return value is null
-            ? new(status, s_emptyHeaders, s_emptyBody)
-            : new(status, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value, jsonTypeInfo));
-    }
+        => new(status, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value, jsonTypeInfo));
 
     /// <summary>
     /// Creates a response from pre-serialized bytes.
@@ -172,5 +176,6 @@ public static partial class SliceResult
         IReadOnlyDictionary<string, string[]>? Errors);
 
     [JsonSerializable(typeof(ProblemDto))]
+    [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
     private sealed partial class SliceResultJsonContext : JsonSerializerContext { }
 }

@@ -3,6 +3,35 @@ using System.Globalization;
 namespace Slice.Lambda.PerFunction;
 
 /// <summary>
+/// Describes the result of binding a Lambda scalar argument.
+/// </summary>
+public enum LambdaArgumentBindingStatus
+{
+    /// <summary>
+    /// The query parameter was present and converted successfully.
+    /// </summary>
+    Bound,
+
+    /// <summary>
+    /// The query parameter was not present.
+    /// </summary>
+    Missing,
+
+    /// <summary>
+    /// The query parameter was present but could not be converted.
+    /// </summary>
+    Invalid,
+}
+
+/// <summary>
+/// Contains a Lambda scalar argument binding result and its converted value.
+/// </summary>
+/// <typeparam name="T">The target argument type.</typeparam>
+/// <param name="Status">The binding status.</param>
+/// <param name="Value">The converted value when <paramref name="Status"/> is <see cref="LambdaArgumentBindingStatus.Bound"/>.</param>
+public readonly record struct LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus Status, T? Value);
+
+/// <summary>
 /// Converts route and query string values into scalar handler argument types.
 /// </summary>
 public static class LambdaArgumentBinder
@@ -29,30 +58,71 @@ public static class LambdaArgumentBinder
     }
 
     /// <summary>
-    /// Attempts to read and convert a query string parameter.
+    /// Reads and converts a query string parameter.
     /// </summary>
-    public static bool TryGetFromQuery<T>(LambdaInvocationContext ctx, string name, out T? value)
+    /// <returns>
+    /// <see cref="LambdaArgumentBindingStatus.Missing"/> when the query value is absent,
+    /// <see cref="LambdaArgumentBindingStatus.Invalid"/> when it cannot be converted, or
+    /// <see cref="LambdaArgumentBindingStatus.Bound"/> with the converted value.
+    /// </returns>
+    public static LambdaArgumentBindingResult<T> BindFromQuery<T>(LambdaInvocationContext ctx, string name)
     {
         ArgumentNullException.ThrowIfNull(ctx);
-        value = default;
         if (ctx.Request.QueryStringParameters is null)
         {
-            return true;
+            return new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Missing, default);
         }
 
         foreach (var pair in ctx.Request.QueryStringParameters)
         {
             if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
             {
-                return TryConvertValue(pair.Value, out value);
+                return TryConvertValue(pair.Value, out T? value)
+                    ? new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Bound, value)
+                    : new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Invalid, default);
             }
         }
 
-        return true;
+        return new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Missing, default);
     }
 
-    private static bool TryConvertValue<T>(string raw, out T? value)
+    /// <summary>
+    /// Reads and converts a request header.
+    /// </summary>
+    /// <returns>
+    /// <see cref="LambdaArgumentBindingStatus.Missing"/> when the header is absent,
+    /// <see cref="LambdaArgumentBindingStatus.Invalid"/> when it cannot be converted, or
+    /// <see cref="LambdaArgumentBindingStatus.Bound"/> with the converted value.
+    /// </returns>
+    public static LambdaArgumentBindingResult<T> BindFromHeader<T>(LambdaInvocationContext ctx, string name)
     {
+        ArgumentNullException.ThrowIfNull(ctx);
+        if (ctx.Request.Headers is null)
+        {
+            return new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Missing, default);
+        }
+
+        foreach (var pair in ctx.Request.Headers)
+        {
+            if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return TryConvertValue(pair.Value, out T? value)
+                    ? new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Bound, value)
+                    : new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Invalid, default);
+            }
+        }
+
+        return new LambdaArgumentBindingResult<T>(LambdaArgumentBindingStatus.Missing, default);
+    }
+
+    private static bool TryConvertValue<T>(string? raw, out T? value)
+    {
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
         var t = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         if (Nullable.GetUnderlyingType(typeof(T)) is not null && raw.Length == 0)
         {

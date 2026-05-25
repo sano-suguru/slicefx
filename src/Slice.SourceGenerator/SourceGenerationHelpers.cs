@@ -106,8 +106,121 @@ internal static class SourceGenerationHelpers
         return false;
     }
 
+    public static HandlerParameterBinding ResolveParameterBinding(
+        HandleParamModel parameter,
+        string pattern,
+        string featureTypeFqn)
+    {
+        var wireName = string.IsNullOrWhiteSpace(parameter.BindingName) ? parameter.Name : parameter.BindingName!;
+        return parameter.BindingSource switch
+        {
+            "body" => ResolveExplicitBody(parameter, wireName),
+            "route" => ResolveExplicitScalar(parameter, pattern, wireName, HandlerParameterBindingSource.Route),
+            "query" => ResolveExplicitScalar(parameter, pattern, wireName, HandlerParameterBindingSource.Query),
+            "header" => ResolveExplicitScalar(parameter, pattern, wireName, HandlerParameterBindingSource.Header),
+            "services" => new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null),
+            _ => ResolveConventionBinding(parameter, pattern, featureTypeFqn, wireName),
+        };
+    }
+
+    public static bool IsLambdaProxyResponseType(string? typeFqn)
+        => typeFqn == "global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyResponse";
+
+    public static bool IsWasiResponseType(string? typeFqn)
+        => typeFqn == "global::Slice.Wasi.WasiResponse";
+
+    public static string BindingSourceName(HandlerParameterBindingSource source)
+    {
+        if (source == HandlerParameterBindingSource.Route)
+        {
+            return "route";
+        }
+
+        if (source == HandlerParameterBindingSource.Query)
+        {
+            return "query";
+        }
+
+        if (source == HandlerParameterBindingSource.Header)
+        {
+            return "header";
+        }
+
+        if (source == HandlerParameterBindingSource.Body)
+        {
+            return "body";
+        }
+
+        return source == HandlerParameterBindingSource.Services ? "services" : "parameter";
+    }
+
     private static string GetSingleGenericArgument(string typeFqn, string prefix)
         => typeFqn.Substring(prefix.Length, typeFqn.Length - prefix.Length - 1);
+
+    private static HandlerParameterBinding ResolveExplicitBody(
+        HandleParamModel parameter,
+        string wireName)
+    {
+        if (parameter.TypeFqn == "global::System.Threading.CancellationToken")
+        {
+            return Unsupported(wireName, "CancellationToken cannot be bound from the request body");
+        }
+
+        if (parameter.IsInterfaceOrAbstract)
+        {
+            return Unsupported(wireName, "body parameter has an interface or abstract type");
+        }
+
+        return new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null);
+    }
+
+    private static HandlerParameterBinding ResolveExplicitScalar(
+        HandleParamModel parameter,
+        string pattern,
+        string wireName,
+        HandlerParameterBindingSource source)
+    {
+        if (!IsSimpleType(parameter.TypeFqn))
+        {
+            return Unsupported(wireName, $"{BindingSourceName(source)} parameter has unsupported type");
+        }
+
+        if (source == HandlerParameterBindingSource.Route && !IsRouteParam(wireName, pattern))
+        {
+            return Unsupported(wireName, $"route parameter '{wireName}' is not present in the route pattern");
+        }
+
+        return new HandlerParameterBinding(source, wireName, null);
+    }
+
+    private static HandlerParameterBinding ResolveConventionBinding(
+        HandleParamModel parameter,
+        string pattern,
+        string featureTypeFqn,
+        string wireName)
+    {
+        if (parameter.TypeFqn == featureTypeFqn + ".Request")
+        {
+            return new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null);
+        }
+
+        if (parameter.TypeFqn == "global::System.Threading.CancellationToken")
+        {
+            return new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
+        }
+
+        if (!IsSimpleType(parameter.TypeFqn))
+        {
+            return new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
+        }
+
+        return IsRouteParam(wireName, pattern)
+            ? new HandlerParameterBinding(HandlerParameterBindingSource.Route, wireName, null)
+            : new HandlerParameterBinding(HandlerParameterBindingSource.Query, wireName, null);
+    }
+
+    private static HandlerParameterBinding Unsupported(string wireName, string reason)
+        => new(HandlerParameterBindingSource.Unsupported, wireName, reason);
 
     private static bool IsSimpleNullableType(string typeFqn)
     {
@@ -127,3 +240,18 @@ internal static class SourceGenerationHelpers
         return terminator >= 0 ? token.Substring(0, terminator) : token;
     }
 }
+
+internal enum HandlerParameterBindingSource
+{
+    Unsupported,
+    Body,
+    Route,
+    Query,
+    Header,
+    Services,
+}
+
+internal readonly record struct HandlerParameterBinding(
+    HandlerParameterBindingSource Source,
+    string WireName,
+    string? UnsupportedReason);

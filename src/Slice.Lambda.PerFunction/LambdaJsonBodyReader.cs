@@ -12,6 +12,12 @@ public static class LambdaJsonBodyReader
     /// <summary>
     /// Deserializes the current request body as JSON using source-generated metadata.
     /// </summary>
+    /// <exception cref="FormatException">
+    /// The body is marked as base64 encoded but does not contain valid base64.
+    /// </exception>
+    /// <exception cref="JsonException">
+    /// The decoded body does not contain valid JSON for <typeparamref name="T"/>.
+    /// </exception>
     public static ValueTask<T?> ReadAsync<T>(LambdaInvocationContext ctx, JsonTypeInfo<T> jsonTypeInfo)
     {
         ArgumentNullException.ThrowIfNull(ctx);

@@ -15,20 +15,27 @@ public static class LambdaCancellation
     /// <param name="context">The current Lambda context.</param>
     /// <returns>A cancellation token source for the current invocation.</returns>
     public static CancellationTokenSource Create(ILambdaContext context)
+        => Create(context, TimeProvider.System);
+
+    /// <summary>
+    /// Creates a cancellation token source that cancels shortly before the Lambda timeout.
+    /// </summary>
+    /// <param name="context">The current Lambda context.</param>
+    /// <param name="timeProvider">The clock used to schedule cancellation.</param>
+    /// <returns>A cancellation token source for the current invocation.</returns>
+    public static CancellationTokenSource Create(ILambdaContext context, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         var remaining = context.RemainingTime - s_defaultBuffer;
-        var cts = new CancellationTokenSource();
         if (remaining > TimeSpan.Zero)
         {
-            cts.CancelAfter(remaining);
-        }
-        else
-        {
-            cts.Cancel();
+            return new CancellationTokenSource(remaining, timeProvider);
         }
 
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
         return cts;
     }
 }

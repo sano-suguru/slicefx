@@ -4,6 +4,35 @@ using Slice.Wasi.Routing;
 namespace Slice.Wasi.Binding;
 
 /// <summary>
+/// Describes the result of binding a WASI scalar argument.
+/// </summary>
+public enum WasiArgumentBindingStatus
+{
+    /// <summary>
+    /// The query parameter was present and converted successfully.
+    /// </summary>
+    Bound,
+
+    /// <summary>
+    /// The query parameter was not present.
+    /// </summary>
+    Missing,
+
+    /// <summary>
+    /// The query parameter was present but could not be converted.
+    /// </summary>
+    Invalid,
+}
+
+/// <summary>
+/// Contains a WASI scalar argument binding result and its converted value.
+/// </summary>
+/// <typeparam name="T">The target argument type.</typeparam>
+/// <param name="Status">The binding status.</param>
+/// <param name="Value">The converted value when <paramref name="Status"/> is <see cref="WasiArgumentBindingStatus.Bound"/>.</param>
+public readonly record struct WasiArgumentBindingResult<T>(WasiArgumentBindingStatus Status, T? Value);
+
+/// <summary>
 /// Converts route and query string values into scalar handler argument types for Slice WASI.
 /// </summary>
 public static class WasiArgumentBinder
@@ -28,23 +57,22 @@ public static class WasiArgumentBinder
     }
 
     /// <summary>
-    /// Attempts to read and convert a query string value.
+    /// Reads and converts a query string value.
     /// </summary>
     /// <typeparam name="T">The target argument type.</typeparam>
     /// <param name="ctx">The current WASI invoker context.</param>
     /// <param name="name">The query string key to read.</param>
-    /// <param name="value">When this method returns, contains the converted value or <c>default</c>.</param>
     /// <returns>
-    /// <c>false</c> when a matching value exists but cannot be converted; otherwise, <c>true</c>.
-    /// Missing query values return <c>true</c> with <c>default</c>.
+    /// <see cref="WasiArgumentBindingStatus.Missing"/> when the query value is absent,
+    /// <see cref="WasiArgumentBindingStatus.Invalid"/> when it cannot be converted, or
+    /// <see cref="WasiArgumentBindingStatus.Bound"/> with the converted value.
     /// </returns>
-    public static bool TryGetFromQuery<T>(WasiInvokerContext ctx, string name, out T? value)
+    public static WasiArgumentBindingResult<T> BindFromQuery<T>(WasiInvokerContext ctx, string name)
     {
-        value = default;
         var qs = ctx.Request.QueryString;
         if (string.IsNullOrEmpty(qs))
         {
-            return true;
+            return new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Missing, default);
         }
 
         var query = qs.TrimStart('?');
@@ -56,23 +84,58 @@ public static class WasiArgumentBinder
             }
 
             var eq = pair.IndexOf('=');
-            if (eq < 0)
-            {
-                continue;
-            }
-
-            var key = Uri.UnescapeDataString(pair[..eq]);
+            var rawKey = eq < 0 ? pair : pair[..eq];
+            var key = Uri.UnescapeDataString(rawKey);
             if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
             {
-                return TryConvertValue(Uri.UnescapeDataString(pair[(eq + 1)..]), out value);
+                if (eq < 0)
+                {
+                    continue;
+                }
+
+                return TryConvertValue(Uri.UnescapeDataString(pair[(eq + 1)..]), out T? value)
+                    ? new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Bound, value)
+                    : new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Invalid, default);
             }
         }
 
-        return true;
+        return new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Missing, default);
     }
 
-    private static bool TryConvertValue<T>(string raw, out T? value)
+    /// <summary>
+    /// Reads and converts a request header.
+    /// </summary>
+    /// <typeparam name="T">The target argument type.</typeparam>
+    /// <param name="ctx">The current WASI invoker context.</param>
+    /// <param name="name">The header name to read.</param>
+    /// <returns>
+    /// <see cref="WasiArgumentBindingStatus.Missing"/> when the header is absent,
+    /// <see cref="WasiArgumentBindingStatus.Invalid"/> when it cannot be converted, or
+    /// <see cref="WasiArgumentBindingStatus.Bound"/> with the converted value.
+    /// </returns>
+    public static WasiArgumentBindingResult<T> BindFromHeader<T>(WasiInvokerContext ctx, string name)
     {
+        foreach (var pair in ctx.Request.Headers)
+        {
+            if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return TryConvertValue(pair.Value, out T? value)
+                    ? new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Bound, value)
+                    : new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Invalid, default);
+            }
+        }
+
+        return new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Missing, default);
+    }
+
+    private static bool TryConvertValue<T>(string? raw, out T? value)
+    {
+        if (raw is null)
+        {
+            value = default;
+            return false;
+        }
+
         var t = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         if (Nullable.GetUnderlyingType(typeof(T)) is not null && raw.Length == 0)
         {

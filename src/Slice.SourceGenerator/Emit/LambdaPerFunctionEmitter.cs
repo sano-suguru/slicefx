@@ -153,16 +153,37 @@ internal static class LambdaPerFunctionEmitter
                 continue;
             }
 
-            var source = ClassifyNonBodyParam(p, feature.Pattern);
-            if (source == ParamSource.Route)
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Route)
             {
-                sb.AppendLine($"        if (!global::Slice.Lambda.PerFunction.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(p.Name)}, out var {p.Name}))");
-                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Route value '{p.Name}' is missing or invalid.")});");
+                sb.AppendLine($"        if (!global::Slice.Lambda.PerFunction.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
+                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
             }
-            else if (source == ParamSource.Query)
+            else if (binding.Source == HandlerParameterBindingSource.Query)
             {
-                sb.AppendLine($"        if (!global::Slice.Lambda.PerFunction.LambdaArgumentBinder.TryGetFromQuery<{p.TypeFqn}>(ctx, {Str(p.Name)}, out var {p.Name}))");
-                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{p.Name}' is invalid.")});");
+                var bindingVariable = "__" + p.Name + "Query";
+                sb.AppendLine($"        var {bindingVariable} = global::Slice.Lambda.PerFunction.LambdaArgumentBinder.BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
+                if (!p.IsNullable)
+                {
+                    sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
+                }
+                sb.AppendLine($"        var {p.Name} = {bindingVariable}.Value!;");
+            }
+            else if (binding.Source == HandlerParameterBindingSource.Header)
+            {
+                var bindingVariable = "__" + p.Name + "Header";
+                sb.AppendLine($"        var {bindingVariable} = global::Slice.Lambda.PerFunction.LambdaArgumentBinder.BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
+                if (!p.IsNullable)
+                {
+                    sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
+                }
+                sb.AppendLine($"        var {p.Name} = {bindingVariable}.Value!;");
             }
             else
             {
@@ -193,7 +214,14 @@ internal static class LambdaPerFunctionEmitter
                 sb.AppendLine($"        var __result = {callExpr};");
             }
 
-            sb.AppendLine($"        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Ok<{awaitedReturnType}>(__result, __JsonTypeInfo<{awaitedReturnType}>());");
+            if (SourceGenerationHelpers.IsLambdaProxyResponseType(awaitedReturnType))
+            {
+                sb.AppendLine("        return __result;");
+            }
+            else
+            {
+                sb.AppendLine($"        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Ok<{awaitedReturnType}>(__result, __JsonTypeInfo<{awaitedReturnType}>());");
+            }
         }
 
         sb.AppendLine("    }");
@@ -206,6 +234,11 @@ internal static class LambdaPerFunctionEmitter
             return new LambdaSkipReason("SLICE012", "returns ASP.NET IResult");
         }
 
+        if (SourceGenerationHelpers.IsWasiResponseType(SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn)))
+        {
+            return new LambdaSkipReason("SLICE012", "returns Slice.Wasi.WasiResponse");
+        }
+
         if (!feature.GetFilterFqns().IsEmpty)
         {
             return new LambdaSkipReason("SLICE013", "endpoint filters require the ASP.NET endpoint filter pipeline");
@@ -216,18 +249,35 @@ internal static class LambdaPerFunctionEmitter
             return new LambdaSkipReason("SLICE016", "DataAnnotations validation requires reflection in the Lambda per-feature path");
         }
 
+        var bodyCount = 0;
         foreach (var p in feature.GetParams())
         {
-            if (p.TypeFqn == "global::System.Threading.CancellationToken"
-                || p.IsInterfaceOrAbstract
-                || p.TypeFqn == feature.FullyQualifiedTypeName + ".Request")
+            if (p.TypeFqn == "global::System.Threading.CancellationToken")
             {
                 continue;
             }
 
-            if (SourceGenerationHelpers.IsRouteParam(p.Name, feature.Pattern) && !SourceGenerationHelpers.IsSimpleType(p.TypeFqn))
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Body)
             {
-                return new LambdaSkipReason("SLICE015", $"route parameter '{p.Name}' has unsupported type '{SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn)}'");
+                bodyCount++;
+                if (bodyCount > 1)
+                {
+                    return new LambdaSkipReason(
+                        "SLICE015",
+                        "multiple body parameters are not supported",
+                        p.Name,
+                        SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
+                }
+            }
+
+            if (binding.Source == HandlerParameterBindingSource.Unsupported)
+            {
+                return new LambdaSkipReason(
+                    "SLICE015",
+                    binding.UnsupportedReason ?? "parameter binding is unsupported",
+                    p.Name,
+                    SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
             }
         }
 
@@ -251,38 +301,10 @@ internal static class LambdaPerFunctionEmitter
         var diagnostic = skip.DiagnosticId switch
         {
             "SLICE012" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, feature.ReturnTypeFqn),
-            "SLICE015" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, ExtractParameterName(skip.Reason), ExtractParameterType(skip.Reason)),
+            "SLICE015" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, skip.ParameterName ?? "", skip.ParameterType ?? ""),
             _ => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName),
         };
         diagnostics.Add(diagnostic);
-    }
-
-    private static string ExtractParameterName(string reason)
-    {
-        const string prefix = "route parameter '";
-        var start = reason.IndexOf(prefix, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return "";
-        }
-
-        start += prefix.Length;
-        var end = reason.IndexOf('\'', start);
-        return end < 0 ? "" : reason.Substring(start, end - start);
-    }
-
-    private static string ExtractParameterType(string reason)
-    {
-        const string prefix = "unsupported type '";
-        var start = reason.IndexOf(prefix, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return "";
-        }
-
-        start += prefix.Length;
-        var end = reason.IndexOf('\'', start);
-        return end < 0 ? "" : reason.Substring(start, end - start);
     }
 
     private static string HandlerMethodName(FeatureModel feature)
@@ -427,10 +449,10 @@ internal static class LambdaPerFunctionEmitter
 
     private static HandleParamModel? FindBodyParam(FeatureModel feature, ImmutableArray<HandleParamModel> parameters)
     {
-        var nestedRequestType = feature.FullyQualifiedTypeName + ".Request";
         foreach (var p in parameters)
         {
-            if (p.TypeFqn == nestedRequestType)
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 return p;
             }
@@ -443,15 +465,6 @@ internal static class LambdaPerFunctionEmitter
         HandleParamModel parameter,
         ImmutableArray<ValidatorModel> validators)
         => validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn);
-
-    private enum ParamSource { Route, Query, DI }
-
-    private static ParamSource ClassifyNonBodyParam(HandleParamModel p, string pattern)
-    {
-        return !SourceGenerationHelpers.IsSimpleType(p.TypeFqn)
-            ? ParamSource.DI
-            : SourceGenerationHelpers.IsRouteParam(p.Name, pattern) ? ParamSource.Route : ParamSource.Query;
-    }
 
     private static string SanitizeIdentifier(string value)
     {
@@ -474,5 +487,9 @@ internal static class LambdaPerFunctionEmitter
             .Replace("<", "&lt;")
             .Replace(">", "&gt;");
 
-    private readonly record struct LambdaSkipReason(string DiagnosticId, string Reason);
+    private readonly record struct LambdaSkipReason(
+        string DiagnosticId,
+        string Reason,
+        string? ParameterName = null,
+        string? ParameterType = null);
 }

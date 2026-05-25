@@ -118,12 +118,23 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Diagnostic reported when a route, query, header, or body parameter type is unsupported by WASI binding.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedParameterForWasi = new(
+        "SLICE023",
+        "Parameter type not supported in WASI path",
+        "Feature '{0}': parameter '{1}' of type '{2}' cannot be bound by the WASI route table and the feature will be excluded",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// Diagnostic reported when a feature return type cannot be used by Lambda per-feature handlers.
     /// </summary>
     public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaPerFeature = new(
         "SLICE012",
         "Return type not supported in Lambda per-feature path",
-        "Feature '{0}': return type '{1}' is ASP.NET-specific and will be excluded from Lambda per-feature handlers. Use a POCO, Task<T>, or ValueTask<T> return type.",
+        "Feature '{0}': return type '{1}' is not supported in Lambda per-feature handlers and the feature will be excluded. Use a POCO, Task<T>, ValueTask<T>, or APIGatewayHttpApiV2ProxyResponse return type.",
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);

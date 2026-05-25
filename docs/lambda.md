@@ -50,15 +50,34 @@ Supported handler inputs:
 
 - Route parameters
 - Query parameters
+- Header parameters
 - Nested JSON `Request` bodies
+- Explicit `[FromBody]` JSON bodies
 - DI services
 - `CancellationToken`
+
+Generated per-feature handlers honor common Minimal API binding attributes:
+`[FromRoute(Name = "...")]`, `[FromQuery(Name = "...")]`,
+`[FromHeader(Name = "...")]`, `[FromBody]`, and `[FromServices]`.
+Route, query, and header values use the same required/optional contract as
+the WASI path: missing nullable parameters bind `null`, missing non-nullable
+parameters return `400 Bad Request`, and present-but-invalid values always
+return `400 Bad Request`. Present empty strings bind as `""`; present empty
+nullable scalars bind `null`.
 
 Supported return shapes:
 
 - POCOs
 - `Task<T>`
 - `ValueTask<T>`
+- `APIGatewayHttpApiV2ProxyResponse`
+- `Task<APIGatewayHttpApiV2ProxyResponse>`
+- `ValueTask<APIGatewayHttpApiV2ProxyResponse>`
+
+If a typed return value is `null`, the generated handler returns
+`200 application/json` with a JSON `null` body. Return
+`APIGatewayHttpApiV2ProxyResponse` when `null` should instead mean 404, 204,
+or another non-JSON response.
 
 Unsupported routes are excluded with generator diagnostics and CLI reasons. Common exclusions include:
 

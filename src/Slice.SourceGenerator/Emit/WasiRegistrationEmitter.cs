@@ -108,8 +108,9 @@ internal static class WasiRegistrationEmitter
         foreach (var f in features)
         {
             var jsonExclusion = JsonContextPlanner.FindExclusion(jsonContextPlan, f);
-            var skipReason = GetSkipReason(f) ?? jsonExclusion?.Reason;
-            if (skipReason is not null)
+            var skipReason = GetSkipReason(f);
+            var skipMessage = skipReason?.Reason ?? jsonExclusion?.Reason;
+            if (skipMessage is not null)
             {
                 if (f.ReturnsAspNetResult)
                 {
@@ -122,7 +123,17 @@ internal static class WasiRegistrationEmitter
                 }
                 else if (jsonExclusion is not null)
                 {
-                    sb.AppendLine($"        // SLICE009: {ToSingleLineComment(f.EndpointName)} — {skipReason}; skipped.");
+                    sb.AppendLine($"        // SLICE009: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
+                }
+                else if (skipReason?.DiagnosticId == "SLICE023")
+                {
+                    diagnostics.Add(EquatableDiagnostic.Create(
+                        SliceDiagnostics.UnsupportedParameterForWasi,
+                        f.GetDiagnosticLocationModel(),
+                        f.TypeName,
+                        skipReason.Value.ParameterName ?? "",
+                        skipReason.Value.ParameterType ?? ""));
+                    sb.AppendLine($"        // SLICE023: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
                 }
                 else
                 {
@@ -130,7 +141,7 @@ internal static class WasiRegistrationEmitter
                         SliceDiagnostics.UnsupportedValidationForWasi,
                         f.GetDiagnosticLocationModel(),
                         f.TypeName));
-                    sb.AppendLine($"        // SLICE011: {ToSingleLineComment(f.EndpointName)} — {skipReason}; skipped.");
+                    sb.AppendLine($"        // SLICE011: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
                 }
 
                 continue;
@@ -148,16 +159,48 @@ internal static class WasiRegistrationEmitter
         return (sb.ToString(), diagnostics.ToImmutable());
     }
 
-    private static string? GetSkipReason(FeatureModel feature)
+    private static WasiSkipReason? GetSkipReason(FeatureModel feature)
     {
         if (feature.ReturnsAspNetResult)
         {
-            return "IResult is ASP.NET-specific";
+            return new WasiSkipReason("SLICE008", "IResult is ASP.NET-specific");
         }
 
         if (feature.RequiresReflectionValidation)
         {
-            return "DataAnnotations validation requires reflection";
+            return new WasiSkipReason("SLICE011", "DataAnnotations validation requires reflection");
+        }
+
+        var bodyCount = 0;
+        foreach (var p in feature.GetParams())
+        {
+            if (p.TypeFqn == "global::System.Threading.CancellationToken")
+            {
+                continue;
+            }
+
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Body)
+            {
+                bodyCount++;
+                if (bodyCount > 1)
+                {
+                    return new WasiSkipReason(
+                        "SLICE023",
+                        "multiple body parameters are not supported",
+                        p.Name,
+                        SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
+                }
+            }
+
+            if (binding.Source == HandlerParameterBindingSource.Unsupported)
+            {
+                return new WasiSkipReason(
+                    "SLICE023",
+                    binding.UnsupportedReason ?? "parameter binding is unsupported",
+                    p.Name,
+                    SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
+            }
         }
 
         return null;
@@ -234,18 +277,40 @@ internal static class WasiRegistrationEmitter
                 continue;
             }
 
-            var source = ClassifyNonBodyParam(p, f.Pattern);
-            if (source == ParamSource.Route)
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, f.Pattern, f.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"                    if (!global::Slice.Wasi.Binding.WasiArgumentBinder");
-                sb.AppendLine($"                        .TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(p.Name)}, out var {p.Name}))");
-                sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Route value '{p.Name}' is missing or invalid.")});");
+                sb.AppendLine($"                        .TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
+                sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
             }
-            else if (source == ParamSource.Query)
+            else if (binding.Source == HandlerParameterBindingSource.Query)
             {
-                sb.AppendLine($"                    if (!global::Slice.Wasi.Binding.WasiArgumentBinder");
-                sb.AppendLine($"                        .TryGetFromQuery<{p.TypeFqn}>(ctx, {Str(p.Name)}, out var {p.Name}))");
-                sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Query value '{p.Name}' is invalid.")});");
+                var bindingVariable = "__" + p.Name + "Query";
+                sb.AppendLine($"                    var {bindingVariable} = global::Slice.Wasi.Binding.WasiArgumentBinder");
+                sb.AppendLine($"                        .BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"                    if ({bindingVariable}.Status == global::Slice.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
+                if (!p.IsNullable)
+                {
+                    sb.AppendLine($"                    if ({bindingVariable}.Status == global::Slice.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
+                }
+                sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
+            }
+            else if (binding.Source == HandlerParameterBindingSource.Header)
+            {
+                var bindingVariable = "__" + p.Name + "Header";
+                sb.AppendLine($"                    var {bindingVariable} = global::Slice.Wasi.Binding.WasiArgumentBinder");
+                sb.AppendLine($"                        .BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"                    if ({bindingVariable}.Status == global::Slice.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
+                if (!p.IsNullable)
+                {
+                    sb.AppendLine($"                    if ({bindingVariable}.Status == global::Slice.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"                        return global::Slice.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
+                }
+                sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
             }
             else // DI
             {
@@ -462,7 +527,6 @@ internal static class WasiRegistrationEmitter
 
     private static HandleParamModel? FindBodyParam(FeatureModel feature, ImmutableArray<HandleParamModel> @params)
     {
-        var nestedRequestType = feature.FullyQualifiedTypeName + ".Request";
         foreach (var p in @params)
         {
             if (p.TypeFqn == "global::System.Threading.CancellationToken")
@@ -470,7 +534,8 @@ internal static class WasiRegistrationEmitter
                 continue;
             }
 
-            if (p.TypeFqn == nestedRequestType)
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 return p;
             }
@@ -484,19 +549,16 @@ internal static class WasiRegistrationEmitter
         => validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn);
 
     private static bool IsWasiResponseType(string? typeFqn)
-        => typeFqn == "global::Slice.Wasi.WasiResponse";
-
-    private enum ParamSource { Route, Query, DI }
-
-    private static ParamSource ClassifyNonBodyParam(HandleParamModel p, string pattern)
-    {
-        return !SourceGenerationHelpers.IsSimpleType(p.TypeFqn)
-            ? ParamSource.DI
-            : SourceGenerationHelpers.IsRouteParam(p.Name, pattern) ? ParamSource.Route : ParamSource.Query;
-    }
+        => SourceGenerationHelpers.IsWasiResponseType(typeFqn);
 
     private static string Str(string value) => CSharpLiteral.String(value);
 
     private static string ToSingleLineComment(string value)
         => value.Replace('\r', ' ').Replace('\n', ' ');
+
+    private readonly record struct WasiSkipReason(
+        string DiagnosticId,
+        string Reason,
+        string? ParameterName = null,
+        string? ParameterType = null);
 }

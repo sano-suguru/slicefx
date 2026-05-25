@@ -123,7 +123,7 @@ internal static class JsonContextPlanner
             return "DataAnnotations validation requires reflection";
         }
 
-        return null;
+        return GetParameterBindingSkipReason(feature);
     }
 
     public static string? GetLambdaStructuralSkipReason(FeatureModel feature)
@@ -131,6 +131,11 @@ internal static class JsonContextPlanner
         if (feature.ReturnsAspNetResult)
         {
             return "returns ASP.NET IResult";
+        }
+
+        if (SourceGenerationHelpers.IsWasiResponseType(SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn)))
+        {
+            return "returns Slice.Wasi.WasiResponse";
         }
 
         if (!feature.GetFilterFqns().IsEmpty)
@@ -143,23 +148,7 @@ internal static class JsonContextPlanner
             return "DataAnnotations validation requires reflection in the Lambda per-feature path";
         }
 
-        foreach (var p in feature.GetParams())
-        {
-            if (p.TypeFqn == "global::System.Threading.CancellationToken"
-                || p.IsInterfaceOrAbstract
-                || p.TypeFqn == feature.FullyQualifiedTypeName + ".Request")
-            {
-                continue;
-            }
-
-            if (SourceGenerationHelpers.IsRouteParam(p.Name, feature.Pattern)
-                && !SourceGenerationHelpers.IsSimpleType(p.TypeFqn))
-            {
-                return $"route parameter '{p.Name}' has unsupported type '{SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn)}'";
-            }
-        }
-
-        return null;
+        return GetParameterBindingSkipReason(feature);
     }
 
     private static JsonContextPlan CreatePlan(
@@ -222,7 +211,7 @@ internal static class JsonContextPlanner
 
         var responseType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
         if (responseType is not null
-            && (target != JsonContextTarget.Wasi || responseType != "global::Slice.Wasi.WasiResponse"))
+            && !IsPassthroughResponseType(target, responseType))
         {
             roots.Add(new JsonRootType(responseType));
         }
@@ -249,10 +238,10 @@ internal static class JsonContextPlanner
 
     private static HandleParamModel? FindBodyParam(FeatureModel feature)
     {
-        var nestedRequestType = feature.FullyQualifiedTypeName + ".Request";
         foreach (var p in feature.GetParams())
         {
-            if (p.TypeFqn == nestedRequestType)
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 return p;
             }
@@ -260,6 +249,43 @@ internal static class JsonContextPlanner
 
         return null;
     }
+
+    private static string? GetParameterBindingSkipReason(FeatureModel feature)
+    {
+        var bodyCount = 0;
+        foreach (var p in feature.GetParams())
+        {
+            if (p.TypeFqn == "global::System.Threading.CancellationToken")
+            {
+                continue;
+            }
+
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            if (binding.Source == HandlerParameterBindingSource.Body)
+            {
+                bodyCount++;
+                if (bodyCount > 1)
+                {
+                    return "multiple body parameters are not supported";
+                }
+            }
+
+            if (binding.Source == HandlerParameterBindingSource.Unsupported)
+            {
+                return binding.UnsupportedReason;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsPassthroughResponseType(JsonContextTarget target, string responseType)
+        => target switch
+        {
+            JsonContextTarget.Wasi => SourceGenerationHelpers.IsWasiResponseType(responseType),
+            JsonContextTarget.LambdaPerFeature => SourceGenerationHelpers.IsLambdaProxyResponseType(responseType),
+            _ => false,
+        };
 
     private static JsonContextTarget? ReadTarget(AttributeData attribute)
     {

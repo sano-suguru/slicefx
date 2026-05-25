@@ -518,6 +518,104 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_emits_wasi_query_binding_with_nullable_missing_support()
+    {
+        var source = """
+            #nullable enable
+
+            using Slice;
+            using Slice.Wasi;
+
+            namespace WasiQueryApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class ListItems
+            {
+                public static WasiResponse Handle(int page, int? size, string? filter)
+                    => SliceResult.NoContent();
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiQueryApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(".BindFromQuery<int>(ctx, \"page\")", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("WasiArgumentBindingStatus.Invalid", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("Query value 'page' is missing.", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Query value 'size' is missing.", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Query value 'filter' is missing.", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_honors_explicit_wasi_binding_metadata()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using Slice;
+            using Slice.Wasi;
+
+            namespace WasiBindingApp
+            {
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+
+                    private WasiJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+
+                public sealed class Clock;
+            }
+
+            namespace WasiBindingApp.Features.Items
+            {
+                [Feature("POST /items/{id:guid}")]
+                public static class UpdateItem
+                {
+                    public sealed record Payload(string Name);
+
+                    public static WasiResponse Handle(
+                        [FromRoute(Name = "id")] Guid itemId,
+                        [FromQuery(Name = "p")] int page,
+                        [FromHeader(Name = "x-trace")] string trace,
+                        [FromBody] Payload payload,
+                        WasiBindingApp.Clock clock)
+                        => SliceResult.NoContent();
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiBindingApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var itemId)", wasiSource, StringComparison.Ordinal);
+        Assert.Contains(".BindFromQuery<int>(ctx, \"p\")", wasiSource, StringComparison.Ordinal);
+        Assert.Contains(".BindFromHeader<string>(ctx, \"x-trace\")", wasiSource, StringComparison.Ordinal);
+        Assert.Contains(".ReadAsync<global::WasiBindingApp.Features.Items.UpdateItem.Payload>", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("GetRequiredService(typeof(global::WasiBindingApp.Clock))", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_emits_wasi_validation_for_supported_attributes_with_custom_messages()
     {
         var source = """
@@ -668,6 +766,111 @@ public class SourceGeneratorCompileTests
         Assert.Contains("\"LambdaApp\"", manifestSource, StringComparison.Ordinal);
         Assert.Contains("\"Slice.LambdaApp_SliceLambdaPerFunctionHandlers\"", manifestSource, StringComparison.Ordinal);
         Assert.Contains("\"Users_GetUser\"", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_lambda_query_binding_with_nullable_missing_support()
+    {
+        var source = """
+            #nullable enable
+
+            using Slice;
+            using Slice.Lambda.PerFunction;
+
+            [assembly: LambdaPerFunction]
+
+            namespace LambdaQueryApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class ListItems
+            {
+                public static void Handle(int page, int? size, string? filter)
+                {
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("LambdaQueryApp", source, includeLambdaReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("BindFromQuery<int>(ctx, \"page\")", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("LambdaArgumentBindingStatus.Invalid", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("Query value 'page' is missing.", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Query value 'size' is missing.", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Query value 'filter' is missing.", lambdaSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_honors_explicit_lambda_binding_metadata_and_proxy_response_passthrough()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Amazon.Lambda.APIGatewayEvents;
+            using Microsoft.AspNetCore.Mvc;
+            using Slice;
+            using Slice.Lambda.PerFunction;
+
+            [assembly: LambdaPerFunction]
+
+            namespace LambdaBindingApp
+            {
+                [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+                public sealed class LambdaJsonContext : JsonSerializerContext
+                {
+                    public static LambdaJsonContext Default { get; } = new();
+
+                    private LambdaJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace LambdaBindingApp.Features.Items
+            {
+                [Feature("POST /items/{id:guid}")]
+                public static class UpdateItem
+                {
+                    public sealed record Payload(string Name);
+
+                    public static APIGatewayHttpApiV2ProxyResponse Handle(
+                        [FromRoute(Name = "id")] Guid itemId,
+                        [FromQuery(Name = "p")] int page,
+                        [FromHeader(Name = "x-trace")] string trace,
+                        [FromBody] Payload payload,
+                        [FromServices] string service)
+                        => new() { StatusCode = 202 };
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("LambdaBindingApp", source, includeLambdaReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var itemId)", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("BindFromQuery<int>(ctx, \"p\")", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("BindFromHeader<string>(ctx, \"x-trace\")", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("ReadAsync<global::LambdaBindingApp.Features.Items.UpdateItem.Payload>", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("GetRequiredService<string>()", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("return __result;", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("LambdaResponseFactory.Ok<global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyResponse>", lambdaSource, StringComparison.Ordinal);
     }
 
     [Fact]

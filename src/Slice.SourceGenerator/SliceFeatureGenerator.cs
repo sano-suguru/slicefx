@@ -814,7 +814,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
     {
         foreach (var attribute in parameter.GetAttributes())
         {
-            var attributeName = attribute.AttributeClass?.Name;
+            var attributeName = attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (attributeName is null)
             {
                 continue;
@@ -822,10 +822,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
             var source = attributeName switch
             {
-                "FromQueryAttribute" => "query",
-                "FromRouteAttribute" => "route",
-                "FromHeaderAttribute" => "header",
-                "FromBodyAttribute" => "body",
+                "global::Microsoft.AspNetCore.Mvc.FromQueryAttribute" => "query",
+                "global::Microsoft.AspNetCore.Mvc.FromRouteAttribute" => "route",
+                "global::Microsoft.AspNetCore.Mvc.FromHeaderAttribute" => "header",
+                "global::Microsoft.AspNetCore.Mvc.FromBodyAttribute" => "body",
+                "global::Microsoft.AspNetCore.Mvc.FromServicesAttribute" => "services",
                 _ => null,
             };
             if (source is null)
