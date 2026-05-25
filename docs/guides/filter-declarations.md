@@ -24,78 +24,45 @@ If 20 features declare the same filter, ask:
 2. **Is it shared, but specific to the Minimal API filter layer?**
    - Example: per-request `Activity` start, or shape-specific endpoint filters. See the `MapGroup` option below.
 
-## Recommended approach: `MapGroup` for common filters
+## Pragmatic options when filters repeat
 
-`MapGroup` is **standard ASP.NET Core**, completely independent of Slice's source generator. It applies common filters to a route prefix.
+Slice has no mechanism to inject filters into features that did not declare them. When the same `[Filter<T>]` appears in many features, you have three options — pick by scope.
 
-### Before
+### Option A — Push truly global concerns into middleware
 
-```csharp
-// every Users feature repeats the same filters
-[Feature("GET /users/{id:guid}")]
-[Filter<RequestLoggingFilter>]
-[Filter<RequireApiKeyFilter>]
-public static class GetUser { ... }
-
-[Feature("POST /users")]
-[Filter<RequestLoggingFilter>]
-[Filter<RequireApiKeyFilter>]
-public static class CreateUser { ... }
-
-// ...18 more features
-```
-
-`Program.cs`:
-
-```csharp
-var app = builder.Build();
-app.MapSlices();
-app.Run();
-```
-
-### After
-
-`MapSlices()` currently registers every feature flat against `IEndpointRouteBuilder`. In practice you have three pragmatic options:
-
-#### Option A — Push truly global concerns into middleware
+Logging, request id, CORS, rate limiting, auth scheme negotiation — most "I want this everywhere" cases belong in ASP.NET Core middleware, not in the endpoint-filter pipeline.
 
 ```csharp
 var app = builder.Build();
 
-// global concerns: request id, activity, CORS, etc.
-app.Use(async (context, next) =>
-{
-    // setup
-    await next();
-});
+app.UseSerilogRequestLogging();   // request logging — middleware, not [Filter<T>]
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapSlices();
 app.Run();
 ```
 
-Logging, auth, CORS, rate-limiting — most "I want it everywhere" cases belong here.
+This is the right layer for cross-cutting concerns that do not need access to the endpoint metadata or the typed `Request`.
 
-#### Option B — Accept per-feature declaration as the right level of explicitness
+### Option B — Attach a shared endpoint filter or policy to all Slice routes via `MapGroup`
 
-For a real group like "every Users feature needs `RequireApiKeyFilter`", writing 20 declarations is often easier to maintain than a global injection mechanism:
-
-- When you add feature #21, copy-paste the filter chain from an existing feature.
-- When you add "a Users feature that does *not* need the API key", you simply omit the attribute — no exemption syntax needed.
-
-#### Option C — Group declarations with `partial class`
-
-C#'s `partial class` lets you split a feature class across files. The attributes themselves still need to live on a single declaration, so this pattern helps with code organization more than with reducing duplication:
+`MapSlices()` is an `IEndpointRouteBuilder` extension, so it composes with `MapGroup`. Use this when the concern is genuinely an endpoint filter (needs the endpoint pipeline) but applies to every Slice route in the host.
 
 ```csharp
-// Features/Users/UserFeatureFilters.cs — file is mainly for IDE navigation
-namespace Slice.Sample.Features.Users;
+var app = builder.Build();
 
-public static partial class CreateUser { }
-public static partial class GetUser { }
-public static partial class DeleteUser { }
+var slices = app.MapGroup("").RequireAuthorization("Admin");
+slices.MapSlices();   // every feature inherits the policy
 ```
 
-Practical value is limited — `[Filter<T>]` is still declared per type.
+See [`filter-configuration.md`](../patterns/filter-configuration.md#when-the-concern-is-authorization) for the working authorization example, and the closed-generic-filter alternative when several filters share logic but differ by a policy marker.
+
+Path prefixes (`MapGroup("/api")`) will *not* prefix Slice features — `[Feature("GET /users/{id}")]` patterns are absolute. `MapGroup` is useful here for metadata aggregation (filters, policies, tags), not for routing.
+
+### Option C — Accept per-feature declaration as the right level of explicitness
+
+When the duplication is real but the concern is genuinely feature-scoped (e.g., "every Users feature needs `RequireApiKeyFilter`"), 20 explicit declarations are often easier to maintain than any indirection. Adding feature #21 is one copy-paste; opting one feature out is one line deleted; tooling like `slice routes --format json` continues to describe the live chain accurately.
 
 ## Conclusion — is duplication a flaw or a feature?
 
@@ -104,13 +71,13 @@ Practical value is limited — `[Filter<T>]` is still declared per type.
 - Truly global concerns → middleware.
 - Authorization concerns → ASP.NET Core Authorization.
 - Group-level endpoint-filter concerns → declare per feature (the duplication is the cost of being explicit) or use a route group when the grouping is real.
-- Repeated endpoint-filter variants with identical filter logic → use closed generic filters such as `[Filter<AuditFilter<AdminAuditPolicy>>]`.
+- Repeated endpoint-filter variants with identical filter logic → use [closed generic policy filters](../patterns/filter-configuration.md#repeated-endpoint-filter-variants-closed-generic-policy-filters) such as `[Filter<AuditFilter<AdminAuditPolicy>>]`.
 - Remaining cases → the copy-paste maintenance cost is lower than the risk of surprise behavior from implicit injection.
 
-"No implicit magic" is a Slice **strength**, not a missing feature. Filter classes are infrastructure types, not feature files, so a small number of shared filters or typed policy markers does not violate the "one endpoint = one feature file" model. Group-scoped filter injection was considered for the framework and intentionally dropped (see the plan file `velvet-spinning-alpaca.md`).
+"No implicit magic" is a Slice **strength**, not a missing feature. Filter classes are infrastructure types, not feature files, so a small number of shared filters or typed policy markers does not violate the "one endpoint = one feature file" model. Group-scoped filter injection was considered for the framework and intentionally dropped.
 
 ## Related patterns
 
-- Filter configuration: `docs/patterns/filter-configuration.md`
-- Handler dependency aggregation: `docs/patterns/handler-dependencies.md`
+- [Filter configuration](../patterns/filter-configuration.md) — closed generic policy filters, `IOptions<T>` configuration recipes.
+- [Handler dependency and state patterns](../patterns/handler-dependencies.md) — grouping dependencies and putting feature state behind DI.
 - Filter order validation (SLICE010): apply `[FilterOrderHint(After = typeof(...))]` to a filter to surface declaration-order mistakes as a warning.

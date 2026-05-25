@@ -205,6 +205,6 @@ public sealed class AuditFilter : IEndpointFilter { ... }
 
 ## Related patterns
 
-- Handler dependency aggregation: `docs/patterns/handler-dependencies.md`
-- Return-type guidance: `docs/guides/return-types.md`
-- Filter declaration duplication: `docs/guides/filter-declarations.md`
+- [Handler dependency and state patterns](handler-dependencies.md) — grouping dependencies and putting feature state behind DI for a static `Handle`.
+- [Return-type guidance](../guides/return-types.md) — when to return a plain response type vs. `IResult`.
+- [Filter declaration duplication](../guides/filter-declarations.md) — why `[Filter<T>]` is declared per feature, and how to keep the duplication manageable.
