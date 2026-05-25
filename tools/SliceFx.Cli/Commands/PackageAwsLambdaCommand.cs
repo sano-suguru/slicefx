@@ -154,6 +154,7 @@ internal static class PackageAwsLambdaCommand
             throw new CliException("No routes are eligible for Lambda function-per-feature packaging.");
         }
 
+        var sharedArtifact = LambdaSharedArtifactMetadataValidator.Validate(eligible, rid);
         var outputDir = output ?? new DirectoryInfo(Path.Combine(ctx.ProjectDirectory.FullName, "artifacts", "aws-lambda"));
         if (outputDir.Exists && !force)
         {
@@ -169,7 +170,7 @@ internal static class PackageAwsLambdaCommand
             await RunDotnetPublishAsync(ctx.ProjectFile.FullName, publishDir, configuration, rid, selfContained, ct).ConfigureAwait(false);
         }
 
-        var manifest = CreateManifest(ctx, eligible, discovery.Routes.Length - eligible.Length, lambdaRuntime, configuration, rid, selfContained);
+        var manifest = CreateManifest(ctx, eligible, discovery.Routes.Length - eligible.Length, lambdaRuntime, configuration, rid, selfContained, sharedArtifact);
         var manifestPath = Path.Combine(outputDir.FullName, "slicefx-lambda-package.json");
         await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions), ct).ConfigureAwait(false);
 
@@ -242,15 +243,25 @@ internal static class PackageAwsLambdaCommand
         string lambdaRuntime,
         string configuration,
         string? rid,
-        bool selfContained)
+        bool selfContained,
+        LambdaSharedArtifactMetadata sharedArtifact)
     {
+        LambdaPackageArtifact[] artifacts =
+        [
+            new LambdaPackageArtifact(
+                sharedArtifact.ArtifactId,
+                sharedArtifact.ArtifactLayout,
+                sharedArtifact.CodeUri,
+                sharedArtifact.BootstrapMode,
+                sharedArtifact.RuntimeIdentifier)
+        ];
         var functions = eligible.Select(route => new LambdaPackageFunction(
             route.EndpointName,
             route.FeatureType,
             route.Method,
             route.Pattern,
             route.LambdaFunctionPerFeatureHandler!,
-            "publish")).ToArray();
+            sharedArtifact.ArtifactId)).ToArray();
 
         return new LambdaPackageManifest(
             FunctionPerFeatureMode,
@@ -260,8 +271,8 @@ internal static class PackageAwsLambdaCommand
             configuration,
             rid,
             selfContained,
-            "publish",
             excludedCount,
+            artifacts,
             functions);
     }
 
@@ -280,9 +291,16 @@ internal static class PackageAwsLambdaCommand
         string Configuration,
         string? RuntimeIdentifier,
         bool SelfContained,
-        string PublishDirectory,
         int ExcludedRouteCount,
+        LambdaPackageArtifact[] Artifacts,
         LambdaPackageFunction[] Functions);
+
+    private sealed record LambdaPackageArtifact(
+        string ArtifactId,
+        string ArtifactLayout,
+        string CodeUri,
+        string BootstrapMode,
+        string? RuntimeIdentifier);
 
     private sealed record LambdaPackageFunction(
         string EndpointName,
@@ -290,5 +308,5 @@ internal static class PackageAwsLambdaCommand
         string Method,
         string Pattern,
         string Handler,
-        string CodeUri);
+        string ArtifactId);
 }

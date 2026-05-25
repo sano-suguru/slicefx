@@ -277,6 +277,7 @@ internal static partial class ManifestAwsLambdaCommand
         }
 
         DetectPerFeatureLogicalIdCollisions(eligible);
+        var sharedArtifact = LambdaSharedArtifactMetadataValidator.Validate(eligible);
 
         var sb = new StringBuilder();
         sb.AppendLine("AWSTemplateFormatVersion: '2010-09-09'");
@@ -293,7 +294,7 @@ internal static partial class ManifestAwsLambdaCommand
         sb.AppendLine(CultureInfo.InvariantCulture, $"    Runtime: '{YamlSingleQuoted(runtime)}'");
         sb.AppendLine(CultureInfo.InvariantCulture, $"    MemorySize: {memory}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"    Timeout: {timeout}");
-        sb.AppendLine("    CodeUri: './publish'  # TODO: run `slicefx package aws-lambda --mode function-per-feature --artifact-layout shared` or set to your publish output");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    CodeUri: './{YamlSingleQuoted(sharedArtifact.CodeUri)}'  # TODO: run `slicefx package aws-lambda --mode function-per-feature --artifact-layout shared` or set to your publish output");
         sb.AppendLine();
         sb.AppendLine("Resources:");
         sb.AppendLine();

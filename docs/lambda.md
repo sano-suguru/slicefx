@@ -109,4 +109,10 @@ Package function-per-feature artifacts with the current shared artifact layout:
 slicefx package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
 ```
 
-`--artifact-layout shared` is the only supported layout today. True NativeAOT binary-per-feature packaging is reserved for a future `--artifact-layout per-feature` implementation.
+`--artifact-layout shared` is the only supported layout today. The generated route and package metadata already model the shared publish output as a named Lambda artifact so future per-feature artifacts can use the same shape without changing the feature model. True NativeAOT binary-per-feature packaging is still reserved for a future `--artifact-layout per-feature` implementation.
+
+## NativeAOT binary-per-feature groundwork
+
+The generated function-per-feature handler path is designed to stay AOT-compatible: JSON body and response handling uses source-generated `JsonSerializerContext` metadata, generated validation avoids reflection-only DataAnnotations rules, and unsupported ASP.NET-specific shapes are excluded before packaging.
+
+A minimal generated handler has been verified to publish and run as a local NativeAOT executable, which proves the generated handler and `SliceFx.Lambda.FunctionPerFeature` binding/response path can survive NativeAOT in principle. That is not the same as true Lambda binary-per-feature packaging yet: a production `--artifact-layout per-feature` still needs generated per-feature entry projects, a Lambda custom-runtime bootstrap, target runtime/RID handling such as `linux-x64` or `linux-arm64`, package caching, and explicit documentation that each binary owns an independent DI container and process.

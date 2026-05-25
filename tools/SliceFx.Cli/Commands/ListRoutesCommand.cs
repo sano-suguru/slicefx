@@ -106,6 +106,7 @@ internal static partial class ListRoutesCommand
             route.Portability,
             route.PortabilityReason,
             route.Filters,
+            LambdaArtifactJson.FromRoute(route),
             RouteTargetCapabilities.Classify(route)));
 
         var json = JsonSerializer.Serialize(jsonRoutes, JsonOptions);
@@ -141,5 +142,27 @@ internal static partial class ListRoutesCommand
         string Portability,
         string? PortabilityReason,
         string[] Filters,
+        LambdaArtifactJson? LambdaFunctionPerFeatureArtifact,
         RouteCapabilities Capabilities);
+
+    private sealed record LambdaArtifactJson(
+        string ArtifactId,
+        string ArtifactLayout,
+        string CodeUri,
+        string BootstrapMode,
+        string? RuntimeIdentifier)
+    {
+        internal static LambdaArtifactJson? FromRoute(SliceRouteInfo route)
+            => route.LambdaFunctionPerFeatureArtifactId is null ||
+               route.LambdaFunctionPerFeatureArtifactLayout is null ||
+               route.LambdaFunctionPerFeatureArtifactCodeUri is null ||
+               route.LambdaFunctionPerFeatureBootstrapMode is null
+                ? null
+                : new LambdaArtifactJson(
+                    route.LambdaFunctionPerFeatureArtifactId,
+                    route.LambdaFunctionPerFeatureArtifactLayout,
+                    route.LambdaFunctionPerFeatureArtifactCodeUri,
+                    route.LambdaFunctionPerFeatureBootstrapMode,
+                    route.LambdaFunctionPerFeatureRuntimeIdentifier);
+    }
 }

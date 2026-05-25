@@ -82,7 +82,7 @@ internal static class RouteManifestEmitter
             var feature = route.Feature;
 
             sb.AppendLine(
-                $"[assembly: global::SliceFx.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.ReturnTypeFqn))}, {CSharpLiteral.String(route.Portability)}, {CSharpNullableStringLiteral(route.PortabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))}, {CSharpNullableStringLiteral(route.LambdaStatus)}, {CSharpNullableStringLiteral(route.LambdaReason)}, {CSharpNullableStringLiteral(route.LambdaHandlerAssembly)}, {CSharpNullableStringLiteral(route.LambdaHandlerType)}, {CSharpNullableStringLiteral(route.LambdaHandlerMethod)}, {CSharpLiteral.String(SourceGenerationHelpers.ManifestSchemaVersion)}, {CSharpNullableStringLiteral(route.WasiStatus)}, {CSharpNullableStringLiteral(route.WasiReason)})]");
+                $"[assembly: global::SliceFx.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.ReturnTypeFqn))}, {CSharpLiteral.String(route.Portability)}, {CSharpNullableStringLiteral(route.PortabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))}, {CSharpNullableStringLiteral(route.LambdaStatus)}, {CSharpNullableStringLiteral(route.LambdaReason)}, {CSharpNullableStringLiteral(route.LambdaHandlerAssembly)}, {CSharpNullableStringLiteral(route.LambdaHandlerType)}, {CSharpNullableStringLiteral(route.LambdaHandlerMethod)}, {CSharpLiteral.String(SourceGenerationHelpers.ManifestSchemaVersion)}, {CSharpNullableStringLiteral(route.WasiStatus)}, {CSharpNullableStringLiteral(route.WasiReason)}, {CSharpNullableStringLiteral(route.LambdaArtifactId)}, {CSharpNullableStringLiteral(route.LambdaArtifactLayout)}, {CSharpNullableStringLiteral(route.LambdaArtifactCodeUri)}, {CSharpNullableStringLiteral(route.LambdaBootstrapMode)}, {CSharpNullableStringLiteral(route.LambdaRuntimeIdentifier)})]");
         }
     }
 
@@ -128,6 +128,11 @@ internal static class RouteManifestEmitter
         sb.AppendLine("        string? LambdaFunctionPerFeatureHandlerAssembly,");
         sb.AppendLine("        string? LambdaFunctionPerFeatureHandlerType,");
         sb.AppendLine("        string? LambdaFunctionPerFeatureHandlerMethod,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureArtifactId,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureArtifactLayout,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureArtifactCodeUri,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureBootstrapMode,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureRuntimeIdentifier,");
         sb.AppendLine("        global::System.Collections.Generic.IReadOnlyList<string> FilterTypes);");
     }
 
@@ -161,6 +166,11 @@ internal static class RouteManifestEmitter
             sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaHandlerAssembly)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaHandlerType)},");
             sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaHandlerMethod)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaArtifactId)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaArtifactLayout)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaArtifactCodeUri)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaBootstrapMode)},");
+            sb.AppendLine($"            {CSharpNullableStringLiteral(route.LambdaRuntimeIdentifier)},");
             sb.AppendLine($"            {FilterTypesLiteral(feature)}),");
         }
         sb.AppendLine("    ];");
@@ -179,7 +189,7 @@ internal static class RouteManifestEmitter
             var (portability, portabilityReason) = ClassifyPortability(feature);
             var wasiStatus = JsonContextPlanner.StatusForWasi(feature, wasiJsonContextPlan);
             var wasiReason = JsonContextPlanner.ReasonForWasi(feature, wasiJsonContextPlan);
-            var (lambdaStatus, lambdaReason, lambdaHandlerAssembly, lambdaHandlerType, lambdaHandlerMethod) =
+            var lambda =
                 GetEmittedLambdaMetadata(feature, assemblyName, emitLambdaFunctionPerFeatureHandlers, lambdaJsonContextPlan);
             routes.Add(new RouteManifestEntry(
                 feature,
@@ -187,11 +197,16 @@ internal static class RouteManifestEmitter
                 portabilityReason,
                 wasiStatus,
                 wasiReason,
-                lambdaStatus,
-                lambdaReason,
-                lambdaHandlerAssembly,
-                lambdaHandlerType,
-                lambdaHandlerMethod));
+                lambda.Status,
+                lambda.Reason,
+                lambda.HandlerAssembly,
+                lambda.HandlerType,
+                lambda.HandlerMethod,
+                lambda.ArtifactId,
+                lambda.ArtifactLayout,
+                lambda.ArtifactCodeUri,
+                lambda.BootstrapMode,
+                lambda.RuntimeIdentifier));
         }
 
         return routes.ToImmutable();
@@ -241,7 +256,7 @@ internal static class RouteManifestEmitter
         return (SourceGenerationHelpers.PortabilityPortable, null);
     }
 
-    private static (string? Status, string? Reason, string? HandlerAssembly, string? HandlerType, string? HandlerMethod) GetEmittedLambdaMetadata(
+    private static LambdaFunctionPerFeatureEligibility GetEmittedLambdaMetadata(
         FeatureModel feature,
         string assemblyName,
         bool emitLambdaFunctionPerFeatureHandlers,
@@ -249,11 +264,10 @@ internal static class RouteManifestEmitter
     {
         if (!emitLambdaFunctionPerFeatureHandlers)
         {
-            return (null, null, null, null, null);
+            return LambdaFunctionPerFeatureEligibility.NotEmitted;
         }
 
-        var lambda = ClassifyLambdaFunctionPerFeature(feature, assemblyName, emitLambdaFunctionPerFeatureHandlers, lambdaJsonContextPlan);
-        return (lambda.Status, lambda.Reason, lambda.HandlerAssembly, lambda.HandlerType, lambda.HandlerMethod);
+        return ClassifyLambdaFunctionPerFeature(feature, assemblyName, emitLambdaFunctionPerFeatureHandlers, lambdaJsonContextPlan);
     }
 
     internal static LambdaFunctionPerFeatureEligibility ClassifyLambdaFunctionPerFeature(
@@ -271,7 +285,7 @@ internal static class RouteManifestEmitter
 
         if (!emitLambdaFunctionPerFeatureHandlers)
         {
-            return new LambdaFunctionPerFeatureEligibility(SourceGenerationHelpers.ManifestEligible, null, null, null, null);
+            return new LambdaFunctionPerFeatureEligibility(SourceGenerationHelpers.ManifestEligible, null, null, null, null, null, null, null, null, null);
         }
 
         return new LambdaFunctionPerFeatureEligibility(
@@ -279,7 +293,12 @@ internal static class RouteManifestEmitter
             null,
             assemblyName,
             $"SliceFx.{GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaFunctionPerFeatureHandlers")}",
-            SanitizeIdentifier(feature.EndpointName));
+            SanitizeIdentifier(feature.EndpointName),
+            SourceGenerationHelpers.LambdaArtifactIdShared,
+            SourceGenerationHelpers.LambdaArtifactLayoutShared,
+            SourceGenerationHelpers.LambdaArtifactCodeUriShared,
+            SourceGenerationHelpers.LambdaBootstrapModeGeneratedHandler,
+            null);
     }
 
     private static string FilterTypesLiteral(FeatureModel feature)
@@ -339,15 +358,27 @@ internal readonly record struct RouteManifestEntry(
     string? LambdaReason,
     string? LambdaHandlerAssembly,
     string? LambdaHandlerType,
-    string? LambdaHandlerMethod);
+    string? LambdaHandlerMethod,
+    string? LambdaArtifactId,
+    string? LambdaArtifactLayout,
+    string? LambdaArtifactCodeUri,
+    string? LambdaBootstrapMode,
+    string? LambdaRuntimeIdentifier);
 
 internal readonly record struct LambdaFunctionPerFeatureEligibility(
-    string Status,
+    string? Status,
     string? Reason,
     string? HandlerAssembly,
     string? HandlerType,
-    string? HandlerMethod)
+    string? HandlerMethod,
+    string? ArtifactId,
+    string? ArtifactLayout,
+    string? ArtifactCodeUri,
+    string? BootstrapMode,
+    string? RuntimeIdentifier)
 {
+    internal static LambdaFunctionPerFeatureEligibility NotEmitted { get; } = new(null, null, null, null, null, null, null, null, null, null);
+
     internal static LambdaFunctionPerFeatureEligibility Ineligible(string reason)
-        => new(SourceGenerationHelpers.ManifestIneligible, reason, null, null, null);
+        => new(SourceGenerationHelpers.ManifestIneligible, reason, null, null, null, null, null, null, null, null);
 }

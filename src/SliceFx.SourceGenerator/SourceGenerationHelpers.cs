@@ -7,6 +7,10 @@ internal static class SourceGenerationHelpers
     public const string ManifestSchemaVersion = SliceRouteManifestSchema.CurrentVersion;
     public const string ManifestEligible = "eligible";
     public const string ManifestIneligible = "ineligible";
+    public const string LambdaArtifactIdShared = "shared";
+    public const string LambdaArtifactLayoutShared = "shared";
+    public const string LambdaArtifactCodeUriShared = "publish";
+    public const string LambdaBootstrapModeGeneratedHandler = "generated-handler";
     public const string PortabilityPortable = "portable";
     public const string PortabilityPartial = "partial";
     public const string PortabilityAspNetOnly = "aspnet-only";

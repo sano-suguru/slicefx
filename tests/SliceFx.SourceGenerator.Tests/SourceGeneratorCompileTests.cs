@@ -1013,9 +1013,11 @@ public class SourceGeneratorCompileTests
             .Replace("\r", "", StringComparison.Ordinal)
             .Replace("\n", "", StringComparison.Ordinal);
         Assert.Contains("string? LambdaFunctionPerFeatureStatus", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("string? LambdaFunctionPerFeatureArtifactId", manifestSource, StringComparison.Ordinal);
         Assert.Contains("string? WasiDispatchStatus", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("null,null,null,null,null,\"1\",\"eligible\",null)]", compactManifestSource, StringComparison.Ordinal);
-        Assert.Contains("\"1\",true,\"portable\",null,\"eligible\",null,null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
+        Assert.Contains("\"1\",\"eligible\",null,null,null,null,null,null)]", compactManifestSource, StringComparison.Ordinal);
+        Assert.Contains("\"1\",true,\"portable\",null,\"eligible\",null,null,null,null,null,null,null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"shared\"", compactManifestSource, StringComparison.Ordinal);
     }
 
     [Fact]

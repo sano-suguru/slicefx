@@ -58,6 +58,7 @@ The generated route manifest is the shared metadata seam for client generation, 
 - Request type, return type, and handler parameter names.
 - Referenced filter type names.
 - Portability status using `portable`, `partial`, or `aspnet-only`.
+- Lambda function-per-feature eligibility plus generated handler and artifact metadata when available.
 
 The manifest is deliberately string-based. Deployment tools, docs, and CLI commands can read route shape and compatibility without adding runtime dependencies to `SliceFx.Core`. The CLI route catalog should prefer generated metadata from built project outputs, then fall back to source scanning only for unbuilt projects. Route listing, compatibility reporting, typed client generation, OpenAPI, and future deployment checks should share this contract.
 

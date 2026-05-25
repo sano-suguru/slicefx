@@ -103,4 +103,4 @@ By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the A
 
 The default runtime is `provided.al2023`. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
 
-`slicefx package aws-lambda --mode function-per-feature --artifact-layout shared` creates a publish output and `slicefx-lambda-package.json` describing generated handlers. The manifest records `artifactLayout: "shared"` and the publish directory as the artifact-relative `publish` path. Separate NativeAOT binaries per feature remain a future `--artifact-layout per-feature` optimization.
+`slicefx package aws-lambda --mode function-per-feature --artifact-layout shared` creates a publish output and `slicefx-lambda-package.json` describing generated handlers. The manifest records `artifactLayout: "shared"` plus an `artifacts` collection; today the single `shared` artifact has `codeUri: "publish"` and every function references it by `artifactId`. Separate NativeAOT binaries per feature remain a future `--artifact-layout per-feature` optimization.

@@ -218,7 +218,7 @@ public class CliFixtureTests
 
         var generatedRoute = portableRoute with
         {
-            ManifestSchemaVersion = "2",
+            ManifestSchemaVersion = "1",
             WasiDispatchStatus = RouteTargetCapabilities.Eligible,
             WasiDispatchReason = null,
             Portability = RouteCatalog.PortabilityPartial,
@@ -228,7 +228,7 @@ public class CliFixtureTests
 
         var generatedRouteWithoutWasiMetadata = portableRoute with
         {
-            ManifestSchemaVersion = "2",
+            ManifestSchemaVersion = "1",
             WasiDispatchStatus = null,
             WasiDispatchReason = null,
             HasGeneratedMetadata = true,
@@ -323,6 +323,11 @@ public class CliFixtureTests
                 null,
                 "999",
                 "eligible",
+                null,
+                null,
+                null,
+                null,
+                null,
                 null)]
 
             namespace Unsupported.Schema.App.Features.Health;
@@ -434,7 +439,7 @@ public class CliFixtureTests
 
         var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
         Assert.Contains("Invalid SliceFx route manifest", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("expected 20 constructor arguments but found 17", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("expected 25 constructor arguments but found 17", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Rebuild the project", exception.Message, StringComparison.Ordinal);
     }
 
@@ -1663,10 +1668,44 @@ public class CliFixtureTests
         var json = await File.ReadAllTextAsync(manifestPath);
         Assert.Contains("\"mode\": \"function-per-feature\"", json);
         Assert.Contains("\"artifactLayout\": \"shared\"", json);
-        Assert.Contains("\"publishDirectory\": \"publish\"", json);
+        Assert.Contains("\"artifacts\": [", json);
+        Assert.Contains("\"artifactId\": \"shared\"", json);
+        Assert.Contains("\"codeUri\": \"publish\"", json);
+        Assert.Contains("\"bootstrapMode\": \"generated-handler\"", json);
         Assert.Contains("\"endpointName\": \"Health.GetHealth\"", json);
+        Assert.Contains("\"artifactId\": \"shared\"", json);
         Assert.Contains("lambda-package-app::SliceFx.lambda_package_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth", json);
         Assert.DoesNotContain(outputDir, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_function_per_feature_rejects_inconsistent_shared_artifact_metadata()
+    {
+        using var fixture = CreateProjectWithLambdaArtifactMetadata(codeUri: "../publish");
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature", "--artifact-layout", "shared"])
+            .InvokeAsync();
+
+        Assert.Equal(1, exitCode);
+        Assert.False(File.Exists(outputFile));
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_function_per_feature_rejects_inconsistent_shared_artifact_metadata()
+    {
+        using var fixture = CreateProjectWithLambdaArtifactMetadata(bootstrapMode: "custom-bootstrap");
+        await fixture.BuildAsync();
+
+        var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
+        var exitCode = await PackageAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "shared", "--skip-publish"])
+            .InvokeAsync();
+
+        Assert.Equal(1, exitCode);
+        Assert.False(Directory.Exists(outputDir));
     }
 
     [Fact]
@@ -1862,6 +1901,73 @@ public class CliFixtureTests
 
         return fixture;
     }
+
+    private static CliProjectFixture CreateProjectWithLambdaArtifactMetadata(
+        string? artifactId = "shared",
+        string? artifactLayout = "shared",
+        string? codeUri = "publish",
+        string? bootstrapMode = "generated-handler")
+    {
+        var fixture = CliProjectFixture.Create(
+            "invalid-lambda-metadata-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Invalid.Lambda.Metadata.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Lambda.FunctionPerFeature", "SliceFx.Lambda.FunctionPerFeature.csproj")}}" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "RouteMetadata.cs",
+            $$"""
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeatureModuleAttribute("SliceFx.InvalidHandlers")]
+            [assembly: SliceFeatureRouteAttribute(
+                "Health.GetHealth",
+                "Invalid.Lambda.Metadata.App.Features.Health.GetHealth",
+                "GET",
+                "/health",
+                "Health",
+                null,
+                null,
+                "System.String",
+                "portable",
+                null,
+                null,
+                null,
+                "eligible",
+                null,
+                "invalid-lambda-metadata-app",
+                "SliceFx.InvalidHandlers",
+                "Health_GetHealth",
+                "1",
+                "eligible",
+                null,
+                {{CSharpStringOrNull(artifactId)}},
+                {{CSharpStringOrNull(artifactLayout)}},
+                {{CSharpStringOrNull(codeUri)}},
+                {{CSharpStringOrNull(bootstrapMode)}},
+                null)]
+
+            namespace Invalid.Lambda.Metadata.App.Features.Health;
+
+            public static class GetHealth
+            {
+            }
+            """);
+
+        return fixture;
+    }
+
+    private static string CSharpStringOrNull(string? value)
+        => value is null ? "null" : $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
 
     private static string FindRepoRoot()
     {

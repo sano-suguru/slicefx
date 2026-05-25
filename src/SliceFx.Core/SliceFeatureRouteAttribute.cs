@@ -7,7 +7,7 @@ namespace SliceFx;
 public sealed class SliceFeatureRouteAttribute : Attribute
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with route metadata.
+    /// Initializes a new instance of the <see cref="SliceFeatureRouteAttribute"/> class with route and Lambda artifact metadata.
     /// </summary>
     public SliceFeatureRouteAttribute(
         string endpointName,
@@ -29,7 +29,12 @@ public sealed class SliceFeatureRouteAttribute : Attribute
         string? lambdaFunctionPerFeatureHandlerMethod,
         string manifestSchemaVersion,
         string? wasiDispatchStatus,
-        string? wasiDispatchReason)
+        string? wasiDispatchReason,
+        string? lambdaFunctionPerFeatureArtifactId,
+        string? lambdaFunctionPerFeatureArtifactLayout,
+        string? lambdaFunctionPerFeatureArtifactCodeUri,
+        string? lambdaFunctionPerFeatureBootstrapMode,
+        string? lambdaFunctionPerFeatureRuntimeIdentifier)
     {
         EndpointName = endpointName;
         FeatureType = featureType;
@@ -51,6 +56,11 @@ public sealed class SliceFeatureRouteAttribute : Attribute
         ManifestSchemaVersion = manifestSchemaVersion;
         WasiDispatchStatus = wasiDispatchStatus;
         WasiDispatchReason = wasiDispatchReason;
+        LambdaFunctionPerFeatureArtifactId = lambdaFunctionPerFeatureArtifactId;
+        LambdaFunctionPerFeatureArtifactLayout = lambdaFunctionPerFeatureArtifactLayout;
+        LambdaFunctionPerFeatureArtifactCodeUri = lambdaFunctionPerFeatureArtifactCodeUri;
+        LambdaFunctionPerFeatureBootstrapMode = lambdaFunctionPerFeatureBootstrapMode;
+        LambdaFunctionPerFeatureRuntimeIdentifier = lambdaFunctionPerFeatureRuntimeIdentifier;
     }
 
     /// <summary>
@@ -152,4 +162,29 @@ public sealed class SliceFeatureRouteAttribute : Attribute
     /// Gets why WASI dispatch was not emitted when excluded.
     /// </summary>
     public string? WasiDispatchReason { get; }
+
+    /// <summary>
+    /// Gets the Lambda artifact identity that contains the generated handler when known.
+    /// </summary>
+    public string? LambdaFunctionPerFeatureArtifactId { get; }
+
+    /// <summary>
+    /// Gets the Lambda artifact layout that contains the generated handler when known.
+    /// </summary>
+    public string? LambdaFunctionPerFeatureArtifactLayout { get; }
+
+    /// <summary>
+    /// Gets the package-relative Lambda artifact CodeUri when known.
+    /// </summary>
+    public string? LambdaFunctionPerFeatureArtifactCodeUri { get; }
+
+    /// <summary>
+    /// Gets the Lambda bootstrap mode used by the artifact when known.
+    /// </summary>
+    public string? LambdaFunctionPerFeatureBootstrapMode { get; }
+
+    /// <summary>
+    /// Gets the Lambda artifact runtime identifier when known.
+    /// </summary>
+    public string? LambdaFunctionPerFeatureRuntimeIdentifier { get; }
 }

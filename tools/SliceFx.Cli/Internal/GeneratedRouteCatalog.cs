@@ -343,6 +343,11 @@ internal static class GeneratedRouteCatalog
 
         var wasiStatus = GetString(args[18]);
         var wasiReason = GetString(args[19]);
+        var lambdaArtifactId = GetString(args[20]);
+        var lambdaArtifactLayout = GetString(args[21]);
+        var lambdaArtifactCodeUri = GetString(args[22]);
+        var lambdaBootstrapMode = GetString(args[23]);
+        var lambdaRuntimeIdentifier = GetString(args[24]);
 
         return new SliceRouteInfo(
             method.ToUpperInvariant(),
@@ -363,6 +368,11 @@ internal static class GeneratedRouteCatalog
             lambdaHandlerAssembly,
             lambdaHandlerType,
             lambdaHandlerMethod,
+            lambdaArtifactId,
+            lambdaArtifactLayout,
+            lambdaArtifactCodeUri,
+            lambdaBootstrapMode,
+            lambdaRuntimeIdentifier,
             manifestSchemaVersion,
             wasiStatus,
             wasiReason,
