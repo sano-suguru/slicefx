@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.Wasi</RootNamespace>
+    <AssemblyName>SliceFx.Wasi</AssemblyName>
+    <PackageId>SliceFx.Wasi</PackageId>
+    <Description>ASP.NET-independent WASI runtime adapter for SliceFx applications. Exports wasi:http/incoming-handler@0.2.0; deploys to Cloudflare Workers, Fermyon Cloud (Spin), and any wasi:http host.</Description>
+    <PackageTags>slicefx;slice;wasi;wasi-http;wasm;cloudflare-workers;fermyon;spin;serverless;vertical-slice-architecture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

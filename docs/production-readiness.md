@@ -1,6 +1,6 @@
-# Slice production readiness criteria
+# SliceFx production readiness criteria
 
-This document defines the **objective gate values** for deciding whether Slice is ready to adopt in production. These are readiness targets, not a claim that Slice is production-ready today.
+This document defines the **objective gate values** for deciding whether SliceFx is ready to adopt in production. These are readiness targets, not a claim that SliceFx is production-ready today.
 
 Current public status: `0.1.0-preview.1` is unreleased, the packages are not on NuGet yet, and no production adoption is claimed.
 
@@ -9,11 +9,11 @@ Current public status: `0.1.0-preview.1` is unreleased, the packages are not on 
 Before discussing gate values, the six differentiators that must **never** be eroded by any change. Every phase and task passes through this filter before being adopted.
 
 1. **100% pure ASP.NET Core Minimal API expansion** — generated code only chains standard APIs.
-2. **`Slice.Core` is dependency-free** (`FrameworkReference` only).
+2. **`SliceFx.Core` is dependency-free** (`FrameworkReference` only).
 3. **No new startup-time reflection** — Native AOT friendliness preserved.
 4. **No implicit magic** — filters that are not declared in source are never injected.
 5. **Convention violations surface at compile time** — through the type system or analyzer diagnostics, not at runtime.
-6. **`slice routes` / `slice client csharp` tooling stays uninterrupted** — the route manifest schema is not broken.
+6. **`slicefx routes` / `slicefx client csharp` tooling stays uninterrupted** — the route manifest schema is not broken.
 
 ## Baseline measurements
 
@@ -36,15 +36,15 @@ Measured on Apple M1 (8 cores, macOS 26.4.1, .NET SDK 10.0.300, BenchmarkDotNet 
 | WarmRun_TrackedTreeTrivialEdit  | 200          | 3.08 ms | 2.44 MB |
 | CompilationEditOnly             | 200          | 0.001 ms | 0.002 MB |
 
-The table above is the local Apple M1 baseline. The chart below is generated from BenchmarkDotNet JSON and uses `tests/Slice.Benchmarks/gates.json` for the dotted gate lines; after the nightly perf workflow runs on `main`, it reflects the latest GitHub Actions Ubuntu x64 measurement. The SVG caption identifies the actual measurement host.
+The table above is the local Apple M1 baseline. The chart below is generated from BenchmarkDotNet JSON and uses `tests/SliceFx.Benchmarks/gates.json` for the dotted gate lines; after the nightly perf workflow runs on `main`, it reflects the latest GitHub Actions Ubuntu x64 measurement. The SVG caption identifies the actual measurement host.
 
 ![Latest GitHub Actions source generator benchmark chart](perf/latest.svg)
 
-Reproduce with `dotnet run -c Release --project tests/Slice.Benchmarks --no-build -- --filter "*"`.
+Reproduce with `dotnet run -c Release --project tests/SliceFx.Benchmarks --no-build -- --filter "*"`.
 
 ### Gate values (derived from baseline)
 
-Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware; the 100-feature tracked-tree warm gate includes a small CI variance buffer based on the Ubuntu x64 perf run. The single source of truth is `tests/Slice.Benchmarks/gates.json`; the nightly `Perf` workflow (`.github/workflows/perf.yml`) parses BenchmarkDotNet JSON output and runs `tests/Slice.Benchmarks/check-gates.sh`, failing the workflow if any gate is breached. Edit `gates.json` and this table together.
+Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware; the 100-feature tracked-tree warm gate includes a small CI variance buffer based on the Ubuntu x64 perf run. The single source of truth is `tests/SliceFx.Benchmarks/gates.json`; the nightly `Perf` workflow (`.github/workflows/perf.yml`) parses BenchmarkDotNet JSON output and runs `tests/SliceFx.Benchmarks/check-gates.sh`, failing the workflow if any gate is breached. Edit `gates.json` and this table together.
 
 | Metric | Gate | Baseline (Apple M1) | How to measure |
 |---|---|---|---|
@@ -56,7 +56,7 @@ Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware;
 | Tracked-tree trivial edit re-run (200 features) | < 8 ms | 3.08 ms | `SourceGeneratorBenchmarks.WarmRun_TrackedTreeTrivialEdit` Mean |
 | Allocations per cold generator pass (200 features) | < 8 MB | 5.03 MB | `MemoryDiagnoser` Allocated |
 | Tracked-step cache reuse on no-op and trivial edits | 100% (Cached/Unchanged) | Verified | `IncrementalCacheTests` (`SliceFeatureModels`, `SliceReferencedModules`, `SliceEmitPlan`) |
-| `Slice.Core.dll` size | < 50 KB | (measure during release) | `bin/Release/net10.0/Slice.Core.dll` |
+| `SliceFx.Core.dll` size | < 50 KB | (measure during release) | `bin/Release/net10.0/SliceFx.Core.dll` |
 
 ### Observations from the baseline
 
@@ -67,18 +67,18 @@ Gates are set at roughly 2× baseline to leave headroom for noisier CI hardware;
 
 ### MapSlices() startup cost
 
-Not yet measured in `Slice.Benchmarks`. Future candidate. Today, the manual proxy is: `dotnet run --project samples/Slice.Sample` followed by `curl http://localhost:5099/health` — startup is sub-second on a development laptop.
+Not yet measured in `SliceFx.Benchmarks`. Future candidate. Today, the manual proxy is: `dotnet run --project samples/SliceFx.Sample` followed by `curl http://localhost:5099/health` — startup is sub-second on a development laptop.
 
 ## Verification flow
 
-1. **Incremental cache tests**: `dotnet test tests/Slice.SourceGenerator.Tests --filter "FullyQualifiedName~IncrementalCacheTests"` is green.
-2. **Run benchmarks locally**: `dotnet run -c Release --project tests/Slice.Benchmarks -- --filter "*"` produces numbers for 50 / 100 / 200 features. Output lands in `BenchmarkDotNet.Artifacts/results/*-report-full.json`.
-3. **Check gates locally**: `bash tests/Slice.Benchmarks/check-gates.sh tests/Slice.Benchmarks/gates.json BenchmarkDotNet.Artifacts/results` exits non-zero if any gate in `gates.json` is breached. The nightly `Perf` workflow runs this same script.
+1. **Incremental cache tests**: `dotnet test tests/SliceFx.SourceGenerator.Tests --filter "FullyQualifiedName~IncrementalCacheTests"` is green.
+2. **Run benchmarks locally**: `dotnet run -c Release --project tests/SliceFx.Benchmarks -- --filter "*"` produces numbers for 50 / 100 / 200 features. Output lands in `BenchmarkDotNet.Artifacts/results/*-report-full.json`.
+3. **Check gates locally**: `bash tests/SliceFx.Benchmarks/check-gates.sh tests/SliceFx.Benchmarks/gates.json BenchmarkDotNet.Artifacts/results` exits non-zero if any gate in `gates.json` is breached. The nightly `Perf` workflow runs this same script.
 4. **Adjust baseline**: when intentionally tightening or loosening gates, edit `gates.json` and the table above together so they stay in sync.
 5. **Strength-preservation regression check**:
-   - Before and after a refactor, `diff` of `obj/Generated/Slice.SourceGenerator/**/*.g.cs` is empty.
-   - `slice routes --format json` output is unchanged.
-   - `Slice.Core` has zero `<PackageReference>` entries (the MSBuild `ValidateSliceCorePackageReferences` target enforces this automatically).
+   - Before and after a refactor, `diff` of `obj/Generated/SliceFx.SourceGenerator/**/*.g.cs` is empty.
+   - `slicefx routes --format json` output is unchanged.
+   - `SliceFx.Core` has zero `<PackageReference>` entries (the MSBuild `ValidateSliceCorePackageReferences` target enforces this automatically).
 
 ## Adoption evidence
 

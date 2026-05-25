@@ -118,6 +118,6 @@
 
   <!-- Footer -->
   <line x1="72" y1="582" x2="1128" y2="582" stroke="rgba(51,65,85,0.45)" stroke-width="1"/>
-  <text x="72" y="610" font-family="Arial, sans-serif" font-size="15" fill="#475569">github.com/sano-suguru/slice</text>
+  <text x="72" y="610" font-family="Arial, sans-serif" font-size="15" fill="#475569">github.com/sano-suguru/slicefx</text>
   <text x="1128" y="610" font-family="Arial, sans-serif" font-size="15" text-anchor="end" fill="#475569">MIT License · .NET 10</text>
 </svg>

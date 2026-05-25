@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.LambdaSample</RootNamespace>
+    <!-- Uncomment for native AOT Lambda deployment: -->
+    <!-- <PublishAot>true</PublishAot> -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SliceFx.Core\SliceFx.Core.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.Lambda\SliceFx.Lambda.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.SourceGenerator\SliceFx.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

@@ -11,7 +11,7 @@ Filters are auto-registered as **scoped** by `AddSlice()`. Have the filter accep
 ### Before (hard-coded API key)
 
 ```csharp
-// samples/Slice.Sample/Filters/RequireApiKeyFilter.cs
+// samples/SliceFx.Sample/Filters/RequireApiKeyFilter.cs
 public sealed class RequireApiKeyFilter : IEndpointFilter
 {
     private const string HeaderName = "X-API-Key";

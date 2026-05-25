@@ -1,18 +1,18 @@
 # AWS Lambda
 
-Slice has two Lambda paths:
+SliceFx has two Lambda paths:
 
-- `Slice.Lambda` hosts the ASP.NET Core app in Lambda.
-- `Slice.Lambda.FunctionPerFeature` emits generated HTTP API v2 handlers for eligible features.
+- `SliceFx.Lambda` hosts the ASP.NET Core app in Lambda.
+- `SliceFx.Lambda.FunctionPerFeature` emits generated HTTP API v2 handlers for eligible features.
 
 Use hosted Lambda by default. Use function-per-feature Lambda when you explicitly want route-level Lambda function resources and can accept the shared-artifact MVP constraints.
 
 ## Hosted Lambda
 
-`Slice.Lambda` is a thin adapter over `Amazon.Lambda.AspNetCoreServer.Hosting`.
+`SliceFx.Lambda` is a thin adapter over `Amazon.Lambda.AspNetCoreServer.Hosting`.
 
 ```csharp
-using Slice.Lambda;
+using SliceFx.Lambda;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
@@ -32,7 +32,7 @@ Deploy the sample with the Lambda .NET tooling (`dotnet lambda package`) for the
 
 ## Function-per-feature Lambda
 
-`Slice.Lambda.FunctionPerFeature` is an HTTP API v2 MVP. It emits one Lambda function resource per eligible feature, but the current artifact layout is shared: multiple functions point at the same publish output and select the generated method through `Handler`. This does not provide per-function binary-size or cold-start isolation. Opt in at the assembly level:
+`SliceFx.Lambda.FunctionPerFeature` is an HTTP API v2 MVP. It emits one Lambda function resource per eligible feature, but the current artifact layout is shared: multiple functions point at the same publish output and select the generated method through `Handler`. This does not provide per-function binary-size or cold-start isolation. Opt in at the assembly level:
 
 ```csharp
 [assembly: LambdaFunctionPerFeature]
@@ -94,19 +94,19 @@ The generator reports `SLICE012`-`SLICE017` for function-per-feature Lambda elig
 Generate a hosted SAM template:
 
 ```bash
-slice manifest aws-lambda --output template.yaml
+slicefx manifest aws-lambda --output template.yaml
 ```
 
 Generate a function-per-feature SAM template with the current shared artifact layout:
 
 ```bash
-slice manifest aws-lambda --mode function-per-feature --artifact-layout shared --output template.yaml
+slicefx manifest aws-lambda --mode function-per-feature --artifact-layout shared --output template.yaml
 ```
 
 Package function-per-feature artifacts with the current shared artifact layout:
 
 ```bash
-slice package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
+slicefx package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
 ```
 
 `--artifact-layout shared` is the only supported layout today. True NativeAOT binary-per-feature packaging is reserved for a future `--artifact-layout per-feature` implementation.

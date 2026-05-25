@@ -11,12 +11,12 @@
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Version>0.1.0-preview.1</Version>
-    <Authors>Slice contributors</Authors>
+    <Authors>SliceFx contributors</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/sano-suguru/slice</RepositoryUrl>
-    <PackageProjectUrl>https://sano-suguru.github.io/slice/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sano-suguru/slicefx</RepositoryUrl>
+    <PackageProjectUrl>https://sano-suguru.github.io/slicefx/</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

@@ -27,7 +27,7 @@ public static class CreateUser
 
 Advantages:
 
-- **WASI-portable** — `slice routes` classifies this as `portable`.
+- **WASI-portable** — `slicefx routes` classifies this as `portable`.
 - **Direct testability** — `var r = await CreateUser.Handle(...); Assert.Equal(...)`.
 - **Accurate OpenAPI schema** — Minimal API infers the response type.
 
@@ -39,7 +39,7 @@ content", return an explicit platform-specific result instead. In WASI, use
 `SliceResult.NoContent()`. In function-per-feature Lambda, return
 `APIGatewayHttpApiV2ProxyResponse` directly.
 
-See `samples/Slice.Sample/Features/Users/CreateUser.cs`.
+See `samples/SliceFx.Sample/Features/Users/CreateUser.cs`.
 
 ### `IResult` (when HTTP details matter)
 
@@ -65,7 +65,7 @@ Legitimate use cases for `IResult`:
 - Custom headers that need to be set imperatively.
 - Binary or streaming responses.
 
-See `samples/Slice.Sample/Features/Users/GetUser.cs`.
+See `samples/SliceFx.Sample/Features/Users/GetUser.cs`.
 
 ## Trade-offs to know
 

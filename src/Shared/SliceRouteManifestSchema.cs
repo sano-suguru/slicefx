@@ -1,4 +1,4 @@
-namespace Slice.Shared;
+namespace SliceFx.Shared;
 
 internal static class SliceRouteManifestSchema
 {

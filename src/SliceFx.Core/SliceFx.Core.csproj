@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx</RootNamespace>
+    <AssemblyName>SliceFx.Core</AssemblyName>
+    <PackageId>SliceFx.Core</PackageId>
+    <Description>Core runtime for SliceFx feature files on ASP.NET Core Minimal APIs.</Description>
+    <PackageTags>slicefx;slice;vertical-slice;vertical-slice-architecture;aspnet-core;aspnetcore;minimal-api;native-aot;aot;serverless</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

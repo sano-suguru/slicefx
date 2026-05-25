@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.Lambda</RootNamespace>
+    <AssemblyName>SliceFx.Lambda</AssemblyName>
+    <PackageId>SliceFx.Lambda</PackageId>
+    <Description>AWS Lambda hosting adapter for SliceFx applications.</Description>
+    <PackageTags>slicefx;slice;aws-lambda;aspnet-core;aspnetcore;minimal-api;serverless;vertical-slice-architecture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="2.1.0" />
+  </ItemGroup>
+
+</Project>

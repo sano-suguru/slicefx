@@ -24,30 +24,30 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore Slice.slnx
+        run: dotnet restore SliceFx.slnx
 
       - name: Build
-        run: dotnet build Slice.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+        run: dotnet build SliceFx.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
 
       - name: Test
-        run: dotnet test Slice.slnx --configuration Release --no-build --no-restore
+        run: dotnet test SliceFx.slnx --configuration Release --no-build --no-restore
 
       - name: Pack
         run: |
-          dotnet pack src/Slice.Core/Slice.Core.csproj --configuration Release --no-build
-          dotnet pack src/Slice.SourceGenerator/Slice.SourceGenerator.csproj --configuration Release --no-build
-          dotnet pack src/Slice.Lambda/Slice.Lambda.csproj --configuration Release --no-build
-          dotnet pack src/Slice.TestHost/Slice.TestHost.csproj --configuration Release --no-build
-          dotnet pack src/Slice.Wasi/Slice.Wasi.csproj --configuration Release --no-build
-          dotnet pack tools/Slice.Cli/Slice.Cli.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.Core/SliceFx.Core.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.SourceGenerator/SliceFx.SourceGenerator.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.Lambda/SliceFx.Lambda.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.TestHost/SliceFx.TestHost.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.Wasi/SliceFx.Wasi.csproj --configuration Release --no-build
+          dotnet pack tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build
 
       - name: Verify formatting
-        run: dotnet format Slice.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
+        run: dotnet format SliceFx.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
 
-      - name: Guard Slice.Core dependency boundary
+      - name: Guard SliceFx.Core dependency boundary
         shell: pwsh
         run: |
-          $coreProject = Get-Content src/Slice.Core/Slice.Core.csproj -Raw
+          $coreProject = Get-Content src/SliceFx.Core/SliceFx.Core.csproj -Raw
           if ($coreProject -match '<PackageReference\b') {
-            throw 'Slice.Core must not contain PackageReference entries.'
+            throw 'SliceFx.Core must not contain PackageReference entries.'
           }

@@ -1,0 +1,7 @@
+<Project>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="SliceFxRole" />
+    <CompilerVisibleProperty Include="SliceFxAggregateReferences" />
+    <CompilerVisibleProperty Include="SliceFxReferencedAssemblies" />
+  </ItemGroup>
+</Project>

@@ -39,13 +39,13 @@ jobs:
           python -m pip install matplotlib==3.9.2
 
       - name: Restore
-        run: dotnet restore tests/Slice.Benchmarks/Slice.Benchmarks.csproj
+        run: dotnet restore tests/SliceFx.Benchmarks/SliceFx.Benchmarks.csproj
 
       - name: Build benchmarks (Release)
-        run: dotnet build tests/Slice.Benchmarks/Slice.Benchmarks.csproj --configuration Release --no-restore
+        run: dotnet build tests/SliceFx.Benchmarks/SliceFx.Benchmarks.csproj --configuration Release --no-restore
 
       - name: Run benchmarks
-        run: dotnet run -c Release --project tests/Slice.Benchmarks --no-build -- --filter '*'
+        run: dotnet run -c Release --project tests/SliceFx.Benchmarks --no-build -- --filter '*'
 
       - name: Capture chart metadata
         id: chart-meta
@@ -56,9 +56,9 @@ jobs:
 
       - name: Generate benchmark chart
         run: >
-          python tests/Slice.Benchmarks/render-perf-chart.py
+          python tests/SliceFx.Benchmarks/render-perf-chart.py
           --results-dir BenchmarkDotNet.Artifacts/results
-          --gates tests/Slice.Benchmarks/gates.json
+          --gates tests/SliceFx.Benchmarks/gates.json
           --output docs/perf/latest.svg
           --history-dir docs/perf/history
           --run-date "${{ steps.chart-meta.outputs.date }}"
@@ -77,7 +77,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Check perf gates
-        run: bash tests/Slice.Benchmarks/check-gates.sh tests/Slice.Benchmarks/gates.json BenchmarkDotNet.Artifacts/results
+        run: bash tests/SliceFx.Benchmarks/check-gates.sh tests/SliceFx.Benchmarks/gates.json BenchmarkDotNet.Artifacts/results
 
       - name: Detect chart changes
         id: chart-changes

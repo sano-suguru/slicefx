@@ -1,6 +1,6 @@
-# Platform abstraction with Slice
+# Platform abstraction with SliceFx
 
-The `builder.Services` DI container is the consistent seam across every Slice host. The same service interface — and the same feature file — can be registered with different implementations per deployment target.
+The `builder.Services` DI container is the consistent seam across every SliceFx host. The same service interface — and the same feature file — can be registered with different implementations per deployment target.
 
 ## The pattern
 
@@ -44,7 +44,7 @@ app.Run();
 
 **Lambda `Program.cs`:**
 ```csharp
-using Slice.Lambda;
+using SliceFx.Lambda;
 var builder = WebApplication.CreateSlimBuilder(args);
 builder.Services.AddSlice();
 builder.Services.AddSingleton<IProductStore, DynamoDbProductStore>();
@@ -56,7 +56,7 @@ await app.RunOnLambdaAsync();
 
 **WASI `IncomingHandlerImpl.cs`:**
 ```csharp
-using Slice.Wasi;
+using SliceFx.Wasi;
 private static WasiApp CreateApp()
 {
     var builder = WasiHost.CreateBuilder();
@@ -70,7 +70,7 @@ The feature file `GetProduct.cs` is unchanged across all three hosts.
 
 ## Testing with a swap
 
-`Slice.TestHost` exposes the same `builder.Services` seam for test substitution. The optional configure callback runs after the app's own service registrations, so only the listed services are replaced:
+`SliceFx.TestHost` exposes the same `builder.Services` seam for test substitution. The optional configure callback runs after the app's own service registrations, so only the listed services are replaced:
 
 ```csharp
 await using var host = SliceTestHost.Create<global::Program>(svc =>
@@ -79,11 +79,11 @@ await using var host = SliceTestHost.Create<global::Program>(svc =>
 var resp = await host.Client.GetAsync($"/products/{id}");
 ```
 
-See `samples/Slice.TestHostSample/` for a runnable example of this pattern.
+See `samples/SliceFx.TestHostSample/` for a runnable example of this pattern.
 
 ## Portability and storage
 
-Portability classification is determined by the handler return type and filter types, not by which DI services are injected. A feature that receives a DynamoDB-backed store is still `portable` if it returns a plain record. Running `slice routes` will reflect this:
+Portability classification is determined by the handler return type and filter types, not by which DI services are injected. A feature that receives a DynamoDB-backed store is still `portable` if it returns a plain record. Running `slicefx routes` will reflect this:
 
 ```
 GET /products/{id:guid}   portable   GetProduct

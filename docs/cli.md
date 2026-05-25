@@ -1,33 +1,33 @@
-# Slice CLI
+# SliceFx CLI
 
-`Slice.Cli` is the local `slice` command for scaffolding, route inspection, client generation, and deployment artifacts.
+`SliceFx.Cli` is the local `slicefx` command for scaffolding, route inspection, client generation, and deployment artifacts.
 
 ## Commands
 
 ```bash
-slice new feature CreateOrder --method POST --route /orders
-slice new feature GetProductDetail --method GET
-slice new filter RequireApiKeyFilter
-slice new wasi-cloudflare
+slicefx new feature CreateOrder --method POST --route /orders
+slicefx new feature GetProductDetail --method GET
+slicefx new filter RequireApiKeyFilter
+slicefx new wasi-cloudflare
 
-slice routes
-slice routes --format json
+slicefx routes
+slicefx routes --format json
 
-slice client csharp --output SliceApiClient.g.cs
-slice client typescript --output slice-api-client.ts
+slicefx client csharp --output SliceApiClient.g.cs
+slicefx client typescript --output slice-api-client.ts
 
-slice openapi --output openapi.json
+slicefx openapi --output openapi.json
 
-slice manifest aws-lambda --output template.yaml
-slice manifest aws-lambda --mode function-per-feature --artifact-layout shared --output template.yaml
-slice package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
+slicefx manifest aws-lambda --output template.yaml
+slicefx manifest aws-lambda --mode function-per-feature --artifact-layout shared --output template.yaml
+slicefx package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
 ```
 
 Pass `--project` when running outside the project directory. Use `--force` for commands that write files and should overwrite existing output.
 
 ## Scaffolding
 
-`slice new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes, and writes to `Features/<Group>/<FeatureName>.cs`.
+`slicefx new feature` detects the target project, reads `<RootNamespace>`, infers the feature group from common verb prefixes, and writes to `Features/<Group>/<FeatureName>.cs`.
 
 Examples:
 
@@ -39,15 +39,15 @@ Examples:
 
 Generated feature templates return a nested `Response` record by default. `POST`, `PUT`, and `PATCH` templates also include an empty `Request`.
 
-`slice new filter` scaffolds an `IEndpointFilter`.
+`slicefx new filter` scaffolds an `IEndpointFilter`.
 
-`slice new wasi-cloudflare` scaffolds Cloudflare Workers host files for a `Slice.Wasi` component into `dist/`: `shim.mjs`, `package.json`, Wrangler config, socket stubs, and module-map generation. App-specific pieces such as `IncomingHandlerImpl.cs` and a `[SliceJsonContext(SliceJsonTarget.Wasi)]` JSON context remain in the app because they depend on WIT-generated types and user DTO metadata.
+`slicefx new wasi-cloudflare` scaffolds Cloudflare Workers host files for a `SliceFx.Wasi` component into `dist/`: `shim.mjs`, `package.json`, Wrangler config, socket stubs, and module-map generation. App-specific pieces such as `IncomingHandlerImpl.cs` and a `[SliceJsonContext(SliceJsonTarget.Wasi)]` JSON context remain in the app because they depend on WIT-generated types and user DTO metadata.
 
-The scaffold pins the Cloudflare JS tool versions and declares Node.js 22+ because the pinned Wrangler release requires it. It does not emit a lockfile, so run `npm install` the first time, review and commit the generated `package-lock.json`, then use `npm ci` for subsequent installs. The checked-in `samples/Slice.WasiSample/dist` directory already includes `package-lock.json` and uses `npm ci` for reproducible sample installs. The upstream WASI build/transpile toolchain remains preview/unstable even though the `Slice.Wasi` API is tracked as experimental 0.x surface.
+The scaffold pins the Cloudflare JS tool versions and declares Node.js 22+ because the pinned Wrangler release requires it. It does not emit a lockfile, so run `npm install` the first time, review and commit the generated `package-lock.json`, then use `npm ci` for subsequent installs. The checked-in `samples/SliceFx.WasiSample/dist` directory already includes `package-lock.json` and uses `npm ci` for reproducible sample installs. The upstream WASI build/transpile toolchain remains preview/unstable even though the `SliceFx.Wasi` package API is tracked as experimental 0.x surface.
 
 ## Route inspection
 
-`slice routes` reads source-generated route metadata from the built project output when available. For referenced Slice feature assemblies, it includes only assemblies the host explicitly aggregates through generated metadata (`SliceReferencedAssemblies` or `SliceAggregateReferences=true`) and prints a stderr notice naming those assemblies. If the project has not been built yet, it falls back to scanning local `Features/**/*.cs`.
+`slicefx routes` reads source-generated route metadata from the built project output when available. For referenced Slice feature assemblies, it includes only assemblies the host explicitly aggregates through generated metadata (`SliceFxReferencedAssemblies` or `SliceFxAggregateReferences=true`) and prints a stderr notice naming those assemblies. If the project has not been built yet, it falls back to scanning local `Features/**/*.cs`.
 
 The command reports each route's portability:
 
@@ -61,13 +61,13 @@ The table output includes a `SOURCE` column with the assembly that contributed t
 
 ## Typed C# client
 
-`slice client csharp` generates a typed `HttpClient` wrapper for portable and partial routes. This is useful for Blazor and other .NET clients that should not hand-maintain endpoint strings and DTO wiring.
+`slicefx client csharp` generates a typed `HttpClient` wrapper for portable and partial routes. This is useful for Blazor and other .NET clients that should not hand-maintain endpoint strings and DTO wiring.
 
 The generated class is `public partial class` so it can be extended in a sibling file. Two extension points are available: a `public {ClassName}(HttpMessageHandler handler)` constructor overload for injecting `DelegatingHandler` chains (Polly, auth headers, telemetry), and a `partial void OnRequestPreparing(HttpRequestMessage request)` hook that runs before every outgoing request. A `public static {ClassName} Create(IHttpClientFactory factory, string? name = null)` factory method integrates with `IHttpClientFactory` registrations.
 
 ## Typed TypeScript client
 
-`slice client typescript` generates a zero-dependency `fetch`-based TypeScript client for portable and partial routes. TypeScript interfaces are emitted for request and response record shapes where property information is available in the built project output. The schema reader honors common `System.Text.Json` metadata such as `[JsonPropertyName]`, `[JsonIgnore]`, required members, string-enum converters, and binary members represented as base64 strings.
+`slicefx client typescript` generates a zero-dependency `fetch`-based TypeScript client for portable and partial routes. TypeScript interfaces are emitted for request and response record shapes where property information is available in the built project output. The schema reader honors common `System.Text.Json` metadata such as `[JsonPropertyName]`, `[JsonIgnore]`, required members, string-enum converters, and binary members represented as base64 strings.
 
 The generated code requires only the global `fetch` API and runs in browsers, Cloudflare Workers, Node.js 18+, and Deno. The generated class accepts a `baseUrl` string and an optional `RequestInit` for default headers or credentials:
 
@@ -82,25 +82,25 @@ const item = await client.items.getItemAsync(42);
 
 ## OpenAPI manifest projection
 
-`slice openapi` writes an OpenAPI JSON document from the source-generated route manifest. It is designed for CI, WASI, Lambda function-per-feature, and other cases where you want a portable contract without starting the ASP.NET host:
+`slicefx openapi` writes an OpenAPI JSON document from the source-generated route manifest. It is designed for CI, WASI, Lambda function-per-feature, and other cases where you want a portable contract without starting the ASP.NET host:
 
 ```bash
-slice openapi --output openapi.json
-slice openapi --title Slice.Sample --version 1.0.0 --output openapi.json
+slicefx openapi --output openapi.json
+slicefx openapi --title SliceFx.Sample --version 1.0.0 --output openapi.json
 ```
 
-The document is marked with `x-slice-source: "manifest"`. It projects common `System.Text.Json` metadata, nullable handler parameters, and Minimal API binding names/sources from generated route metadata and build output. For hosted ASP.NET apps, the authoritative OpenAPI document should still come from `Microsoft.AspNetCore.OpenApi` via `builder.Services.AddOpenApi()` and `app.MapOpenApi()`.
+The document is marked with `x-slicefx-source: "manifest"`. It projects common `System.Text.Json` metadata, nullable handler parameters, and Minimal API binding names/sources from generated route metadata and build output. For hosted ASP.NET apps, the authoritative OpenAPI document should still come from `Microsoft.AspNetCore.OpenApi` via `builder.Services.AddOpenApi()` and `app.MapOpenApi()`.
 
-By default, `slice openapi` includes `portable` and `partial` routes. `aspnet-only` routes are omitted because the manifest cannot safely infer `IResult` response schemas; omissions are written as warnings and included in `x-slice-omitted`. Pass `--include-aspnet-only` only when you want those operations emitted with incomplete schemas and explicit `x-slice-portability` metadata.
+By default, `slicefx openapi` includes `portable` and `partial` routes. `aspnet-only` routes are omitted because the manifest cannot safely infer `IResult` response schemas; omissions are written as warnings and included in `x-slicefx-omitted`. Pass `--include-aspnet-only` only when you want those operations emitted with incomplete schemas and explicit `x-slicefx-portability` metadata.
 
 ## AWS Lambda artifacts
 
-`slice manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml`.
+`slicefx manifest aws-lambda` reads the source-generated route manifest and writes an AWS SAM `template.yaml`.
 
-By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted Slice app and one API Gateway `HttpApi` event per `[Feature]`. All features are included because `Slice.Lambda` runs through ASP.NET Core hosting.
+By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted SliceFx app and one API Gateway `HttpApi` event per `[Feature]`. All features are included because `SliceFx.Lambda` runs through ASP.NET Core hosting.
 
-`--mode function-per-feature --artifact-layout shared` emits one `AWS::Serverless::Function` per eligible generated `Slice.Lambda.FunctionPerFeature` handler and excludes unsupported routes with reasons. The shared artifact layout means those functions point at one publish output and select the generated method through `Handler`; it does not provide per-function binary-size or cold-start isolation. ASP.NET route constraints such as `{id:guid}` are converted to API Gateway syntax such as `{id}`.
+`--mode function-per-feature --artifact-layout shared` emits one `AWS::Serverless::Function` per eligible generated `SliceFx.Lambda.FunctionPerFeature` handler and excludes unsupported routes with reasons. The shared artifact layout means those functions point at one publish output and select the generated method through `Handler`; it does not provide per-function binary-size or cold-start isolation. ASP.NET route constraints such as `{id:guid}` are converted to API Gateway syntax such as `{id}`.
 
 The default runtime is `provided.al2023`. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
 
-`slice package aws-lambda --mode function-per-feature --artifact-layout shared` creates a publish output and `slice-lambda-package.json` describing generated handlers. The manifest records `artifactLayout: "shared"` and the publish directory as the artifact-relative `publish` path. Separate NativeAOT binaries per feature remain a future `--artifact-layout per-feature` optimization.
+`slicefx package aws-lambda --mode function-per-feature --artifact-layout shared` creates a publish output and `slicefx-lambda-package.json` describing generated handlers. The manifest records `artifactLayout: "shared"` and the publish directory as the artifact-relative `publish` path. Separate NativeAOT binaries per feature remain a future `--artifact-layout per-feature` optimization.

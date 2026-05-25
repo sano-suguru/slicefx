@@ -1,12 +1,12 @@
 <Project>
   <Target Name="ValidateSliceCorePackageReferences"
           BeforeTargets="_GetRestoreProjectStyle;CollectPackageReferences;Restore;ResolvePackageAssets;PrepareForBuild;ResolveReferences"
-          Condition="'$(MSBuildProjectName)' == 'Slice.Core'">
+          Condition="'$(MSBuildProjectName)' == 'SliceFx.Core'">
     <ItemGroup>
       <ExplicitSliceCorePackageReference Include="@(PackageReference)"
                                          Condition="'%(PackageReference.IsImplicitlyDefined)' != 'true'" />
     </ItemGroup>
     <Error Condition="'@(ExplicitSliceCorePackageReference)' != ''"
-           Text="Slice.Core must stay zero-dependency. Remove PackageReference item(s): @(ExplicitSliceCorePackageReference->'%(Identity)', ', ')." />
+           Text="SliceFx.Core must stay zero-dependency. Remove PackageReference item(s): @(ExplicitSliceCorePackageReference->'%(Identity)', ', ')." />
   </Target>
 </Project>

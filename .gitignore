@@ -5,10 +5,10 @@
 [Dd]ebug/
 artifacts/
 nupkg/
-samples/Slice.WasiSample/dist/*.wasm
-samples/Slice.WasiSample/dist/component/
-samples/Slice.WasiSample/dist/node_modules/
-samples/Slice.WasiSample/dist/.wrangler/
+samples/SliceFx.WasiSample/dist/*.wasm
+samples/SliceFx.WasiSample/dist/component/
+samples/SliceFx.WasiSample/dist/node_modules/
+samples/SliceFx.WasiSample/dist/.wrangler/
 *.nupkg
 *.snupkg
 

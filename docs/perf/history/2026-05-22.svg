@@ -299,7 +299,7 @@ L 243.425469 63.412187
   </g>
   <g id="text_22">
    <text style="fill: #475569; font: 8.5px 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(7.2 379.218187)">Measured 2026-05-22 18:23 UTC | commit c6fa2c7 | GitHub Actions Linux | AMD EPYC 7763 (X64) | Ubuntu 24.04.4 LTS (Noble Numbat) | .NET 10.0.8 (10.0.826.23019) | SDK 10.0.300</text>
-   <text style="fill: #475569; font: 8.5px 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(77.338281 389.017359)">Source: BenchmarkDotNet.Artifacts/results/Slice.Benchmarks.SourceGeneratorBenchmarks-report-full.json | Gates: tests/Slice.Benchmarks/gates.json</text>
+   <text style="fill: #475569; font: 8.5px 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(77.338281 389.017359)">Source: BenchmarkDotNet.Artifacts/results/SliceFx.Benchmarks.SourceGeneratorBenchmarks-report-full.json | Gates: tests/SliceFx.Benchmarks/gates.json</text>
   </g>
  </g>
  <defs>

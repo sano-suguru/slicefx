@@ -6,13 +6,13 @@ This document explains whether that is a flaw or a feature, and shows **standard
 
 ## What Slice deliberately does not do
 
-Slice has **no mechanism to inject filters that are not declared in source**. That is one of the strength-preservation principles ("no implicit magic").
+SliceFx has **no mechanism to inject filters that are not declared in source**. That is one of the strength-preservation principles ("no implicit magic").
 
 Benefits:
 
 - **PR diffs show every filter in every feature's chain** — there are no surprise filters running behind the scenes.
 - **Opting out of a "shared" filter is trivial** — just remove the declaration; no global-filter exemption syntax to remember.
-- **`slice routes --format json` accurately describes the live filter chain** — tooling stays trustworthy.
+- **`slicefx routes --format json` accurately describes the live filter chain** — tooling stays trustworthy.
 
 ## Question the premise first
 
@@ -26,7 +26,7 @@ If 20 features declare the same filter, ask:
 
 ## Pragmatic options when filters repeat
 
-Slice has no mechanism to inject filters into features that did not declare them. When the same `[Filter<T>]` appears in many features, you have three options — pick by scope.
+SliceFx has no mechanism to inject filters into features that did not declare them. When the same `[Filter<T>]` appears in many features, you have three options — pick by scope.
 
 ### Option A — Push truly global concerns into middleware
 
@@ -62,7 +62,7 @@ Path prefixes (`MapGroup("/api")`) will *not* prefix Slice features — `[Featur
 
 ### Option C — Accept per-feature declaration as the right level of explicitness
 
-When the duplication is real but the concern is genuinely feature-scoped (e.g., "every Users feature needs `RequireApiKeyFilter`"), 20 explicit declarations are often easier to maintain than any indirection. Adding feature #21 is one copy-paste; opting one feature out is one line deleted; tooling like `slice routes --format json` continues to describe the live chain accurately.
+When the duplication is real but the concern is genuinely feature-scoped (e.g., "every Users feature needs `RequireApiKeyFilter`"), 20 explicit declarations are often easier to maintain than any indirection. Adding feature #21 is one copy-paste; opting one feature out is one line deleted; tooling like `slicefx routes --format json` continues to describe the live chain accurately.
 
 ## Conclusion — is duplication a flaw or a feature?
 

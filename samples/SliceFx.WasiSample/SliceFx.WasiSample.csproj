@@ -1,0 +1,74 @@
+<Project>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.WasiSample</RootNamespace>
+    <OutputType>Library</OutputType>
+    <SliceFxRole>Both</SliceFxRole>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <UseAppHost>false</UseAppHost>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SelfContained>true</SelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="SliceFxRole" />
+    <Using Include="SliceFx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SliceFx.Core\SliceFx.Core.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.Wasi\SliceFx.Wasi.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.SourceGenerator\SliceFx.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- IncomingHandlerImpl.cs uses WIT-generated types that only exist under wasi-wasm. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != 'wasi-wasm'">
+    <Compile Remove="IncomingHandlerImpl.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <PackageReference Include="BytecodeAlliance.Componentize.DotNet.Wasm.SDK" Version="0.7.0-preview00010" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and ('$(NETCoreSdkPortableRuntimeIdentifier)' == 'linux-x64' or '$(NETCoreSdkPortableRuntimeIdentifier)' == 'win-x64')">
+    <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).microsoft.dotnet.ilcompiler.llvm" Version="10.0.0-alpha.1.25162.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
+    <Wit Include="wit/wit.wasm" World="proxy" Registry="ghcr.io/webassembly/wasi/http:0.2.0" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <!-- componentize-dotnet's PublishAfterBuild DependsOnTargets _PublishBuildAlternative → circular dep with Publish.
+       This empty override (placed after SDK imports so it takes precedence) breaks the cycle.
+       Actual WASM compilation is driven by componentize-dotnet's AfterBuild hooks. -->
+  <Target Name="PublishAfterBuild" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'" />
+
+  <Target Name="FailUnsupportedWasiPublishHost"
+          BeforeTargets="Restore;Build;Publish"
+          Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and '$(NETCoreSdkPortableRuntimeIdentifier)' != 'linux-x64' and '$(NETCoreSdkPortableRuntimeIdentifier)' != 'win-x64'">
+    <Error Text="SliceFx.WasiSample WASI publish requires a NativeAOT-LLVM host package. The current componentize-dotnet preview provides packages for linux-x64 and win-x64; run this publish from one of those hosts." />
+  </Target>
+
+  <Target Name="CopyWasiWasmComponent" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'wasi-wasm' and Exists('$(NativeOutputPath)$(MSBuildProjectName).wasm')">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\dist" />
+    <Copy SourceFiles="$(NativeOutputPath)$(MSBuildProjectName).wasm"
+          DestinationFiles="$(MSBuildProjectDirectory)\dist\slice-wasi-sample.wasm" />
+  </Target>
+
+</Project>

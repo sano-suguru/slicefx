@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.Lambda.FunctionPerFeature</RootNamespace>
+    <AssemblyName>SliceFx.Lambda.FunctionPerFeature</AssemblyName>
+    <PackageId>SliceFx.Lambda.FunctionPerFeature</PackageId>
+    <Description>Function-per-feature AWS Lambda HTTP API v2 runtime for SliceFx applications.</Description>
+    <PackageTags>slicefx;slice;aws-lambda;serverless;function-per-feature;http-api;vertical-slice-architecture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.APIGatewayEvents" Version="3.0.0" />
+    <PackageReference Include="Amazon.Lambda.Core" Version="3.1.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SliceFx.Core\SliceFx.Core.csproj" />
+  </ItemGroup>
+
+</Project>

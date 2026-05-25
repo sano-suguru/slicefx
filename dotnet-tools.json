@@ -2,10 +2,10 @@
   "version": 1,
   "isRoot": true,
   "tools": {
-    "slice.cli": {
+    "slicefx.cli": {
       "version": "0.1.0-preview.1",
       "commands": [
-        "slice"
+        "slicefx"
       ],
       "rollForward": false
     }
