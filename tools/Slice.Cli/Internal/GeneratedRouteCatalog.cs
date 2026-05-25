@@ -11,11 +11,12 @@ internal static class GeneratedRouteCatalog
         var assemblyFiles = FindAssemblyFiles(ctx);
         if (assemblyFiles is null)
         {
-            return new GeneratedRouteDiscovery(false, [], false);
+            return new GeneratedRouteDiscovery(false, [], false, []);
         }
 
         var routes = new List<SliceRouteInfo>();
         var hasLambdaPerFunctionHandlers = false;
+        var primaryAssemblyName = Path.GetFileNameWithoutExtension(assemblyFiles[0].Name);
         foreach (var assemblyFile in assemblyFiles)
         {
             try
@@ -52,11 +53,20 @@ internal static class GeneratedRouteCatalog
             }
         }
 
+        var aggregatedSourceAssemblies = routes
+            .Select(static route => route.SourceAssemblyName)
+            .Where(sourceAssemblyName => sourceAssemblyName is not null
+                                         && !string.Equals(sourceAssemblyName, primaryAssemblyName, StringComparison.OrdinalIgnoreCase))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static assemblyName => assemblyName, StringComparer.Ordinal)
+            .ToArray();
+
         return new GeneratedRouteDiscovery(true, [.. routes
             .DistinctBy(static route => (route.EndpointName, route.Method, route.Pattern, route.FeatureType))
             .OrderBy(static route => route.Pattern, StringComparer.Ordinal)
             .ThenBy(static route => route.Method, StringComparer.Ordinal)
-            .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)], hasLambdaPerFunctionHandlers);
+            .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)], hasLambdaPerFunctionHandlers, aggregatedSourceAssemblies);
     }
 
     private static FileInfo[]? FindAssemblyFiles(ProjectContext ctx)
@@ -77,11 +87,16 @@ internal static class GeneratedRouteCatalog
             return null;
         }
 
-        var referencedAssemblies = ReadReferencedAssemblyNames(primaryAssembly);
-        return [.. primaryAssembly.Directory
+        var primaryMetadata = ReadPrimaryAssemblyMetadata(primaryAssembly);
+        return [
+            primaryAssembly,
+            .. primaryAssembly.Directory
             .EnumerateFiles("*.dll", SearchOption.TopDirectoryOnly)
-            .Where(file => ShouldReadAssembly(file, primaryAssembly.Name, referencedAssemblies))
-            .OrderBy(static file => file.Name, StringComparer.Ordinal)];
+            .Where(file => !string.Equals(file.FullName, primaryAssembly.FullName, StringComparison.OrdinalIgnoreCase))
+            .Where(file => ShouldReadAssembly(file, primaryAssembly.Name, primaryMetadata.ReferencedAssemblyNames))
+            .Where(file => primaryMetadata.AggregatedAssemblyNames.Contains(Path.GetFileNameWithoutExtension(file.Name)))
+            .OrderBy(static file => file.Name, StringComparer.Ordinal)
+        ];
     }
 
     private static bool ShouldReadAssembly(FileInfo file, string primaryAssemblyFileName, HashSet<string> referencedAssemblies)
@@ -115,6 +130,7 @@ internal static class GeneratedRouteCatalog
         }
 
         var reader = peReader.GetMetadataReader();
+        var sourceAssemblyName = reader.GetString(reader.GetAssemblyDefinition().Name);
         var lambdaHandlerTypeName = ReadLambdaPerFunctionHandlerTypeName(reader);
         foreach (var attributeHandle in reader.GetAssemblyDefinition().GetCustomAttributes())
         {
@@ -132,7 +148,7 @@ internal static class GeneratedRouteCatalog
             SliceRouteInfo? route;
             try
             {
-                route = DecodeRoute(attribute);
+                route = DecodeRoute(attribute, sourceAssemblyName);
             }
             catch (BadImageFormatException)
             {
@@ -148,22 +164,47 @@ internal static class GeneratedRouteCatalog
         return new GeneratedAssemblyRouteMetadata([.. routes], lambdaHandlerTypeName);
     }
 
-    private static HashSet<string> ReadReferencedAssemblyNames(FileInfo assemblyFile)
+    private static PrimaryAssemblyMetadata ReadPrimaryAssemblyMetadata(FileInfo assemblyFile)
     {
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var referencedAssemblyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var aggregatedAssemblyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             using var stream = new FileStream(assemblyFile.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var peReader = new PEReader(stream);
             if (!peReader.HasMetadata)
             {
-                return names;
+                return new PrimaryAssemblyMetadata(referencedAssemblyNames, aggregatedAssemblyNames);
             }
 
             var reader = peReader.GetMetadataReader();
             foreach (var handle in reader.AssemblyReferences)
             {
-                names.Add(reader.GetString(reader.GetAssemblyReference(handle).Name));
+                referencedAssemblyNames.Add(reader.GetString(reader.GetAssemblyReference(handle).Name));
+            }
+
+            foreach (var attributeHandle in reader.GetAssemblyDefinition().GetCustomAttributes())
+            {
+                var attribute = reader.GetCustomAttribute(attributeHandle);
+                if (!IsSliceAggregatedFeatureAssemblyAttribute(reader, attribute))
+                {
+                    continue;
+                }
+
+                string? assemblyName;
+                try
+                {
+                    assemblyName = DecodeAggregatedAssemblyName(attribute);
+                }
+                catch (BadImageFormatException)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(assemblyName))
+                {
+                    aggregatedAssemblyNames.Add(assemblyName);
+                }
             }
         }
         catch (BadImageFormatException)
@@ -179,43 +220,30 @@ internal static class GeneratedRouteCatalog
         {
         }
 
-        return names;
+        return new PrimaryAssemblyMetadata(referencedAssemblyNames, aggregatedAssemblyNames);
+    }
+
+    private static string? DecodeAggregatedAssemblyName(CustomAttribute attribute)
+    {
+        var value = attribute.DecodeValue(StringAttributeTypeProvider.Instance);
+        return value.FixedArguments.Length == 0 ? null : GetString(value.FixedArguments[0]);
     }
 
     private static bool IsSliceRouteAttribute(MetadataReader reader, CustomAttribute attribute)
-    {
-        var constructor = attribute.Constructor;
-        EntityHandle typeHandle;
-        if (constructor.Kind == HandleKind.MemberReference)
-        {
-            typeHandle = reader.GetMemberReference((MemberReferenceHandle)constructor).Parent;
-        }
-        else if (constructor.Kind == HandleKind.MethodDefinition)
-        {
-            typeHandle = reader.GetMethodDefinition((MethodDefinitionHandle)constructor).GetDeclaringType();
-        }
-        else
-        {
-            return false;
-        }
+        => IsAttribute(reader, attribute, "Slice", "SliceFeatureRouteAttribute", "Slice.Core");
 
-        if (typeHandle.Kind == HandleKind.TypeReference)
-        {
-            return IsSliceRouteType(reader, reader.GetTypeReference((TypeReferenceHandle)typeHandle));
-        }
-
-        return false;
-    }
-
-    private static bool IsSliceRouteType(MetadataReader reader, TypeReference type)
-        => reader.StringComparer.Equals(type.Namespace, "Slice")
-           && reader.StringComparer.Equals(type.Name, "SliceFeatureRouteAttribute")
-           && type.ResolutionScope.Kind == HandleKind.AssemblyReference
-           && reader.StringComparer.Equals(
-               reader.GetAssemblyReference((AssemblyReferenceHandle)type.ResolutionScope).Name,
-               "Slice.Core");
+    private static bool IsSliceAggregatedFeatureAssemblyAttribute(MetadataReader reader, CustomAttribute attribute)
+        => IsAttribute(reader, attribute, "Slice", "SliceAggregatedFeatureAssemblyAttribute", "Slice.Core");
 
     private static bool IsLambdaPerFunctionModuleAttribute(MetadataReader reader, CustomAttribute attribute)
+        => IsAttribute(reader, attribute, "Slice.Lambda.PerFunction", "LambdaPerFunctionModuleAttribute", "Slice.Lambda.PerFunction");
+
+    private static bool IsAttribute(
+        MetadataReader reader,
+        CustomAttribute attribute,
+        string attributeNamespace,
+        string attributeName,
+        string assemblyName)
     {
         var constructor = attribute.Constructor;
         EntityHandle typeHandle;
@@ -238,12 +266,12 @@ internal static class GeneratedRouteCatalog
         }
 
         var type = reader.GetTypeReference((TypeReferenceHandle)typeHandle);
-        return reader.StringComparer.Equals(type.Namespace, "Slice.Lambda.PerFunction")
-               && reader.StringComparer.Equals(type.Name, "LambdaPerFunctionModuleAttribute")
+        return reader.StringComparer.Equals(type.Namespace, attributeNamespace)
+               && reader.StringComparer.Equals(type.Name, attributeName)
                && type.ResolutionScope.Kind == HandleKind.AssemblyReference
                && reader.StringComparer.Equals(
                   reader.GetAssemblyReference((AssemblyReferenceHandle)type.ResolutionScope).Name,
-                  "Slice.Lambda.PerFunction");
+                  assemblyName);
     }
 
     private static string? ReadLambdaPerFunctionHandlerTypeName(MetadataReader reader)
@@ -268,7 +296,7 @@ internal static class GeneratedRouteCatalog
         return null;
     }
 
-    private static SliceRouteInfo? DecodeRoute(CustomAttribute attribute)
+    private static SliceRouteInfo? DecodeRoute(CustomAttribute attribute, string sourceAssemblyName)
     {
         var value = attribute.DecodeValue(StringAttributeTypeProvider.Instance);
         var args = value.FixedArguments;
@@ -338,7 +366,8 @@ internal static class GeneratedRouteCatalog
             manifestSchemaVersion,
             wasiStatus,
             wasiReason,
-            HasGeneratedMetadata: true);
+            HasGeneratedMetadata: true,
+            SourceAssemblyName: sourceAssemblyName);
     }
 
     private static string? GetString(CustomAttributeTypedArgument<string> argument)
@@ -433,9 +462,17 @@ internal static class GeneratedRouteCatalog
     }
 }
 
-internal sealed record GeneratedRouteDiscovery(bool Found, SliceRouteInfo[] Routes, bool HasLambdaPerFunctionHandlers);
+internal sealed record GeneratedRouteDiscovery(
+    bool Found,
+    SliceRouteInfo[] Routes,
+    bool HasLambdaPerFunctionHandlers,
+    string[] AggregatedSourceAssemblyNames);
 
 internal sealed record GeneratedAssemblyRouteMetadata(SliceRouteInfo[] Routes, string? LambdaPerFunctionHandlerTypeName);
+
+internal sealed record PrimaryAssemblyMetadata(
+    HashSet<string> ReferencedAssemblyNames,
+    HashSet<string> AggregatedAssemblyNames);
 
 internal sealed class UnsupportedRouteManifestSchemaException(string schemaVersion) : Exception
 {

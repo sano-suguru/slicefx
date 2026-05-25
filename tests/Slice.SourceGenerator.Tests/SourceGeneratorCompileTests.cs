@@ -1316,7 +1316,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_aggregates_referenced_feature_assemblies_without_extension_ambiguity()
+    public void Generator_requires_explicit_referenced_feature_assembly_aggregation()
     {
         var featureSource = """
             using Slice;
@@ -1359,12 +1359,66 @@ public class SourceGeneratorCompileTests
         driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
         var runResult = driver.GetRunResult();
 
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE024"));
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Contains("FeatureLib", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var generatedSource = string.Join(Environment.NewLine, runResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+        Assert.DoesNotContain("FeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_aggregates_referenced_feature_assemblies_when_explicitly_enabled()
+    {
+        var featureSource = """
+            using Slice;
+
+            namespace FeatureLib.Features.Products;
+
+            [Feature("GET /products")]
+            public static class ListProducts
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        using var featureAssembly = CompileGeneratedAssembly("FeatureLib", featureSource);
+
+        var hostSource = """
+            using Microsoft.AspNetCore.Builder;
+            using Slice;
+
+            namespace HostApp;
+
+            public static class Startup
+            {
+                public static void Configure()
+                {
+                    var builder = WebApplication.CreateSlimBuilder();
+                    builder.Services.AddSlice();
+                    using var app = builder.Build();
+                    app.MapSlices();
+                }
+            }
+            """;
+
+        var hostCompilation = CreateHostCompilation(
+            "HostApp",
+            hostSource,
+            extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
+        var driver = CreateDriver(("SliceAggregateReferences", "true"));
+
+        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE024");
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("global::Slice.FeatureLib_SliceRegistrations.AddSliceServices(services);", generatedSource, StringComparison.Ordinal);
         Assert.Contains("global::Slice.FeatureLib_SliceRegistrations.MapSliceRoutes(app);", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("[assembly: global::Slice.SliceAggregatedFeatureAssemblyAttribute(\"FeatureLib\")]", generatedSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1416,7 +1470,7 @@ public class SourceGeneratorCompileTests
             "HostApp",
             hostSource,
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
-        GeneratorDriver driver = CreateDriver();
+        GeneratorDriver driver = CreateDriver(("SliceAggregateReferences", "true"));
 
         driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
 
@@ -1484,7 +1538,7 @@ public class SourceGeneratorCompileTests
             "HostApp",
             hostSource,
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
-        GeneratorDriver driver = CreateDriver();
+        GeneratorDriver driver = CreateDriver(("SliceAggregateReferences", "true"));
 
         driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
 
@@ -1538,8 +1592,57 @@ public class SourceGeneratorCompileTests
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE024");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("FeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_invalid_referenced_feature_assembly_aggregation_value()
+    {
+        var featureSource = """
+            using Slice;
+
+            namespace FeatureLib.Features.Products;
+
+            [Feature("GET /products")]
+            public static class ListProducts
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        using var featureAssembly = CompileGeneratedAssembly("FeatureLib", featureSource);
+
+        var hostSource = """
+            using Microsoft.AspNetCore.Builder;
+            using Slice;
+
+            namespace HostApp;
+
+            public static class Startup
+            {
+                public static void Configure()
+                {
+                    var builder = WebApplication.CreateSlimBuilder();
+                    builder.Services.AddSlice();
+                    using var app = builder.Build();
+                    app.MapSlices();
+                }
+            }
+            """;
+
+        var hostCompilation = CreateHostCompilation(
+            "HostApp",
+            hostSource,
+            extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
+        var driver = CreateDriver(("SliceAggregateReferences", "sure"));
+
+        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE025"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("sure", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1603,8 +1706,10 @@ public class SourceGeneratorCompileTests
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE024");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("global::Slice.FirstFeatureLib_SliceRegistrations.AddSliceServices(services);", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("[assembly: global::Slice.SliceAggregatedFeatureAssemblyAttribute(\"FirstFeatureLib\")]", generatedSource, StringComparison.Ordinal);
         Assert.DoesNotContain("SecondFeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
     }
 

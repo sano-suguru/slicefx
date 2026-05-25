@@ -112,6 +112,7 @@ internal static class PackageAwsLambdaCommand
 
         var ctx = ProjectContextDiscovery.Discover(project);
         var discovery = RouteCatalog.DiscoverDetailed(ctx);
+        RouteCatalog.WriteAggregatedRouteNotice(discovery);
         if (!discovery.HasGeneratedMetadata)
         {
             throw new CliException("Lambda per-feature packaging requires generated route metadata. Build the project before running this command.");

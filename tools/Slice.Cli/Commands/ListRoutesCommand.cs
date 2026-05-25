@@ -53,7 +53,9 @@ internal static partial class ListRoutesCommand
     {
         format = NormalizeFormat(format);
         var ctx = ProjectContextDiscovery.Discover(project);
-        var routes = RouteCatalog.Discover(ctx);
+        var discovery = RouteCatalog.DiscoverDetailed(ctx);
+        RouteCatalog.WriteAggregatedRouteNotice(discovery);
+        var routes = discovery.Routes;
 
         if (routes.Length == 0)
         {
@@ -72,13 +74,13 @@ internal static partial class ListRoutesCommand
 
     private static void WriteTable(SliceRouteInfo[] routes)
     {
-        Console.WriteLine("METHOD  ROUTE                         ENDPOINT                    PORTABILITY   WASI        NOTE");
-        Console.WriteLine("------  ----------------------------  --------------------------  ------------  ----------  --------------------------------------------");
+        Console.WriteLine("METHOD  ROUTE                         ENDPOINT                    SOURCE                    PORTABILITY   WASI        NOTE");
+        Console.WriteLine("------  ----------------------------  --------------------------  ------------------------  ------------  ----------  --------------------------------------------");
         foreach (var route in routes)
         {
             var capabilities = RouteTargetCapabilities.Classify(route);
             Console.WriteLine(
-                $"{Pad(route.Method, 6)}  {Pad(route.Pattern, 28)}  {Pad(route.EndpointName, 26)}  {Pad(route.Portability, 12)}  {Pad(capabilities.WasiDispatch.Status, 10)}  {capabilities.WasiDispatch.Reason ?? route.PortabilityReason ?? "-"}");
+                $"{Pad(route.Method, 6)}  {Pad(route.Pattern, 28)}  {Pad(route.EndpointName, 26)}  {Pad(route.SourceAssemblyName ?? "-", 24)}  {Pad(route.Portability, 12)}  {Pad(capabilities.WasiDispatch.Status, 10)}  {capabilities.WasiDispatch.Reason ?? route.PortabilityReason ?? "-"}");
         }
 
         var portable = routes.Count(static route => route.Portability == RouteCatalog.PortabilityPortable);
@@ -97,6 +99,7 @@ internal static partial class ListRoutesCommand
             route.FeatureName,
             route.Tag,
             route.EndpointName,
+            route.SourceAssemblyName,
             route.Summary,
             route.RequestType,
             route.ReturnType,
@@ -131,6 +134,7 @@ internal static partial class ListRoutesCommand
         string FeatureName,
         string Tag,
         string EndpointName,
+        string? SourceAssemblyName,
         string? Summary,
         string? RequestType,
         string ReturnType,

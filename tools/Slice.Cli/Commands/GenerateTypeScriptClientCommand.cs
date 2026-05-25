@@ -62,7 +62,9 @@ internal static partial class GenerateTypeScriptClientCommand
         var ctx = ProjectContextDiscovery.Discover(project);
         className = CliValidation.RequireClassName(className, "Class");
 
-        var routes = RouteCatalog.Discover(ctx)
+        var discovery = RouteCatalog.DiscoverDetailed(ctx);
+        RouteCatalog.WriteAggregatedRouteNotice(discovery);
+        var routes = discovery.Routes
             .Where(static route => route.Portability != RouteCatalog.PortabilityAspNetOnly)
             .ToArray();
 

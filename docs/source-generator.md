@@ -25,21 +25,23 @@ That keeps startup registration reflection-free and trimming-friendly.
 
 ## Multi-assembly apps
 
-Feature assemblies expose generated module helpers and assembly markers. Host assemblies emit the user-facing `AddSlice()` / `MapSlices()` extensions and can aggregate directly referenced Slice modules without runtime scanning.
+Feature assemblies expose generated module helpers and assembly markers. Host assemblies emit the user-facing `AddSlice()` / `MapSlices()` extensions and can explicitly aggregate directly referenced Slice modules without runtime scanning.
 
-Class library projects default to module helpers only. Executable hosts default to the public extension surface and aggregate referenced Slice modules. Set `SliceRole` to `Host`, `Feature`, or `Both` only when you need to override that default.
+Class library projects default to module helpers only. Executable hosts default to the public extension surface and map only features compiled into the host project. Set `SliceRole` to `Host`, `Feature`, or `Both` only when you need to override that default.
 
 Hosts can control referenced module aggregation with MSBuild properties:
 
 ```xml
 <PropertyGroup>
-  <!-- Default: true. Set false to map only features compiled into this project. -->
-  <SliceAggregateReferences>false</SliceAggregateReferences>
-
-  <!-- Optional allow-list. When set, only these referenced assembly names are aggregated. -->
+  <!-- Preferred: aggregate only these referenced assembly simple names. -->
   <SliceReferencedAssemblies>FeatureLib;SharedSlices</SliceReferencedAssemblies>
+
+  <!-- Optional migration switch: aggregate every directly referenced Slice module. -->
+  <SliceAggregateReferences>true</SliceAggregateReferences>
 </PropertyGroup>
 ```
+
+If a host references Slice feature assemblies but sets neither `SliceReferencedAssemblies` nor `SliceAggregateReferences`, the generator reports `SLICE024` and keeps the host local-only. Set `SliceAggregateReferences=false` to make that local-only choice explicit and suppress the diagnostic.
 
 The generator validates endpoint-name uniqueness across local features and aggregated referenced modules before emitting host registrations.
 

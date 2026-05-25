@@ -47,7 +47,7 @@ The scaffold pins the Cloudflare JS tool versions and declares Node.js 22+ becau
 
 ## Route inspection
 
-`slice routes` reads source-generated route metadata from the built project output when available, including directly referenced Slice feature assemblies copied beside the app. If the project has not been built yet, it falls back to scanning `Features/**/*.cs`.
+`slice routes` reads source-generated route metadata from the built project output when available. For referenced Slice feature assemblies, it includes only assemblies the host explicitly aggregates through generated metadata (`SliceReferencedAssemblies` or `SliceAggregateReferences=true`) and prints a stderr notice naming those assemblies. If the project has not been built yet, it falls back to scanning local `Features/**/*.cs`.
 
 The command reports each route's portability:
 
@@ -57,7 +57,7 @@ The command reports each route's portability:
 | `partial` | The route shape is portable, but some attached behavior such as endpoint filters is ASP.NET-only today. |
 | `aspnet-only` | The route intentionally depends on ASP.NET concepts such as `IResult`. |
 
-`--format json` exports the same route metadata for tooling.
+The table output includes a `SOURCE` column with the assembly that contributed the route. `--format json` exports the same route metadata for tooling, including `sourceAssemblyName`.
 
 ## Typed C# client
 

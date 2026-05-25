@@ -106,7 +106,9 @@ internal static partial class GenerateOpenApiCommand
         }
 
         var ctx = ProjectContextDiscovery.Discover(project);
-        var routes = RouteCatalog.Discover(ctx);
+        var discovery = RouteCatalog.DiscoverDetailed(ctx);
+        RouteCatalog.WriteAggregatedRouteNotice(discovery);
+        var routes = discovery.Routes;
         if (routes.Length == 0)
         {
             throw new CliException("No [Feature] routes found. Build the project first if the generated manifest is not yet available.");

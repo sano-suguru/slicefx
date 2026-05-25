@@ -179,7 +179,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         string asmName,
         bool emitAspNet,
         bool emitWasi,
-        ImmutableArray<ReferencedSliceModule> referencedModules,
+        ReferencedSliceModulesResult referencedModulesResult,
         bool emitExtensions,
         JsonContextOverrides jsonContextOverrides,
         JsonContextPlan wasiJsonContextPlan,
@@ -187,6 +187,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         JsonContextPlan lambdaJsonContextPlan)
     {
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        diagnostics.AddRange(referencedModulesResult.Diagnostics);
+        var referencedModules = referencedModulesResult.Modules;
         var requestTypeFqns = FindSliceRequestTypeFqns(models, referencedModules);
         var matchedValidators = MatchValidators(validators, requestTypeFqns);
 
@@ -212,6 +214,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 models,
                 matchedValidators,
                 asmName,
+                referencedModules,
                 lambdaOptions.Enabled,
                 wasiJsonContextPlan,
                 lambdaJsonContextPlan)));
@@ -347,33 +350,29 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
-    private static ImmutableArray<ReferencedSliceModule> FindReferencedSliceModules(
+    private static ReferencedSliceModulesResult FindReferencedSliceModules(
         Compilation compilation,
         AnalyzerConfigOptionsProvider options)
     {
-        var allowedAssemblies = GetReferencedAssemblyAllowList(options);
-        if (allowedAssemblies.Count == 0 && !ShouldAggregateReferences(options))
+        var role = GetGenerationRole(compilation, options);
+        if (role is not (SliceGenerationRole.Host or SliceGenerationRole.Both))
         {
-            return [];
+            return new ReferencedSliceModulesResult([], []);
         }
 
         var moduleAttribute = compilation.GetTypeByMetadataName("Slice.SliceFeatureModuleAttribute");
         if (moduleAttribute is null)
         {
-            return [];
+            return new ReferencedSliceModulesResult([], []);
         }
 
+        var aggregationOptions = GetReferenceAggregationOptions(options);
         var builder = ImmutableArray.CreateBuilder<ReferencedSliceModule>();
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols
                      .OrderBy(static a => a.Identity.Name, StringComparer.Ordinal))
         {
-            if (allowedAssemblies.Count > 0 && !allowedAssemblies.Contains(assembly.Identity.Name))
-            {
-                continue;
-            }
-
-            var routes = FindReferencedSliceRoutes(compilation, assembly);
-            var validators = FindReferencedSliceValidators(compilation, assembly);
+            var routes = default(ImmutableArray<ReferencedSliceRoute>);
+            var validators = default(ImmutableArray<ReferencedSliceValidator>);
             foreach (var attribute in assembly.GetAttributes())
             {
                 if (!IsAttribute(attribute.AttributeClass, moduleAttribute, "Slice.SliceFeatureModuleAttribute")
@@ -381,6 +380,12 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     || attribute.ConstructorArguments[0].Value is not INamedTypeSymbol registrationType)
                 {
                     continue;
+                }
+
+                if (routes.IsDefault)
+                {
+                    routes = FindReferencedSliceRoutes(compilation, assembly);
+                    validators = FindReferencedSliceValidators(compilation, assembly);
                 }
 
                 var module = new ReferencedSliceModule(
@@ -398,7 +403,48 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
         }
 
-        return builder.ToImmutable();
+        var allModules = builder.ToImmutable();
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        if (aggregationOptions.InvalidAggregateReferencesValue is not null)
+        {
+            diagnostics.Add(EquatableDiagnostic.Create(
+                SliceDiagnostics.InvalidSliceAggregateReferences,
+                DiagnosticLocationModel.None,
+                aggregationOptions.InvalidAggregateReferencesValue));
+        }
+
+        ImmutableArray<ReferencedSliceModule> effectiveModules;
+        if (aggregationOptions.HasAllowList)
+        {
+            effectiveModules = [.. allModules.Where(module => aggregationOptions.AllowedAssemblies.Contains(module.AssemblyName))];
+        }
+        else if (aggregationOptions.AggregateFlagSpecified && aggregationOptions.AggregateAllReferences)
+        {
+            effectiveModules = allModules;
+        }
+        else
+        {
+            effectiveModules = [];
+            if (!aggregationOptions.AggregateFlagSpecified
+                && aggregationOptions.InvalidAggregateReferencesValue is null)
+            {
+                var referencedFeatureAssemblies = allModules
+                    .Where(static module => !module.Routes.IsDefaultOrEmpty)
+                    .Select(static module => module.AssemblyName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(static assemblyName => assemblyName, StringComparer.Ordinal)
+                    .ToArray();
+                if (referencedFeatureAssemblies.Length > 0)
+                {
+                    diagnostics.Add(EquatableDiagnostic.Create(
+                        SliceDiagnostics.UnconfiguredReferencedSliceModules,
+                        DiagnosticLocationModel.None,
+                        string.Join(", ", referencedFeatureAssemblies)));
+                }
+            }
+        }
+
+        return new ReferencedSliceModulesResult(effectiveModules, diagnostics.ToImmutable());
     }
 
     private static ImmutableArray<ReferencedSliceValidator> FindReferencedSliceValidators(
@@ -431,38 +477,47 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return builder.ToImmutable();
     }
 
-    private static HashSet<string> GetReferencedAssemblyAllowList(AnalyzerConfigOptionsProvider options)
+    private static SliceReferenceAggregationOptions GetReferenceAggregationOptions(AnalyzerConfigOptionsProvider options)
     {
-        var assemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var assemblies = ImmutableHashSet.CreateBuilder(StringComparer.OrdinalIgnoreCase);
         if (!options.GlobalOptions.TryGetValue("build_property.SliceReferencedAssemblies", out var value)
             || string.IsNullOrWhiteSpace(value))
         {
-            return assemblies;
         }
-
-        foreach (var part in value.Split([',', ';']))
+        else
         {
-            var assemblyName = part.Trim();
-            if (assemblyName.Length > 0)
+            foreach (var part in value.Split([',', ';']))
             {
-                assemblies.Add(assemblyName);
+                var assemblyName = part.Trim();
+                if (assemblyName.Length > 0)
+                {
+                    assemblies.Add(assemblyName);
+                }
             }
         }
 
-        return assemblies;
-    }
-
-    private static bool ShouldAggregateReferences(AnalyzerConfigOptionsProvider options)
-    {
-        if (!options.GlobalOptions.TryGetValue("build_property.SliceAggregateReferences", out var value)
-            || string.IsNullOrWhiteSpace(value))
+        if (!options.GlobalOptions.TryGetValue("build_property.SliceAggregateReferences", out var aggregateValue)
+            || string.IsNullOrWhiteSpace(aggregateValue))
         {
-            return true;
+            return new SliceReferenceAggregationOptions(false, false, null, assemblies.ToImmutable());
         }
 
-        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(value, "no", StringComparison.OrdinalIgnoreCase);
+        var normalized = aggregateValue.Trim();
+        if (string.Equals(normalized, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SliceReferenceAggregationOptions(true, true, null, assemblies.ToImmutable());
+        }
+
+        if (string.Equals(normalized, "false", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "0", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "no", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SliceReferenceAggregationOptions(true, false, null, assemblies.ToImmutable());
+        }
+
+        return new SliceReferenceAggregationOptions(true, false, normalized, assemblies.ToImmutable());
     }
 
     private static ImmutableArray<ReferencedSliceRoute> FindReferencedSliceRoutes(

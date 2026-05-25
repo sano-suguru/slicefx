@@ -25,6 +25,19 @@ internal sealed record ReferencedSliceValidator(
     string RequestType,
     string ValidatorType);
 
+internal sealed record ReferencedSliceModulesResult(
+    ImmutableArray<ReferencedSliceModule> Modules,
+    ImmutableArray<EquatableDiagnostic> Diagnostics);
+
+internal sealed record SliceReferenceAggregationOptions(
+    bool AggregateFlagSpecified,
+    bool AggregateAllReferences,
+    string? InvalidAggregateReferencesValue,
+    ImmutableHashSet<string> AllowedAssemblies)
+{
+    internal bool HasAllowList => AllowedAssemblies.Count > 0;
+}
+
 internal enum SliceGenerationRole
 {
     Host,

@@ -36,8 +36,8 @@ internal static class RouteCatalog
     {
         var generatedRoutes = GeneratedRouteCatalog.Discover(ctx);
         return generatedRoutes.Found
-            ? new RouteCatalogDiscovery(generatedRoutes.Routes, HasGeneratedMetadata: true, generatedRoutes.HasLambdaPerFunctionHandlers)
-            : new RouteCatalogDiscovery(DiscoverFromSource(ctx), HasGeneratedMetadata: false, HasLambdaPerFunctionHandlers: false);
+            ? new RouteCatalogDiscovery(generatedRoutes.Routes, HasGeneratedMetadata: true, generatedRoutes.HasLambdaPerFunctionHandlers, generatedRoutes.AggregatedSourceAssemblyNames)
+            : new RouteCatalogDiscovery(DiscoverFromSource(ctx), HasGeneratedMetadata: false, HasLambdaPerFunctionHandlers: false, []);
     }
 
     private static SliceRouteInfo[] DiscoverFromSource(ProjectContext ctx)
@@ -49,13 +49,24 @@ internal static class RouteCatalog
         }
 
         return [.. Directory.EnumerateFiles(featuresDir, "*.cs", SearchOption.AllDirectories)
-            .SelectMany(ReadRoutes)
+            .SelectMany(file => ReadRoutes(file, ctx.AssemblyName))
             .OrderBy(static route => route.Pattern, StringComparer.Ordinal)
             .ThenBy(static route => route.Method, StringComparer.Ordinal)
             .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)];
     }
 
-    private static IEnumerable<SliceRouteInfo> ReadRoutes(string file)
+    internal static void WriteAggregatedRouteNotice(RouteCatalogDiscovery discovery)
+    {
+        if (discovery.AggregatedSourceAssemblyNames.Length == 0)
+        {
+            return;
+        }
+
+        Console.Error.WriteLine(
+            $"Slice routes include aggregated referenced assemblies: {string.Join(", ", discovery.AggregatedSourceAssemblyNames)}");
+    }
+
+    private static IEnumerable<SliceRouteInfo> ReadRoutes(string file, string sourceAssemblyName)
     {
         var source = File.ReadAllText(file);
         var root = CSharpSyntaxTree.ParseText(source).GetCompilationUnitRoot();
@@ -111,7 +122,8 @@ internal static class RouteCatalog
                 filters,
                 parameters,
                 lambda.Status,
-                lambda.Reason);
+                lambda.Reason,
+                SourceAssemblyName: sourceAssemblyName);
         }
     }
 
@@ -437,22 +449,23 @@ internal sealed record SliceRouteInfo(
     SliceRouteParameter[] Parameters,
     string? LambdaPerFeatureStatus = null,
     string? LambdaPerFeatureReason = null,
-    string? SourceAssemblyName = null,
+    string? LambdaPerFeatureHandlerAssembly = null,
     string? LambdaPerFeatureHandlerType = null,
     string? LambdaPerFeatureHandlerMethod = null,
     string? ManifestSchemaVersion = null,
     string? WasiDispatchStatus = null,
     string? WasiDispatchReason = null,
-    bool HasGeneratedMetadata = false)
+    bool HasGeneratedMetadata = false,
+    string? SourceAssemblyName = null)
 {
     internal string FeatureType => $"{Namespace}.{FeatureName}";
 
     internal string? LambdaPerFeatureHandler
-        => SourceAssemblyName is null ||
+        => LambdaPerFeatureHandlerAssembly is null ||
            LambdaPerFeatureHandlerType is null ||
            LambdaPerFeatureHandlerMethod is null
             ? null
-            : $"{SourceAssemblyName}::{LambdaPerFeatureHandlerType}::{LambdaPerFeatureHandlerMethod}";
+            : $"{LambdaPerFeatureHandlerAssembly}::{LambdaPerFeatureHandlerType}::{LambdaPerFeatureHandlerMethod}";
 }
 
 internal sealed record SliceRouteParameter(
@@ -468,4 +481,5 @@ internal sealed record SliceRouteParameter(
 internal sealed record RouteCatalogDiscovery(
     SliceRouteInfo[] Routes,
     bool HasGeneratedMetadata,
-    bool HasLambdaPerFunctionHandlers);
+    bool HasLambdaPerFunctionHandlers,
+    string[] AggregatedSourceAssemblyNames);

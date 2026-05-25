@@ -43,6 +43,7 @@ public class CliFixtureTests
         var route = Assert.Single(routes);
         Assert.Equal("Things.GetThing", route.EndpointName);
         Assert.Equal("Get things", route.Summary);
+        Assert.Equal("my-app", route.SourceAssemblyName);
         Assert.Contains(route.Parameters, static parameter => parameter is { Type: "Dictionary<string, int>", Name: "counts" });
         Assert.Contains(route.Parameters, static parameter => parameter is { Type: "int[]", Name: "ids" });
     }
@@ -457,6 +458,34 @@ public class CliFixtureTests
         await fixture.BuildAsync();
 
         Assert.Empty(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+    }
+
+    [Fact]
+    public async Task Route_catalog_does_not_include_referenced_feature_assemblies_without_explicit_aggregation()
+    {
+        using var fixture = CreateHostWithReferencedFeatureLibrary(null);
+
+        await fixture.BuildAsync();
+
+        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+
+        Assert.Empty(discovery.Routes);
+        Assert.Empty(discovery.AggregatedSourceAssemblyNames);
+    }
+
+    [Fact]
+    public async Task Route_catalog_includes_referenced_feature_assemblies_from_host_aggregation_metadata()
+    {
+        using var fixture = CreateHostWithReferencedFeatureLibrary("<SliceReferencedAssemblies>feature-lib</SliceReferencedAssemblies>");
+
+        await fixture.BuildAsync();
+
+        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var route = Assert.Single(discovery.Routes);
+
+        Assert.Equal("Health.GetHealth", route.EndpointName);
+        Assert.Equal("feature-lib", route.SourceAssemblyName);
+        Assert.Equal(["feature-lib"], discovery.AggregatedSourceAssemblyNames);
     }
 
     [Fact]
@@ -1443,11 +1472,18 @@ public class CliFixtureTests
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
                 <RootNamespace>Host.App</RootNamespace>
+                <SliceRole>Host</SliceRole>
+                <SliceReferencedAssemblies>feature-lib</SliceReferencedAssemblies>
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="FeatureLib/feature-lib.csproj" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+              <ItemGroup>
+                <CompilerVisibleProperty Include="SliceRole" />
+                <CompilerVisibleProperty Include="SliceReferencedAssemblies" />
+                <CompilerVisibleProperty Include="SliceAggregateReferences" />
               </ItemGroup>
               <ItemGroup>
                 <Compile Remove="FeatureLib/**/*.cs" />
@@ -1464,6 +1500,7 @@ public class CliFixtureTests
                 <RootNamespace>Feature.Lib</RootNamespace>
               </PropertyGroup>
               <ItemGroup>
+                <FrameworkReference Include="Microsoft.AspNetCore.App" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -1722,6 +1759,85 @@ public class CliFixtureTests
 
         Assert.Contains("""_setArgs(["My\"\\Wasi"]);""", shim);
         Assert.DoesNotContain("_setArgs(['", shim);
+    }
+
+    private static CliProjectFixture CreateHostWithReferencedFeatureLibrary(string? aggregationProperty)
+    {
+        var propertyLine = string.IsNullOrWhiteSpace(aggregationProperty)
+            ? ""
+            : Environment.NewLine + "    " + aggregationProperty;
+        var fixture = CliProjectFixture.Create(
+            "host-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Host.App</RootNamespace>
+                <SliceRole>Host</SliceRole>{{propertyLine}}
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="FeatureLib/feature-lib.csproj" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+              <ItemGroup>
+                <CompilerVisibleProperty Include="SliceRole" />
+                <CompilerVisibleProperty Include="SliceReferencedAssemblies" />
+                <CompilerVisibleProperty Include="SliceAggregateReferences" />
+              </ItemGroup>
+              <ItemGroup>
+                <Compile Remove="FeatureLib/**/*.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "FeatureLib/feature-lib.csproj",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <AssemblyName>feature-lib</AssemblyName>
+                <RootNamespace>Feature.Lib</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <FrameworkReference Include="Microsoft.AspNetCore.App" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "UseFeatureLib.cs",
+            """
+            namespace Host.App;
+
+            public sealed class UseFeatureLib
+            {
+                private Feature.Lib.Marker _marker = new();
+            }
+            """);
+        fixture.WriteFeature(
+            "FeatureLib/Marker.cs",
+            """
+            namespace Feature.Lib;
+
+            public sealed class Marker;
+            """);
+        fixture.WriteFeature(
+            "FeatureLib/Features/Health/GetHealth.cs",
+            """
+            using Slice;
+
+            namespace Feature.Lib.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public static string Handle() => "ok";
+            }
+            """);
+
+        return fixture;
     }
 
     private static string FindRepoRoot()

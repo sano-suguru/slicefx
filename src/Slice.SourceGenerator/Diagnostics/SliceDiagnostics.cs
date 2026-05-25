@@ -129,6 +129,28 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Diagnostic reported when referenced Slice feature assemblies exist but aggregation is not explicitly configured.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnconfiguredReferencedSliceModules = new(
+        "SLICE024",
+        "Referenced Slice modules require explicit aggregation",
+        "Referenced Slice feature assemblies were found but cross-assembly aggregation is not configured: {0}. Set SliceReferencedAssemblies to an explicit allow-list, set SliceAggregateReferences=true to aggregate all referenced Slice modules, or set SliceAggregateReferences=false to keep local-only routes.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when SliceAggregateReferences is set to an unsupported value.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidSliceAggregateReferences = new(
+        "SLICE025",
+        "Invalid SliceAggregateReferences value",
+        "SliceAggregateReferences value '{0}' is invalid. Use true/false, 1/0, or yes/no.",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// Diagnostic reported when a feature return type cannot be used by Lambda per-feature handlers.
     /// </summary>
     public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaPerFeature = new(

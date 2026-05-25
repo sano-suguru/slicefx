@@ -108,6 +108,7 @@ internal static partial class ManifestAwsLambdaCommand
 
         var ctx = ProjectContextDiscovery.Discover(project);
         var discovery = RouteCatalog.DiscoverDetailed(ctx);
+        RouteCatalog.WriteAggregatedRouteNotice(discovery);
         var routes = discovery.Routes;
 
         if (routes.Length == 0)

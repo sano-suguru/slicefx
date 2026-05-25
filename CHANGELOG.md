@@ -11,11 +11,14 @@ This project follows semantic versioning once stable packages are published. Bef
 - Initial experimental framework, source generator, adapters, WASI runtime, and CLI surface.
 - Core runtime package ID is `Slice.Core` because `Slice` is already used on NuGet.
 - `Slice.SourceGenerator` is required for generated `AddSlice` / `MapSlices` registrations in the `Slice` namespace.
-- Feature assemblies emit module helpers, and hosts can aggregate referenced Slice feature modules.
+- Feature assemblies emit module helpers, and hosts can explicitly aggregate referenced Slice feature modules.
 - Package metadata is prepared, but the preview has not been pushed to NuGet yet.
 
 ### Added
 
+- Added explicit opt-in for cross-assembly feature aggregation. Hosts map local features by default; use `<SliceReferencedAssemblies>FeatureLib;SharedSlices</SliceReferencedAssemblies>` for the preferred allow-list or `<SliceAggregateReferences>true</SliceAggregateReferences>` to preserve all-references aggregation.
+- Added diagnostics for unconfigured referenced Slice feature modules and invalid `SliceAggregateReferences` values to prevent accidental HTTP surface expansion.
+- Added route source assembly reporting to CLI route metadata and notices when generated tooling consumes aggregated referenced routes.
 - Added route metadata manifests with portability vocabulary for `portable`, `partial`, and `aspnet-only` routes.
 - Added CLI scaffolding, route inspection, compatibility reporting, and C# typed client generation.
 - Added AWS Lambda, TestHost, and WASI experimental adapters.
