@@ -52,7 +52,7 @@ WASI support (`Slice.Wasi`) is experimental and depends on an unstable upstream 
 | `Slice.Core` | Core runtime: `[Feature]`, `[Filter<T>]`, validation, and endpoint filters. |
 | `Slice.SourceGenerator` | AOT-friendly generated registrations and route metadata. |
 | `Slice.Lambda` | ASP.NET-hosted AWS Lambda adapter. |
-| `Slice.Lambda.PerFunction` | Experimental HTTP API v2 per-feature Lambda handlers. |
+| `Slice.Lambda.FunctionPerFeature` | Experimental HTTP API v2 function-per-feature Lambda handlers. |
 | `Slice.TestHost` | In-process test host helpers. |
 | `Slice.Wasi` | ASP.NET-independent wasi:http dispatch. |
 | `Slice.Cli` | Scaffolding, route inspection, AWS SAM manifest/package helpers, and typed client generation. |
@@ -145,7 +145,7 @@ Read more:
 | `slice client typescript` typed fetch client generation | Experimental |
 | AWS SAM manifest generation | Experimental |
 | ASP.NET-hosted Lambda adapter | Experimental |
-| Per-feature Lambda handlers | Experimental HTTP API v2 MVP |
+| Function-per-feature Lambda handlers | Experimental HTTP API v2 MVP with shared artifact layout |
 | TestHost helper | Experimental |
 | WASI adapter | Experimental in-process wasi:http dispatch |
 
@@ -158,11 +158,11 @@ Read more:
 
 ## Portability
 
-The source generator classifies each feature endpoint at build time. `slice routes` reports the result; the same data drives typed-client generation, WASI route tables, and Lambda per-feature eligibility.
+The source generator classifies each feature endpoint at build time. `slice routes` reports the result; the same data drives typed-client generation, WASI route tables, and Lambda function-per-feature eligibility.
 
 | Class | Meaning |
 | --- | --- |
-| `portable` | Returns a plain record or void. Eligible for typed-client generation, WASI dispatch, and per-feature Lambda. |
+| `portable` | Returns a plain record or void. Eligible for typed-client generation, WASI dispatch, and function-per-feature Lambda. |
 | `partial` | Portable handler shape, but attached endpoint filters are ASP.NET-only today. |
 | `aspnet-only` | Returns `IResult` or uses ASP.NET-specific behavior. The full Minimal API feature set is available. |
 
@@ -202,7 +202,7 @@ The Slice route manifest is a separate build-time artifact for portability class
 | Source generator and route manifest | [docs/source-generator.md](docs/source-generator.md) |
 | CLI commands | [docs/cli.md](docs/cli.md) |
 | OpenAPI integration | [docs/guides/openapi.md](docs/guides/openapi.md) |
-| Lambda hosting and per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
+| Lambda hosting and function-per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | WASI deploy path | [samples/Slice.WasiSample/README.md](samples/Slice.WasiSample/README.md) |
 | Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |
 | Design decisions FAQ | [docs/design-decisions.md](docs/design-decisions.md) |

@@ -42,7 +42,7 @@ These ideas are useful references, not the public authoring model. Slice should 
 
 These ideas are useful deployment references, not a platform compatibility claim. The feature boundary should be visible to tooling and can become a deployment boundary where the runtime supports it. That does not mean file-system routing is mandatory, or that Slice emits one independent binary or WASM component per feature.
 
-The current value is generated metadata, compatibility visibility, hosted deployment manifests, and an HTTP API v2 per-feature Lambda MVP without changing the app model. Fully independent NativeAOT binary-per-feature output remains future-facing.
+The current value is generated metadata, compatibility visibility, hosted deployment manifests, and an HTTP API v2 function-per-feature Lambda MVP without changing the app model. Its current artifact layout is shared, so it does not provide per-function binary-size or cold-start isolation. Fully independent NativeAOT binary-per-feature output remains future-facing.
 
 - **Convention-first project shape.** `Features/<Group>/<Feature>.cs` should stay easy to scaffold and navigate.
 - **Generated route metadata.** The source generator is the natural place to emit a route manifest for tooling, docs, compatibility checks, and future deployment output.
@@ -139,24 +139,24 @@ Near-term WASI work should focus on better manifest-driven compatibility reporti
 
 `slice manifest aws-lambda` (CLI) generates an AWS SAM `template.yaml` from the source-generated route manifest. The default hosted mode emits one `AWS::Serverless::Function` for the ASP.NET-hosted Slice app and one API Gateway `HttpApi` event per `[Feature]`. ASP.NET route constraints are automatically stripped for API Gateway. The default runtime is `provided.al2023` (NativeAOT / self-contained, handler `bootstrap`).
 
-`--mode per-feature` is implemented as an HTTP API v2 MVP on the `Slice.Lambda.PerFunction` satellite. The source generator emits feature-specific handler methods when the assembly opts in with `[assembly: LambdaPerFunction]`; the SAM template emits one `AWS::Serverless::Function` per eligible feature. The first packaging path may share one publish artifact across functions and select the generated method via `Handler`; separate NativeAOT binaries per feature remain long-term.
+`--mode function-per-feature --artifact-layout shared` is implemented as an HTTP API v2 MVP on the `Slice.Lambda.FunctionPerFeature` satellite. The source generator emits feature-specific handler methods when the assembly opts in with `[assembly: LambdaFunctionPerFeature]`; the SAM template emits one `AWS::Serverless::Function` per eligible feature. The shared artifact layout points those functions at one publish artifact and selects the generated method via `Handler`; separate NativeAOT binaries per feature remain long-term.
 
-### Lambda per-feature MVP scope
+### Lambda function-per-feature MVP scope
 
-The first per-feature Lambda mode is intentionally narrower than ASP.NET-hosted Lambda. It targets API Gateway HTTP API v2 and supports route parameters, query parameters, JSON request bodies, DI services, and `CancellationToken`. Supported return shapes start with POCOs, `Task<T>`, and `ValueTask<T>`; additional result helpers can be added only if they do not recreate ASP.NET's endpoint pipeline.
+The first function-per-feature Lambda mode is intentionally narrower than ASP.NET-hosted Lambda. It targets API Gateway HTTP API v2 and supports route parameters, query parameters, JSON request bodies, DI services, and `CancellationToken`. Supported return shapes start with POCOs, `Task<T>`, and `ValueTask<T>`; additional result helpers can be added only if they do not recreate ASP.NET's endpoint pipeline.
 
-Per-feature Lambda and WASI should share the same portable binding contract: missing nullable query parameters bind `null`, missing non-nullable query parameters fail with `400 Bad Request`, and invalid present values fail with `400 Bad Request`. Typed `null` returns are serialized as JSON `null`; absence-like responses should use explicit result helpers on the paths that support them.
+Function-per-feature Lambda and WASI should share the same portable binding contract: missing nullable query parameters bind `null`, missing non-nullable query parameters fail with `400 Bad Request`, and invalid present values fail with `400 Bad Request`. Typed `null` returns are serialized as JSON `null`; absence-like responses should use explicit result helpers on the paths that support them.
 
-The MVP excludes features that return `IResult`, depend on endpoint filters, require reflection-based validation, use unsupported route parameter types, or lack an explicit `[SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]` context for AOT-safe JSON body/response metadata. ASP.NET-specific middleware behavior such as auth, CORS, or Problem Details customization remains outside the compile-time contract. API Gateway REST v1, ALB, non-HTTP triggers, per-feature WASM components, and separate NativeAOT binaries stay out of the MVP. Reuse the existing WASI-style binding concepts where practical so portable feature rules converge instead of splitting by host.
+The MVP excludes features that return `IResult`, depend on endpoint filters, require reflection-based validation, use unsupported route parameter types, or lack an explicit `[SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]` context for AOT-safe JSON body/response metadata. ASP.NET-specific middleware behavior such as auth, CORS, or Problem Details customization remains outside the compile-time contract. API Gateway REST v1, ALB, non-HTTP triggers, per-feature WASM components, and separate NativeAOT binaries stay out of the MVP. Reuse the existing WASI-style binding concepts where practical so portable feature rules converge instead of splitting by host.
 
 Cloudflare WASI function-per-feature deployment (one WASM component per feature) requires per-feature NativeAOT compilation and is blocked on `componentize-dotnet` multi-component build support. The current Slice.WASI model (one WASM component, all routes dispatched in-process) is the practical deployment target until that tooling matures.
 
 Even when the build tooling matures, the benefit of per-feature WASI deployment is less clear than for function hosts with per-function scaling and billing knobs. The main remaining benefit would be independent deployment per feature (deploying one route without affecting others). That benefit alone may not justify the build complexity unless `componentize-dotnet` makes per-feature compilation straightforward.
 
-## Next implementation direction
+## Directional focus
 
-1. ~~Continue converging CLI route discovery on the source-generated route manifest.~~ ✅ Done.
-2. Extend typed client generation from C# first to TypeScript once the route metadata is rich enough.
-3. Add manifest-driven deployment checks where they provide clear feedback.
-4. Keep WASI/fetch-style dispatch focused on `WasiRequest` -> `WasiResponse`.
-5. Continue from generated per-feature Lambda handlers toward true NativeAOT binary-per-feature packaging. Treat separate NativeAOT binaries per feature as long-term, not current scope.
+- Keep generated route metadata as the shared contract seam for route listing, typed clients, OpenAPI projections, portability reporting, and deployment tooling.
+- Keep typed clients manifest-driven and portable-first across .NET and TypeScript without making ASP.NET-only routes look portable.
+- Keep deployment tooling explicit about target capability gaps and route exclusions instead of implying every feature can run on every host.
+- Keep WASI/fetch-style dispatch focused on the portable `WasiRequest` -> `WasiResponse` path rather than introducing a second public routing model.
+- Treat independent per-feature binaries as a long-term deployment optimization, not the core product promise.

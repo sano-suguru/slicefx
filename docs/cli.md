@@ -19,8 +19,8 @@ slice client typescript --output slice-api-client.ts
 slice openapi --output openapi.json
 
 slice manifest aws-lambda --output template.yaml
-slice manifest aws-lambda --mode per-feature --output template.yaml
-slice package aws-lambda --mode per-feature --output artifacts/aws-lambda
+slice manifest aws-lambda --mode function-per-feature --artifact-layout shared --output template.yaml
+slice package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
 ```
 
 Pass `--project` when running outside the project directory. Use `--force` for commands that write files and should overwrite existing output.
@@ -82,7 +82,7 @@ const item = await client.items.getItemAsync(42);
 
 ## OpenAPI manifest projection
 
-`slice openapi` writes an OpenAPI JSON document from the source-generated route manifest. It is designed for CI, WASI, Lambda per-feature, and other cases where you want a portable contract without starting the ASP.NET host:
+`slice openapi` writes an OpenAPI JSON document from the source-generated route manifest. It is designed for CI, WASI, Lambda function-per-feature, and other cases where you want a portable contract without starting the ASP.NET host:
 
 ```bash
 slice openapi --output openapi.json
@@ -99,8 +99,8 @@ By default, `slice openapi` includes `portable` and `partial` routes. `aspnet-on
 
 By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted Slice app and one API Gateway `HttpApi` event per `[Feature]`. All features are included because `Slice.Lambda` runs through ASP.NET Core hosting.
 
-`--mode per-feature` emits one `AWS::Serverless::Function` per eligible generated `Slice.Lambda.PerFunction` handler and excludes unsupported routes with reasons. ASP.NET route constraints such as `{id:guid}` are converted to API Gateway syntax such as `{id}`.
+`--mode function-per-feature --artifact-layout shared` emits one `AWS::Serverless::Function` per eligible generated `Slice.Lambda.FunctionPerFeature` handler and excludes unsupported routes with reasons. The shared artifact layout means those functions point at one publish output and select the generated method through `Handler`; it does not provide per-function binary-size or cold-start isolation. ASP.NET route constraints such as `{id:guid}` are converted to API Gateway syntax such as `{id}`.
 
 The default runtime is `provided.al2023`. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
 
-`slice package aws-lambda --mode per-feature` creates a publish output and `slice-lambda-package.json` describing generated handlers. The manifest records the publish directory as the artifact-relative `publish` path. The current MVP may point multiple functions at the same publish artifact; separate NativeAOT binaries per feature remain a future optimization.
+`slice package aws-lambda --mode function-per-feature --artifact-layout shared` creates a publish output and `slice-lambda-package.json` describing generated handlers. The manifest records `artifactLayout: "shared"` and the publish directory as the artifact-relative `publish` path. Separate NativeAOT binaries per feature remain a future `--artifact-layout per-feature` optimization.

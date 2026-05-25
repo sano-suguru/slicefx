@@ -37,7 +37,7 @@ slice openapi --output openapi.json
 slice openapi --title MyApi --version 1.2.0 --output openapi.json
 ```
 
-This command does not start the ASP.NET host or fetch `/openapi/v1.json`. That keeps it usable in CI, WASI, Lambda per-feature, and other contexts where the app host may not run locally or may have environment-dependent side effects.
+This command does not start the ASP.NET host or fetch `/openapi/v1.json`. That keeps it usable in CI, WASI, Lambda function-per-feature, and other contexts where the app host may not run locally or may have environment-dependent side effects.
 
 The generated document is stamped with `x-slice-source: "manifest"`. It is a projection of manifest data, not a full replacement for the ASP.NET runtime document. It includes route paths, methods, operation ids, tags, summaries, route/query/header parameters, request bodies, successful response schemas, portability metadata, and DTO schemas available from built assemblies.
 

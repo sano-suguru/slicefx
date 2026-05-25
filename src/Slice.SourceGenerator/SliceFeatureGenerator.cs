@@ -69,10 +69,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (c, _) =>
                 c.GetTypeByMetadataName("Slice.Wasi.Routing.WasiRouteTable") is not null);
 
-        // Only emit Lambda per-feature code when the satellite is referenced and the assembly opts in.
-        var lambdaPerFunctionOptions = context.CompilationProvider
-            .Select(static (c, _) => FindLambdaPerFunctionOptions(c))
-            .WithTrackingName("SliceLambdaPerFunctionOptions");
+        // Only emit Lambda function-per-feature code when the satellite is referenced and the assembly opts in.
+        var lambdaFunctionPerFeatureOptions = context.CompilationProvider
+            .Select(static (c, _) => FindLambdaFunctionPerFeatureOptions(c))
+            .WithTrackingName("SliceLambdaFunctionPerFeatureOptions");
 
         var referencedModules = context.CompilationProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
@@ -111,11 +111,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         var lambdaJsonContextPlan = validModels
             .Combine(jsonContextOverrides)
-            .Combine(lambdaPerFunctionOptions)
+            .Combine(lambdaFunctionPerFeatureOptions)
             .Select(static (pair, _) =>
                 pair.Right.Enabled
-                    ? JsonContextPlanner.CreateLambdaPlan(pair.Left.Left, pair.Left.Right.LambdaPerFeatureContextFqn)
-                    : new JsonContextPlan(JsonContextTarget.LambdaPerFeature, null, [], []))
+                    ? JsonContextPlanner.CreateLambdaPlan(pair.Left.Left, pair.Left.Right.LambdaFunctionPerFeatureContextFqn)
+                    : new JsonContextPlan(JsonContextTarget.LambdaFunctionPerFeature, null, [], []))
             .WithTrackingName("SliceLambdaJsonContextPlan");
 
         var emitPlan = validModels.Combine(validValidators)
@@ -126,7 +126,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Combine(emitExtensions)
             .Combine(jsonContextOverrides)
             .Combine(wasiJsonContextPlan)
-            .Combine(lambdaPerFunctionOptions)
+            .Combine(lambdaFunctionPerFeatureOptions)
             .Combine(lambdaJsonContextPlan)
             .Select(static (pair, _) =>
             {
@@ -183,7 +183,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         bool emitExtensions,
         JsonContextOverrides jsonContextOverrides,
         JsonContextPlan wasiJsonContextPlan,
-        LambdaPerFunctionOptions lambdaOptions,
+        LambdaFunctionPerFeatureOptions lambdaOptions,
         JsonContextPlan lambdaJsonContextPlan)
     {
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
@@ -228,7 +228,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         if (lambdaOptions.Enabled)
         {
-            var (lambdaSource, lambdaDiagnostics) = LambdaPerFunctionEmitter.Emit(
+            var (lambdaSource, lambdaDiagnostics) = LambdaFunctionPerFeatureEmitter.Emit(
                 models,
                 asmName,
                 matchedValidators,
@@ -237,7 +237,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 lambdaOptions.StartupTypeFqn);
             diagnostics.AddRange(lambdaDiagnostics);
             sources.Add(new GeneratedSource(
-                $"{asmName}.SliceLambdaPerFunctionHandlers.g.cs",
+                $"{asmName}.SliceLambdaFunctionPerFeatureHandlers.g.cs",
                 lambdaSource));
         }
 
@@ -286,24 +286,24 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             : SliceGenerationRole.Host;
     }
 
-    private static LambdaPerFunctionOptions FindLambdaPerFunctionOptions(Compilation compilation)
+    private static LambdaFunctionPerFeatureOptions FindLambdaFunctionPerFeatureOptions(Compilation compilation)
     {
-        if (compilation.GetTypeByMetadataName("Slice.Lambda.PerFunction.LambdaInvocationContext") is null)
+        if (compilation.GetTypeByMetadataName("Slice.Lambda.FunctionPerFeature.LambdaInvocationContext") is null)
         {
-            return new LambdaPerFunctionOptions(false, null, []);
+            return new LambdaFunctionPerFeatureOptions(false, null, []);
         }
 
-        var attributeType = compilation.GetTypeByMetadataName("Slice.Lambda.PerFunction.LambdaPerFunctionAttribute");
+        var attributeType = compilation.GetTypeByMetadataName("Slice.Lambda.FunctionPerFeature.LambdaFunctionPerFeatureAttribute");
         if (attributeType is null)
         {
-            return new LambdaPerFunctionOptions(false, null, []);
+            return new LambdaFunctionPerFeatureOptions(false, null, []);
         }
 
-        var startupInterface = compilation.GetTypeByMetadataName("Slice.Lambda.PerFunction.ILambdaPerFunctionStartup");
+        var startupInterface = compilation.GetTypeByMetadataName("Slice.Lambda.FunctionPerFeature.ILambdaFunctionPerFeatureStartup");
 
         foreach (var attribute in compilation.Assembly.GetAttributes())
         {
-            if (!IsAttribute(attribute.AttributeClass, attributeType, "Slice.Lambda.PerFunction.LambdaPerFunctionAttribute"))
+            if (!IsAttribute(attribute.AttributeClass, attributeType, "Slice.Lambda.FunctionPerFeature.LambdaFunctionPerFeatureAttribute"))
             {
                 continue;
             }
@@ -312,22 +312,22 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             if (attribute.ConstructorArguments.Length > 0
                 && attribute.ConstructorArguments[0].Value is INamedTypeSymbol startupType)
             {
-                var diagnostic = ValidateLambdaPerFunctionStartupType(startupType, startupInterface);
+                var diagnostic = ValidateLambdaFunctionPerFeatureStartupType(startupType, startupInterface);
                 if (diagnostic is not null)
                 {
-                    return new LambdaPerFunctionOptions(true, null, [diagnostic.Value]);
+                    return new LambdaFunctionPerFeatureOptions(true, null, [diagnostic.Value]);
                 }
 
                 startupTypeFqn = startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             }
 
-            return new LambdaPerFunctionOptions(true, startupTypeFqn, []);
+            return new LambdaFunctionPerFeatureOptions(true, startupTypeFqn, []);
         }
 
-        return new LambdaPerFunctionOptions(false, null, []);
+        return new LambdaFunctionPerFeatureOptions(false, null, []);
     }
 
-    private static EquatableDiagnostic? ValidateLambdaPerFunctionStartupType(
+    private static EquatableDiagnostic? ValidateLambdaFunctionPerFeatureStartupType(
         INamedTypeSymbol startupType,
         INamedTypeSymbol? startupInterface)
     {
@@ -345,7 +345,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         var location = CreateDiagnosticLocation(startupType.Locations.Length > 0 ? startupType.Locations[0] : null);
         return EquatableDiagnostic.Create(
-            SliceDiagnostics.InvalidLambdaPerFeatureStartupType,
+            SliceDiagnostics.InvalidLambdaFunctionPerFeatureStartupType,
             location,
             startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }

@@ -3,10 +3,10 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Amazon.Lambda.APIGatewayEvents;
 
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
-/// Creates API Gateway HTTP API v2 responses for generated per-feature handlers.
+/// Creates API Gateway HTTP API v2 responses for generated function-per-feature handlers.
 /// </summary>
 public static partial class LambdaResponseFactory
 {

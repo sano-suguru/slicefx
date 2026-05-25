@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Slice.Lambda.PerFunction.Tests;
+namespace Slice.Lambda.FunctionPerFeature.Tests;
 
 public sealed class LambdaServiceProviderTests
 {

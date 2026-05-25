@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
 /// Reads JSON request bodies from API Gateway HTTP API v2 events.

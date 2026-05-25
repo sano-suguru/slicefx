@@ -9,7 +9,7 @@ internal static class JsonContextPlanner
     {
         var type = (INamedTypeSymbol)context.TargetSymbol;
         var hasWasiTarget = false;
-        var hasLambdaPerFeatureTarget = false;
+        var hasLambdaFunctionPerFeatureTarget = false;
         foreach (var attribute in context.Attributes)
         {
             var target = ReadTarget(attribute);
@@ -17,9 +17,9 @@ internal static class JsonContextPlanner
             {
                 hasWasiTarget = true;
             }
-            else if (target == JsonContextTarget.LambdaPerFeature)
+            else if (target == JsonContextTarget.LambdaFunctionPerFeature)
             {
-                hasLambdaPerFeatureTarget = true;
+                hasLambdaFunctionPerFeatureTarget = true;
             }
         }
 
@@ -28,7 +28,7 @@ internal static class JsonContextPlanner
             CreateDiagnosticLocation(type.Locations.Length > 0 ? type.Locations[0] : null),
             InheritsFromJsonSerializerContext(type),
             hasWasiTarget,
-            hasLambdaPerFeatureTarget);
+            hasLambdaFunctionPerFeatureTarget);
     }
 
     public static JsonContextOverrides CreateOverrides(ImmutableArray<JsonContextOverrideCandidate> candidates)
@@ -59,11 +59,11 @@ internal static class JsonContextPlanner
                 }
             }
 
-            if (candidate.HasLambdaPerFeatureTarget)
+            if (candidate.HasLambdaFunctionPerFeatureTarget)
             {
                 if (lambda is not null)
                 {
-                    diagnostics.Add(DuplicateDiagnostic(JsonContextTarget.LambdaPerFeature, lambda, candidate));
+                    diagnostics.Add(DuplicateDiagnostic(JsonContextTarget.LambdaFunctionPerFeature, lambda, candidate));
                 }
                 else
                 {
@@ -83,7 +83,7 @@ internal static class JsonContextPlanner
     public static JsonContextPlan CreateLambdaPlan(
         ImmutableArray<FeatureModel> features,
         string? explicitContextFqn)
-        => CreatePlan(JsonContextTarget.LambdaPerFeature, features, explicitContextFqn);
+        => CreatePlan(JsonContextTarget.LambdaFunctionPerFeature, features, explicitContextFqn);
 
     public static string StatusForWasi(FeatureModel feature, JsonContextPlan plan)
     {
@@ -106,7 +106,7 @@ internal static class JsonContextPlanner
 
     private static string CreateMissingContextReason(JsonContextTarget target, ImmutableArray<JsonRootType> roots)
     {
-        var contextName = target == JsonContextTarget.Wasi ? "WASI" : "Lambda per-feature";
+        var contextName = target == JsonContextTarget.Wasi ? "WASI" : "Lambda function-per-feature";
         var rootList = string.Join(", ", roots.Select(static root => SourceGenerationHelpers.TrimGlobalAlias(root.TypeFqn)));
         return $"{contextName} JSON requires an explicit [SliceJsonContext] JsonSerializerContext with JsonSerializable metadata for: {rootList}";
     }
@@ -145,7 +145,7 @@ internal static class JsonContextPlanner
 
         if (feature.RequiresReflectionValidation)
         {
-            return "DataAnnotations validation requires reflection in the Lambda per-feature path";
+            return "DataAnnotations validation requires reflection in the Lambda function-per-feature path";
         }
 
         return GetParameterBindingSkipReason(feature);
@@ -283,7 +283,7 @@ internal static class JsonContextPlanner
         => target switch
         {
             JsonContextTarget.Wasi => SourceGenerationHelpers.IsWasiResponseType(responseType),
-            JsonContextTarget.LambdaPerFeature => SourceGenerationHelpers.IsLambdaProxyResponseType(responseType),
+            JsonContextTarget.LambdaFunctionPerFeature => SourceGenerationHelpers.IsLambdaProxyResponseType(responseType),
             _ => false,
         };
 
@@ -297,7 +297,7 @@ internal static class JsonContextPlanner
         return attribute.ConstructorArguments[0].Value switch
         {
             1 => JsonContextTarget.Wasi,
-            2 => JsonContextTarget.LambdaPerFeature,
+            2 => JsonContextTarget.LambdaFunctionPerFeature,
             _ => null,
         };
     }
@@ -309,7 +309,7 @@ internal static class JsonContextPlanner
         => EquatableDiagnostic.Create(
             SliceDiagnostics.DuplicateJsonContextOverride,
             secondContext.Location,
-            target == JsonContextTarget.Wasi ? "Wasi" : "LambdaPerFeature",
+            target == JsonContextTarget.Wasi ? "Wasi" : "LambdaFunctionPerFeature",
             firstContextFqn,
             secondContext.ContextFqn);
 

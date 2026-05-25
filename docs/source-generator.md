@@ -60,4 +60,4 @@ The manifest is string-based so tools can consume route shape without adding dep
 
 ## Diagnostics
 
-Invalid feature shapes are reported at compile time with `SLICE###` diagnostics. Common checks include missing `Handle` methods, non-public or non-static handlers, ambiguous handler overloads, unsupported WASI routes, filter order hints, and Lambda per-feature eligibility.
+Invalid feature shapes are reported at compile time with `SLICE###` diagnostics. Common checks include missing `Handle` methods, non-public or non-static handlers, ambiguous handler overloads, unsupported WASI routes, filter order hints, and Lambda function-per-feature eligibility.

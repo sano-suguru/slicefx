@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>Slice.Lambda.PerFunction</RootNamespace>
-    <PackageId>Slice.Lambda.PerFunction</PackageId>
-    <Description>Per-feature AWS Lambda HTTP API v2 runtime for Slice applications.</Description>
-    <PackageTags>slice;aws-lambda;serverless;per-feature;http-api</PackageTags>
+    <RootNamespace>Slice.Lambda.FunctionPerFeature</RootNamespace>
+    <PackageId>Slice.Lambda.FunctionPerFeature</PackageId>
+    <Description>Function-per-feature AWS Lambda HTTP API v2 runtime for Slice applications.</Description>
+    <PackageTags>slice;aws-lambda;serverless;function-per-feature;http-api</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

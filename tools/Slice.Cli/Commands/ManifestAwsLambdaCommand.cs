@@ -8,6 +8,10 @@ namespace Slice.Cli.Commands;
 
 internal static partial class ManifestAwsLambdaCommand
 {
+    private const string HostedMode = "hosted";
+    private const string FunctionPerFeatureMode = "function-per-feature";
+    private const string SharedArtifactLayout = "shared";
+
     // Managed runtime handler: version-dependent, emit as a FIXME placeholder.
     private const string ManagedRuntimeHandlerComment =
         "# FIXME: replace with the actual handler for your Lambda hosting package version";
@@ -19,7 +23,10 @@ internal static partial class ManifestAwsLambdaCommand
         new(StringComparer.OrdinalIgnoreCase) { "provided", "provided.al2", "provided.al2023", "dotnet8", "dotnet9" };
 
     private static readonly HashSet<string> KnownModes =
-        new(StringComparer.OrdinalIgnoreCase) { "hosted", "per-feature" };
+        new(StringComparer.OrdinalIgnoreCase) { HostedMode, FunctionPerFeatureMode };
+
+    private static readonly HashSet<string> KnownArtifactLayouts =
+        new(StringComparer.OrdinalIgnoreCase) { SharedArtifactLayout };
 
     internal static Command Build()
     {
@@ -45,8 +52,13 @@ internal static partial class ManifestAwsLambdaCommand
         };
         var modeOpt = new Option<string>("--mode")
         {
-            Description = "Lambda manifest mode: 'hosted' for one ASP.NET-hosted Lambda function, or 'per-feature' for future independent handlers.",
-            DefaultValueFactory = _ => "hosted",
+            Description = "Lambda manifest mode: 'hosted' for one ASP.NET-hosted Lambda function, or 'function-per-feature' for one Lambda function resource per eligible feature.",
+            DefaultValueFactory = _ => HostedMode,
+        };
+        var artifactLayoutOpt = new Option<string>("--artifact-layout")
+        {
+            Description = "Function-per-feature artifact layout. Only 'shared' is supported today; future per-feature artifacts are reserved.",
+            DefaultValueFactory = _ => SharedArtifactLayout,
         };
         var forceOpt = SharedOptions.CreateForce();
 
@@ -58,6 +70,7 @@ internal static partial class ManifestAwsLambdaCommand
             memoryOpt,
             timeoutOpt,
             modeOpt,
+            artifactLayoutOpt,
             forceOpt
         };
 
@@ -68,12 +81,13 @@ internal static partial class ManifestAwsLambdaCommand
             var runtime = parseResult.GetValue(runtimeOpt) ?? "provided.al2023";
             var memory = parseResult.GetValue(memoryOpt);
             var timeout = parseResult.GetValue(timeoutOpt);
-            var mode = parseResult.GetValue(modeOpt) ?? "hosted";
+            var mode = parseResult.GetValue(modeOpt) ?? HostedMode;
+            var artifactLayout = parseResult.GetValue(artifactLayoutOpt) ?? SharedArtifactLayout;
             var force = parseResult.GetValue(forceOpt);
 
             try
             {
-                await RunAsync(project, output, runtime, memory, timeout, mode, force, ct).ConfigureAwait(false);
+                await RunAsync(project, output, runtime, memory, timeout, mode, artifactLayout, force, ct).ConfigureAwait(false);
                 return 0;
             }
             catch (CliException ex)
@@ -93,6 +107,7 @@ internal static partial class ManifestAwsLambdaCommand
         int memory,
         int timeout,
         string mode,
+        string artifactLayout,
         bool force,
         CancellationToken ct)
     {
@@ -104,6 +119,16 @@ internal static partial class ManifestAwsLambdaCommand
         if (!KnownModes.Contains(mode))
         {
             throw new CliException($"Unknown Lambda manifest mode '{mode}'. Expected one of: {string.Join(", ", KnownModes)}.");
+        }
+
+        if (!KnownArtifactLayouts.Contains(artifactLayout))
+        {
+            if (string.Equals(artifactLayout, "per-feature", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new CliException("Lambda artifact layout 'per-feature' is not implemented yet. Use `--artifact-layout shared`.");
+            }
+
+            throw new CliException($"Unknown Lambda artifact layout '{artifactLayout}'. Expected one of: {string.Join(", ", KnownArtifactLayouts)}.");
         }
 
         var ctx = ProjectContextDiscovery.Discover(project);
@@ -122,20 +147,20 @@ internal static partial class ManifestAwsLambdaCommand
             throw new CliException($"Output file already exists: {outputFile.FullName}\nUse --force to overwrite.");
         }
 
-        var perFeature = string.Equals(mode, "per-feature", StringComparison.OrdinalIgnoreCase);
-        var yaml = perFeature
-            ? GeneratePerFeatureSamTemplate(ctx, discovery, runtime, memory, timeout)
+        var functionPerFeature = string.Equals(mode, FunctionPerFeatureMode, StringComparison.OrdinalIgnoreCase);
+        var yaml = functionPerFeature
+            ? GenerateFunctionPerFeatureSamTemplate(ctx, discovery, runtime, memory, timeout)
             : GenerateHostedSamTemplate(ctx, routes, runtime, memory, timeout);
 
         Directory.CreateDirectory(outputFile.DirectoryName!);
         await File.WriteAllTextAsync(outputFile.FullName, yaml, ct).ConfigureAwait(false);
 
         Console.WriteLine($"Generated {outputFile.FullName}");
-        if (perFeature)
+        if (functionPerFeature)
         {
-            var eligibleCount = CountEligibleLambdaPerFeatureRoutes(routes);
+            var eligibleCount = CountEligibleLambdaFunctionPerFeatureRoutes(routes);
             var excludedCount = routes.Length - eligibleCount;
-            Console.WriteLine($"  per-feature mode — {eligibleCount} function(s), {excludedCount} excluded route(s), runtime: {runtime}, memory: {memory} MB, timeout: {timeout}s");
+            Console.WriteLine($"  function-per-feature mode — {eligibleCount} function(s), {excludedCount} excluded route(s), artifact layout: {SharedArtifactLayout}, runtime: {runtime}, memory: {memory} MB, timeout: {timeout}s");
             WriteExcludedRoutes(routes);
         }
         else
@@ -219,7 +244,7 @@ internal static partial class ManifestAwsLambdaCommand
         return sb.ToString();
     }
 
-    private static string GeneratePerFeatureSamTemplate(
+    private static string GenerateFunctionPerFeatureSamTemplate(
         ProjectContext ctx,
         RouteCatalogDiscovery discovery,
         string runtime,
@@ -228,27 +253,27 @@ internal static partial class ManifestAwsLambdaCommand
     {
         if (!discovery.HasGeneratedMetadata)
         {
-            throw new CliException("Lambda per-feature mode requires generated route metadata. Build the project before running this command.");
+            throw new CliException("Lambda function-per-feature mode requires generated route metadata. Build the project before running this command.");
         }
 
-        if (!discovery.HasLambdaPerFunctionHandlers)
+        if (!discovery.HasLambdaFunctionPerFeatureHandlers)
         {
             throw new CliException(
-                "Lambda per-feature handlers were not found in the built project. " +
-                "Reference Slice.Lambda.PerFunction and add [assembly: LambdaPerFunction(...)] to opt in.");
+                "Lambda function-per-feature handlers were not found in the built project. " +
+                "Reference Slice.Lambda.FunctionPerFeature and add [assembly: LambdaFunctionPerFeature(...)] to opt in.");
         }
 
         var eligible = discovery.Routes
-            .Where(IsEmittedLambdaPerFeatureRoute)
+            .Where(IsEmittedLambdaFunctionPerFeatureRoute)
             .ToArray();
         if (eligible.Length == 0)
         {
-            throw new CliException("No routes are eligible for Lambda per-feature mode.\n" + FormatExcludedRoutes(discovery.Routes));
+            throw new CliException("No routes are eligible for Lambda function-per-feature mode.\n" + FormatExcludedRoutes(discovery.Routes));
         }
 
         if (eligible.Length > 100)
         {
-            Console.WriteLine($"Warning: per-feature mode will emit {eligible.Length} Lambda functions. Large templates can approach CloudFormation resource limits.");
+            Console.WriteLine($"Warning: function-per-feature mode will emit {eligible.Length} Lambda functions. Large templates can approach CloudFormation resource limits.");
         }
 
         DetectPerFeatureLogicalIdCollisions(eligible);
@@ -256,10 +281,11 @@ internal static partial class ManifestAwsLambdaCommand
         var sb = new StringBuilder();
         sb.AppendLine("AWSTemplateFormatVersion: '2010-09-09'");
         sb.AppendLine("Transform: 'AWS::Serverless-2016-10-31'");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Description: '{YamlSingleQuoted($"Generated by slice manifest aws-lambda --mode per-feature from {ctx.AssemblyName}. Edit as needed.")}'");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Description: '{YamlSingleQuoted($"Generated by slice manifest aws-lambda --mode function-per-feature --artifact-layout shared from {ctx.AssemblyName}. Edit as needed.")}'");
         sb.AppendLine();
-        sb.AppendLine("# Per-feature mode: each eligible [Feature] becomes an independent Lambda function.");
-        sb.AppendLine("# MVP packaging may point multiple functions at the same publish artifact; Handler selects the generated feature entrypoint.");
+        sb.AppendLine("# Function-per-feature mode: each eligible [Feature] becomes a separate Lambda function resource.");
+        sb.AppendLine("# Artifact layout: shared. Multiple functions point at the same publish artifact; Handler selects the generated feature entrypoint.");
+        sb.AppendLine("# This layout does not provide per-function binary-size or cold-start isolation.");
         sb.AppendLine("# Unsupported routes are intentionally excluded; run `slice routes --format json` for capability details.");
         sb.AppendLine();
         sb.AppendLine("Globals:");
@@ -267,7 +293,7 @@ internal static partial class ManifestAwsLambdaCommand
         sb.AppendLine(CultureInfo.InvariantCulture, $"    Runtime: '{YamlSingleQuoted(runtime)}'");
         sb.AppendLine(CultureInfo.InvariantCulture, $"    MemorySize: {memory}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"    Timeout: {timeout}");
-        sb.AppendLine("    CodeUri: './publish'  # TODO: run `slice package aws-lambda --mode per-feature` or set to your publish output");
+        sb.AppendLine("    CodeUri: './publish'  # TODO: run `slice package aws-lambda --mode function-per-feature --artifact-layout shared` or set to your publish output");
         sb.AppendLine();
         sb.AppendLine("Resources:");
         sb.AppendLine();
@@ -280,7 +306,7 @@ internal static partial class ManifestAwsLambdaCommand
             var functionId = ToLogicalId(route.EndpointName, "Function");
             var eventId = ToLogicalId(route.EndpointName, "Event");
             var samPath = ToSamPath(route.Pattern);
-            var handler = route.LambdaPerFeatureHandler!;
+            var handler = route.LambdaFunctionPerFeatureHandler!;
 
             sb.AppendLine(CultureInfo.InvariantCulture, $"  # {SanitizeComment(route.EndpointName)} — {SanitizeComment(route.Method)} {SanitizeComment(route.Pattern)}");
             sb.AppendLine(CultureInfo.InvariantCulture, $"  {functionId}:");
@@ -328,20 +354,20 @@ internal static partial class ManifestAwsLambdaCommand
         }
     }
 
-    private static int CountEligibleLambdaPerFeatureRoutes(SliceRouteInfo[] routes)
-        => routes.Count(IsEmittedLambdaPerFeatureRoute);
+    private static int CountEligibleLambdaFunctionPerFeatureRoutes(SliceRouteInfo[] routes)
+        => routes.Count(IsEmittedLambdaFunctionPerFeatureRoute);
 
-    private static bool IsEmittedLambdaPerFeatureRoute(SliceRouteInfo route)
-        => route.LambdaPerFeatureHandler is not null
+    private static bool IsEmittedLambdaFunctionPerFeatureRoute(SliceRouteInfo route)
+        => route.LambdaFunctionPerFeatureHandler is not null
            && string.Equals(
-               RouteTargetCapabilities.Classify(route).LambdaPerFeature.Status,
+               RouteTargetCapabilities.Classify(route).LambdaFunctionPerFeature.Status,
                RouteTargetCapabilities.Eligible,
                StringComparison.OrdinalIgnoreCase);
 
     private static void WriteExcludedRoutes(SliceRouteInfo[] routes)
     {
         var excluded = routes
-            .Where(static route => !IsEmittedLambdaPerFeatureRoute(route))
+            .Where(static route => !IsEmittedLambdaFunctionPerFeatureRoute(route))
             .ToArray();
         if (excluded.Length == 0)
         {
@@ -351,7 +377,7 @@ internal static partial class ManifestAwsLambdaCommand
         Console.WriteLine("  excluded:");
         foreach (var route in excluded)
         {
-            var reason = RouteTargetCapabilities.Classify(route).LambdaPerFeature.Reason ?? "not eligible";
+            var reason = RouteTargetCapabilities.Classify(route).LambdaFunctionPerFeature.Reason ?? "not eligible";
             Console.WriteLine($"    - {route.EndpointName}: {reason}");
         }
     }
@@ -361,7 +387,7 @@ internal static partial class ManifestAwsLambdaCommand
         var sb = new StringBuilder("Excluded routes:");
         foreach (var route in routes)
         {
-            var reason = RouteTargetCapabilities.Classify(route).LambdaPerFeature.Reason ?? "not eligible";
+            var reason = RouteTargetCapabilities.Classify(route).LambdaFunctionPerFeature.Reason ?? "not eligible";
             sb.AppendLine(CultureInfo.InvariantCulture, $"  - {route.EndpointName}: {reason}");
         }
 
@@ -370,7 +396,7 @@ internal static partial class ManifestAwsLambdaCommand
 
     private static void AppendExcludedRouteComments(StringBuilder sb, SliceRouteInfo[] routes)
     {
-        var excluded = routes.Where(static route => !IsEmittedLambdaPerFeatureRoute(route)).ToArray();
+        var excluded = routes.Where(static route => !IsEmittedLambdaFunctionPerFeatureRoute(route)).ToArray();
         if (excluded.Length == 0)
         {
             return;
@@ -379,7 +405,7 @@ internal static partial class ManifestAwsLambdaCommand
         sb.AppendLine("# Excluded routes:");
         foreach (var route in excluded)
         {
-            var reason = RouteTargetCapabilities.Classify(route).LambdaPerFeature.Reason ?? "not eligible";
+            var reason = RouteTargetCapabilities.Classify(route).LambdaFunctionPerFeature.Reason ?? "not eligible";
             sb.AppendLine(CultureInfo.InvariantCulture, $"# - {SanitizeComment(route.EndpointName)}: {SanitizeComment(reason)}");
         }
     }

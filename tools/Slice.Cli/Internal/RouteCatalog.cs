@@ -36,8 +36,8 @@ internal static class RouteCatalog
     {
         var generatedRoutes = GeneratedRouteCatalog.Discover(ctx);
         return generatedRoutes.Found
-            ? new RouteCatalogDiscovery(generatedRoutes.Routes, HasGeneratedMetadata: true, generatedRoutes.HasLambdaPerFunctionHandlers, generatedRoutes.AggregatedSourceAssemblyNames)
-            : new RouteCatalogDiscovery(DiscoverFromSource(ctx), HasGeneratedMetadata: false, HasLambdaPerFunctionHandlers: false, []);
+            ? new RouteCatalogDiscovery(generatedRoutes.Routes, HasGeneratedMetadata: true, generatedRoutes.HasLambdaFunctionPerFeatureHandlers, generatedRoutes.AggregatedSourceAssemblyNames)
+            : new RouteCatalogDiscovery(DiscoverFromSource(ctx), HasGeneratedMetadata: false, HasLambdaFunctionPerFeatureHandlers: false, []);
     }
 
     private static SliceRouteInfo[] DiscoverFromSource(ProjectContext ctx)
@@ -105,7 +105,7 @@ internal static class RouteCatalog
             var filters = ReadFilters(classDeclaration.AttributeLists);
             var (portability, portabilityReason) = ClassifyPortability(returnType, filters);
             var featureName = classDeclaration.Identifier.ValueText;
-            var lambda = ClassifyLambdaPerFeature(returnType, filters, parameters, parts[1]);
+            var lambda = ClassifyLambdaFunctionPerFeature(returnType, filters, parameters, parts[1]);
 
             yield return new SliceRouteInfo(
                 parts[0].ToUpperInvariant(),
@@ -330,7 +330,7 @@ internal static class RouteCatalog
             : (PortabilityPortable, null);
     }
 
-    internal static RouteCapability ClassifyLambdaPerFeature(
+    internal static RouteCapability ClassifyLambdaFunctionPerFeature(
         string returnType,
         string[] filters,
         SliceRouteParameter[] parameters,
@@ -447,11 +447,11 @@ internal sealed record SliceRouteInfo(
     string? PortabilityReason,
     string[] Filters,
     SliceRouteParameter[] Parameters,
-    string? LambdaPerFeatureStatus = null,
-    string? LambdaPerFeatureReason = null,
-    string? LambdaPerFeatureHandlerAssembly = null,
-    string? LambdaPerFeatureHandlerType = null,
-    string? LambdaPerFeatureHandlerMethod = null,
+    string? LambdaFunctionPerFeatureStatus = null,
+    string? LambdaFunctionPerFeatureReason = null,
+    string? LambdaFunctionPerFeatureHandlerAssembly = null,
+    string? LambdaFunctionPerFeatureHandlerType = null,
+    string? LambdaFunctionPerFeatureHandlerMethod = null,
     string? ManifestSchemaVersion = null,
     string? WasiDispatchStatus = null,
     string? WasiDispatchReason = null,
@@ -460,12 +460,12 @@ internal sealed record SliceRouteInfo(
 {
     internal string FeatureType => $"{Namespace}.{FeatureName}";
 
-    internal string? LambdaPerFeatureHandler
-        => LambdaPerFeatureHandlerAssembly is null ||
-           LambdaPerFeatureHandlerType is null ||
-           LambdaPerFeatureHandlerMethod is null
+    internal string? LambdaFunctionPerFeatureHandler
+        => LambdaFunctionPerFeatureHandlerAssembly is null ||
+           LambdaFunctionPerFeatureHandlerType is null ||
+           LambdaFunctionPerFeatureHandlerMethod is null
             ? null
-            : $"{LambdaPerFeatureHandlerAssembly}::{LambdaPerFeatureHandlerType}::{LambdaPerFeatureHandlerMethod}";
+            : $"{LambdaFunctionPerFeatureHandlerAssembly}::{LambdaFunctionPerFeatureHandlerType}::{LambdaFunctionPerFeatureHandlerMethod}";
 }
 
 internal sealed record SliceRouteParameter(
@@ -481,5 +481,5 @@ internal sealed record SliceRouteParameter(
 internal sealed record RouteCatalogDiscovery(
     SliceRouteInfo[] Routes,
     bool HasGeneratedMetadata,
-    bool HasLambdaPerFunctionHandlers,
+    bool HasLambdaFunctionPerFeatureHandlers,
     string[] AggregatedSourceAssemblyNames);

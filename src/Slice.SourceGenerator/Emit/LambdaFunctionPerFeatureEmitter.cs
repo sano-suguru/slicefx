@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Slice.SourceGenerator;
 
-internal static class LambdaPerFunctionEmitter
+internal static class LambdaFunctionPerFeatureEmitter
 {
     public static (string Source, ImmutableArray<EquatableDiagnostic> Diagnostics) Emit(
         ImmutableArray<FeatureModel> features,
@@ -13,7 +13,7 @@ internal static class LambdaPerFunctionEmitter
         JsonContextPlan jsonContextPlan,
         string? startupTypeFqn)
     {
-        var className = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaPerFunctionHandlers");
+        var className = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaFunctionPerFeatureHandlers");
         var sb = new StringBuilder();
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
 
@@ -22,14 +22,14 @@ internal static class LambdaPerFunctionEmitter
         sb.AppendLine("using global::Amazon.Lambda.APIGatewayEvents;");
         sb.AppendLine("using global::Amazon.Lambda.Core;");
         sb.AppendLine("using global::Microsoft.Extensions.DependencyInjection;");
-        sb.AppendLine("using global::Slice.Lambda.PerFunction;");
+        sb.AppendLine("using global::Slice.Lambda.FunctionPerFeature;");
         sb.AppendLine();
-        sb.AppendLine($"[assembly: global::Slice.Lambda.PerFunction.LambdaPerFunctionModuleAttribute({CSharpLiteral.String("global::Slice." + className)})]");
+        sb.AppendLine($"[assembly: global::Slice.Lambda.FunctionPerFeature.LambdaFunctionPerFeatureModuleAttribute({CSharpLiteral.String("global::Slice." + className)})]");
         sb.AppendLine();
         sb.AppendLine("namespace Slice;");
         sb.AppendLine();
         sb.AppendLine("/// <summary>");
-        sb.AppendLine("/// Provides generated Slice Lambda per-feature handlers.");
+        sb.AppendLine("/// Provides generated Slice Lambda function-per-feature handlers.");
         sb.AppendLine("/// </summary>");
         sb.AppendLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
         sb.AppendLine($"public static class {className}");
@@ -61,7 +61,7 @@ internal static class LambdaPerFunctionEmitter
     {
         var registrationClassName = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceRegistrations");
         sb.AppendLine("    private static readonly global::System.Lazy<global::Microsoft.Extensions.DependencyInjection.ServiceProvider> s_services = new(");
-        sb.AppendLine("        static () => global::Slice.Lambda.PerFunction.LambdaServiceProvider.Build(static services =>");
+        sb.AppendLine("        static () => global::Slice.Lambda.FunctionPerFeature.LambdaServiceProvider.Build(static services =>");
         sb.AppendLine("        {");
         if (startupTypeFqn is not null)
         {
@@ -112,27 +112,27 @@ internal static class LambdaPerFunctionEmitter
         sb.AppendLine("        global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyRequest request,");
         sb.AppendLine("        global::Amazon.Lambda.Core.ILambdaContext lambdaContext)");
         sb.AppendLine("    {");
-        sb.AppendLine("        using var __timeout = global::Slice.Lambda.PerFunction.LambdaCancellation.Create(lambdaContext);");
+        sb.AppendLine("        using var __timeout = global::Slice.Lambda.FunctionPerFeature.LambdaCancellation.Create(lambdaContext);");
         sb.AppendLine("        using var __scope = s_services.Value.CreateScope();");
-        sb.AppendLine("        var ctx = new global::Slice.Lambda.PerFunction.LambdaInvocationContext(request, __scope.ServiceProvider, lambdaContext, __timeout.Token);");
+        sb.AppendLine("        var ctx = new global::Slice.Lambda.FunctionPerFeature.LambdaInvocationContext(request, __scope.ServiceProvider, lambdaContext, __timeout.Token);");
 
         if (bodyParam is not null)
         {
             sb.AppendLine($"        {bodyParam.TypeFqn}? {bodyParam.Name};");
             sb.AppendLine("        try");
             sb.AppendLine("        {");
-            sb.AppendLine($"            {bodyParam.Name} = await global::Slice.Lambda.PerFunction.LambdaJsonBodyReader.ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>()).ConfigureAwait(false);");
+            sb.AppendLine($"            {bodyParam.Name} = await global::Slice.Lambda.FunctionPerFeature.LambdaJsonBodyReader.ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>()).ConfigureAwait(false);");
             sb.AppendLine("        }");
             sb.AppendLine("        catch (global::System.Exception ex) when (ex is global::System.Text.Json.JsonException or global::System.FormatException)");
             sb.AppendLine("        {");
-            sb.AppendLine("            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
+            sb.AppendLine("            return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
             sb.AppendLine("        }");
-            sb.AppendLine($"        if ({bodyParam.Name} is null) return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body is required.\");");
+            sb.AppendLine($"        if ({bodyParam.Name} is null) return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body is required.\");");
 
             if (ShouldUseGeneratedValidation(feature))
             {
                 sb.AppendLine($"        var __daErrors = {ValidationMethodName(feature)}({bodyParam.Name});");
-                sb.AppendLine("        if (__daErrors is not null) return global::Slice.Lambda.PerFunction.LambdaResponseFactory.ValidationProblem(__daErrors);");
+                sb.AppendLine("        if (__daErrors is not null) return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.ValidationProblem(__daErrors);");
             }
 
             if (HasValidatorForParameter(bodyParam, validators))
@@ -141,7 +141,7 @@ internal static class LambdaPerFunctionEmitter
                 sb.AppendLine("        if (__validator is not null)");
                 sb.AppendLine("        {");
                 sb.AppendLine($"            var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken).ConfigureAwait(false);");
-                sb.AppendLine("            if (!__vr.IsValid) return global::Slice.Lambda.PerFunction.LambdaResponseFactory.ValidationProblem(__vr.Errors!);");
+                sb.AppendLine("            if (!__vr.IsValid) return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.ValidationProblem(__vr.Errors!);");
                 sb.AppendLine("        }");
             }
         }
@@ -156,32 +156,32 @@ internal static class LambdaPerFunctionEmitter
             var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
-                sb.AppendLine($"        if (!global::Slice.Lambda.PerFunction.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
-                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
+                sb.AppendLine($"        if (!global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
+                sb.AppendLine($"            return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
             }
             else if (binding.Source == HandlerParameterBindingSource.Query)
             {
                 var bindingVariable = "__" + p.Name + "Query";
-                sb.AppendLine($"        var {bindingVariable} = global::Slice.Lambda.PerFunction.LambdaArgumentBinder.BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
-                sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Invalid)");
-                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
+                sb.AppendLine($"        var {bindingVariable} = global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBinder.BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"            return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
                 if (!p.IsNullable)
                 {
-                    sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Missing)");
-                    sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
+                    sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"            return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
                 }
                 sb.AppendLine($"        var {p.Name} = {bindingVariable}.Value!;");
             }
             else if (binding.Source == HandlerParameterBindingSource.Header)
             {
                 var bindingVariable = "__" + p.Name + "Header";
-                sb.AppendLine($"        var {bindingVariable} = global::Slice.Lambda.PerFunction.LambdaArgumentBinder.BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
-                sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Invalid)");
-                sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
+                sb.AppendLine($"        var {bindingVariable} = global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBinder.BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"            return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
                 if (!p.IsNullable)
                 {
-                    sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.PerFunction.LambdaArgumentBindingStatus.Missing)");
-                    sb.AppendLine($"            return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
+                    sb.AppendLine($"        if ({bindingVariable}.Status == global::Slice.Lambda.FunctionPerFeature.LambdaArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"            return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
                 }
                 sb.AppendLine($"        var {p.Name} = {bindingVariable}.Value!;");
             }
@@ -196,12 +196,12 @@ internal static class LambdaPerFunctionEmitter
         if (feature.ReturnTypeFqn == "void")
         {
             sb.AppendLine($"        {callExpr};");
-            sb.AppendLine("        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.NoContent();");
+            sb.AppendLine("        return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.NoContent();");
         }
         else if (SourceGenerationHelpers.IsNonGenericAwaitable(feature.ReturnTypeFqn))
         {
             sb.AppendLine($"        await {callExpr}.ConfigureAwait(false);");
-            sb.AppendLine("        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.NoContent();");
+            sb.AppendLine("        return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.NoContent();");
         }
         else
         {
@@ -220,7 +220,7 @@ internal static class LambdaPerFunctionEmitter
             }
             else
             {
-                sb.AppendLine($"        return global::Slice.Lambda.PerFunction.LambdaResponseFactory.Ok<{awaitedReturnType}>(__result, __JsonTypeInfo<{awaitedReturnType}>());");
+                sb.AppendLine($"        return global::Slice.Lambda.FunctionPerFeature.LambdaResponseFactory.Ok<{awaitedReturnType}>(__result, __JsonTypeInfo<{awaitedReturnType}>());");
             }
         }
 
@@ -246,7 +246,7 @@ internal static class LambdaPerFunctionEmitter
 
         if (feature.RequiresReflectionValidation)
         {
-            return new LambdaSkipReason("SLICE016", "DataAnnotations validation requires reflection in the Lambda per-feature path");
+            return new LambdaSkipReason("SLICE016", "DataAnnotations validation requires reflection in the Lambda function-per-feature path");
         }
 
         var bodyCount = 0;
@@ -291,11 +291,11 @@ internal static class LambdaPerFunctionEmitter
     {
         var descriptor = skip.DiagnosticId switch
         {
-            "SLICE012" => SliceDiagnostics.UnsupportedReturnTypeForLambdaPerFeature,
-            "SLICE013" => SliceDiagnostics.UnsupportedFilterForLambdaPerFeature,
-            "SLICE015" => SliceDiagnostics.UnsupportedParameterForLambdaPerFeature,
-            "SLICE016" => SliceDiagnostics.UnsupportedValidationForLambdaPerFeature,
-            _ => SliceDiagnostics.UnsupportedReturnTypeForLambdaPerFeature,
+            "SLICE012" => SliceDiagnostics.UnsupportedReturnTypeForLambdaFunctionPerFeature,
+            "SLICE013" => SliceDiagnostics.UnsupportedFilterForLambdaFunctionPerFeature,
+            "SLICE015" => SliceDiagnostics.UnsupportedParameterForLambdaFunctionPerFeature,
+            "SLICE016" => SliceDiagnostics.UnsupportedValidationForLambdaFunctionPerFeature,
+            _ => SliceDiagnostics.UnsupportedReturnTypeForLambdaFunctionPerFeature,
         };
 
         var diagnostic = skip.DiagnosticId switch

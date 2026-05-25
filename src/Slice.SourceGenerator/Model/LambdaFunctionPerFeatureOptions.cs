@@ -2,9 +2,9 @@ using System.Collections.Immutable;
 
 namespace Slice.SourceGenerator;
 
-internal sealed class LambdaPerFunctionOptions : IEquatable<LambdaPerFunctionOptions>
+internal sealed class LambdaFunctionPerFeatureOptions : IEquatable<LambdaFunctionPerFeatureOptions>
 {
-    public LambdaPerFunctionOptions(
+    public LambdaFunctionPerFeatureOptions(
         bool enabled,
         string? startupTypeFqn,
         ImmutableArray<EquatableDiagnostic> diagnostics)
@@ -20,13 +20,13 @@ internal sealed class LambdaPerFunctionOptions : IEquatable<LambdaPerFunctionOpt
 
     public ImmutableArray<EquatableDiagnostic> Diagnostics { get; }
 
-    public bool Equals(LambdaPerFunctionOptions? other)
+    public bool Equals(LambdaFunctionPerFeatureOptions? other)
         => other is not null
            && Enabled == other.Enabled
            && string.Equals(StartupTypeFqn, other.StartupTypeFqn, StringComparison.Ordinal)
            && Diagnostics.SequenceEqual(other.Diagnostics);
 
-    public override bool Equals(object? obj) => Equals(obj as LambdaPerFunctionOptions);
+    public override bool Equals(object? obj) => Equals(obj as LambdaFunctionPerFeatureOptions);
 
     public override int GetHashCode()
     {

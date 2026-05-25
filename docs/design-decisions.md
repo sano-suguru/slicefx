@@ -76,7 +76,7 @@ Each satellite (`Slice.Lambda`, `Slice.TestHost`, `Slice.Wasi`) brings its own N
 
 `Slice.Wasi` is still experimental, and publishing a WASI component also depends on preview upstream tooling (`componentize-dotnet`, NativeAOT-LLVM, WASI Preview 2, and Cloudflare's JS shim path when targeting Workers). Keeping it as an opt-in satellite makes that toolchain risk explicit instead of imposing it on ASP.NET-only apps.
 
-This is why the source generator emits separate files for each active surface (`{Asm}_SliceRegistrations.g.cs`, `{Asm}_SliceWasiRegistrations.g.cs`, `{Asm}_SliceRouteManifest.g.cs`, and `{Asm}.SliceLambdaPerFunctionHandlers.g.cs` when Lambda per-feature handlers are enabled) instead of one combined output.
+This is why the source generator emits separate files for each active surface (`{Asm}_SliceRegistrations.g.cs`, `{Asm}_SliceWasiRegistrations.g.cs`, `{Asm}_SliceRouteManifest.g.cs`, and `{Asm}.SliceLambdaFunctionPerFeatureHandlers.g.cs` when Lambda function-per-feature handlers are enabled) instead of one combined output.
 
 ## How is warm-run kept faster than cold-run?
 

@@ -8,6 +8,9 @@ namespace Slice.Cli.Commands;
 
 internal static class PackageAwsLambdaCommand
 {
+    private const string FunctionPerFeatureMode = "function-per-feature";
+    private const string SharedArtifactLayout = "shared";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -24,8 +27,13 @@ internal static class PackageAwsLambdaCommand
         };
         var modeOpt = new Option<string>("--mode")
         {
-            Description = "Package mode. Only 'per-feature' is supported.",
-            DefaultValueFactory = _ => "per-feature",
+            Description = "Package mode. Only 'function-per-feature' is supported.",
+            DefaultValueFactory = _ => FunctionPerFeatureMode,
+        };
+        var artifactLayoutOpt = new Option<string>("--artifact-layout")
+        {
+            Description = "Function-per-feature artifact layout. Only 'shared' is supported today; future per-feature artifacts are reserved.",
+            DefaultValueFactory = _ => SharedArtifactLayout,
         };
         var configurationOpt = new Option<string>("--configuration")
         {
@@ -58,6 +66,7 @@ internal static class PackageAwsLambdaCommand
             projectOpt,
             outputOpt,
             modeOpt,
+            artifactLayoutOpt,
             configurationOpt,
             lambdaRuntimeOpt,
             ridOpt,
@@ -70,7 +79,8 @@ internal static class PackageAwsLambdaCommand
         {
             var project = parseResult.GetValue(projectOpt);
             var output = parseResult.GetValue(outputOpt);
-            var mode = parseResult.GetValue(modeOpt) ?? "per-feature";
+            var mode = parseResult.GetValue(modeOpt) ?? FunctionPerFeatureMode;
+            var artifactLayout = parseResult.GetValue(artifactLayoutOpt) ?? SharedArtifactLayout;
             var configuration = parseResult.GetValue(configurationOpt) ?? "Release";
             var lambdaRuntime = parseResult.GetValue(lambdaRuntimeOpt) ?? "provided.al2023";
             var rid = parseResult.GetValue(ridOpt);
@@ -80,7 +90,7 @@ internal static class PackageAwsLambdaCommand
 
             try
             {
-                await RunAsync(project, output, mode, configuration, lambdaRuntime, rid, selfContained, skipPublish, force, ct).ConfigureAwait(false);
+                await RunAsync(project, output, mode, artifactLayout, configuration, lambdaRuntime, rid, selfContained, skipPublish, force, ct).ConfigureAwait(false);
                 return 0;
             }
             catch (CliException ex)
@@ -97,6 +107,7 @@ internal static class PackageAwsLambdaCommand
         FileInfo? project,
         DirectoryInfo? output,
         string mode,
+        string artifactLayout,
         string configuration,
         string lambdaRuntime,
         string? rid,
@@ -105,9 +116,19 @@ internal static class PackageAwsLambdaCommand
         bool force,
         CancellationToken ct)
     {
-        if (!string.Equals(mode, "per-feature", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(mode, FunctionPerFeatureMode, StringComparison.OrdinalIgnoreCase))
         {
-            throw new CliException("Only `slice package aws-lambda --mode per-feature` is supported. Use `dotnet publish` for hosted Lambda packages.");
+            throw new CliException("Only `slice package aws-lambda --mode function-per-feature --artifact-layout shared` is supported. Use `dotnet publish` for hosted Lambda packages.");
+        }
+
+        if (!string.Equals(artifactLayout, SharedArtifactLayout, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(artifactLayout, "per-feature", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new CliException("Lambda artifact layout 'per-feature' is not implemented yet. Use `--artifact-layout shared`.");
+            }
+
+            throw new CliException("Only `--artifact-layout shared` is supported.");
         }
 
         var ctx = ProjectContextDiscovery.Discover(project);
@@ -115,22 +136,22 @@ internal static class PackageAwsLambdaCommand
         RouteCatalog.WriteAggregatedRouteNotice(discovery);
         if (!discovery.HasGeneratedMetadata)
         {
-            throw new CliException("Lambda per-feature packaging requires generated route metadata. Build the project before running this command.");
+            throw new CliException("Lambda function-per-feature packaging requires generated route metadata. Build the project before running this command.");
         }
 
-        if (!discovery.HasLambdaPerFunctionHandlers)
+        if (!discovery.HasLambdaFunctionPerFeatureHandlers)
         {
             throw new CliException(
-                "Lambda per-feature handlers were not found in the built project. " +
-                "Reference Slice.Lambda.PerFunction and add [assembly: LambdaPerFunction(...)] to opt in.");
+                "Lambda function-per-feature handlers were not found in the built project. " +
+                "Reference Slice.Lambda.FunctionPerFeature and add [assembly: LambdaFunctionPerFeature(...)] to opt in.");
         }
 
         var eligible = discovery.Routes
-            .Where(IsEmittedLambdaPerFeatureRoute)
+            .Where(IsEmittedLambdaFunctionPerFeatureRoute)
             .ToArray();
         if (eligible.Length == 0)
         {
-            throw new CliException("No routes are eligible for Lambda per-feature packaging.");
+            throw new CliException("No routes are eligible for Lambda function-per-feature packaging.");
         }
 
         var outputDir = output ?? new DirectoryInfo(Path.Combine(ctx.ProjectDirectory.FullName, "artifacts", "aws-lambda"));
@@ -153,7 +174,7 @@ internal static class PackageAwsLambdaCommand
         await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions), ct).ConfigureAwait(false);
 
         Console.WriteLine($"Generated {manifestPath}");
-        Console.WriteLine($"  per-feature package — {eligible.Length} handler(s), publish: {publishDir}");
+        Console.WriteLine($"  function-per-feature package — {eligible.Length} handler(s), artifact layout: {SharedArtifactLayout}, publish: {publishDir}");
     }
 
     private static async Task RunDotnetPublishAsync(
@@ -228,11 +249,12 @@ internal static class PackageAwsLambdaCommand
             route.FeatureType,
             route.Method,
             route.Pattern,
-            route.LambdaPerFeatureHandler!,
+            route.LambdaFunctionPerFeatureHandler!,
             "publish")).ToArray();
 
         return new LambdaPackageManifest(
-            "per-feature",
+            FunctionPerFeatureMode,
+            SharedArtifactLayout,
             ctx.AssemblyName,
             lambdaRuntime,
             configuration,
@@ -243,15 +265,16 @@ internal static class PackageAwsLambdaCommand
             functions);
     }
 
-    private static bool IsEmittedLambdaPerFeatureRoute(SliceRouteInfo route)
-        => route.LambdaPerFeatureHandler is not null
+    private static bool IsEmittedLambdaFunctionPerFeatureRoute(SliceRouteInfo route)
+        => route.LambdaFunctionPerFeatureHandler is not null
            && string.Equals(
-               RouteTargetCapabilities.Classify(route).LambdaPerFeature.Status,
+               RouteTargetCapabilities.Classify(route).LambdaFunctionPerFeature.Status,
                RouteTargetCapabilities.Eligible,
                StringComparison.OrdinalIgnoreCase);
 
     private sealed record LambdaPackageManifest(
         string Mode,
+        string ArtifactLayout,
         string AssemblyName,
         string LambdaRuntime,
         string Configuration,

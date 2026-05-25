@@ -1,6 +1,6 @@
 using Amazon.Lambda.Core;
 
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
 /// Creates cancellation sources for Lambda invocations.

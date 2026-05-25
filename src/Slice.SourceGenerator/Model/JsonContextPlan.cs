@@ -69,7 +69,7 @@ internal sealed class JsonContextPlan : IEquatable<JsonContextPlan>
 internal enum JsonContextTarget
 {
     Wasi,
-    LambdaPerFeature,
+    LambdaFunctionPerFeature,
 }
 
 internal readonly record struct JsonRootType(string TypeFqn);
@@ -87,30 +87,30 @@ internal readonly record struct JsonContextOverrideCandidate(
     DiagnosticLocationModel Location,
     bool InheritsFromJsonSerializerContext,
     bool HasWasiTarget,
-    bool HasLambdaPerFeatureTarget);
+    bool HasLambdaFunctionPerFeatureTarget);
 
 internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
 {
     public JsonContextOverrides(
         string? wasiContextFqn,
-        string? lambdaPerFeatureContextFqn,
+        string? lambdaFunctionPerFeatureContextFqn,
         ImmutableArray<EquatableDiagnostic> diagnostics)
     {
         WasiContextFqn = wasiContextFqn;
-        LambdaPerFeatureContextFqn = lambdaPerFeatureContextFqn;
+        LambdaFunctionPerFeatureContextFqn = lambdaFunctionPerFeatureContextFqn;
         Diagnostics = diagnostics;
     }
 
     public string? WasiContextFqn { get; }
 
-    public string? LambdaPerFeatureContextFqn { get; }
+    public string? LambdaFunctionPerFeatureContextFqn { get; }
 
     public ImmutableArray<EquatableDiagnostic> Diagnostics { get; }
 
     public bool Equals(JsonContextOverrides? other)
         => other is not null
            && string.Equals(WasiContextFqn, other.WasiContextFqn, StringComparison.Ordinal)
-           && string.Equals(LambdaPerFeatureContextFqn, other.LambdaPerFeatureContextFqn, StringComparison.Ordinal)
+           && string.Equals(LambdaFunctionPerFeatureContextFqn, other.LambdaFunctionPerFeatureContextFqn, StringComparison.Ordinal)
            && Diagnostics.SequenceEqual(other.Diagnostics);
 
     public override bool Equals(object? obj) => Equals(obj as JsonContextOverrides);
@@ -120,7 +120,7 @@ internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
         unchecked
         {
             var hash = WasiContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(WasiContextFqn);
-            hash = (hash * 31) + (LambdaPerFeatureContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(LambdaPerFeatureContextFqn));
+            hash = (hash * 31) + (LambdaFunctionPerFeatureContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(LambdaFunctionPerFeatureContextFqn));
             foreach (var diagnostic in Diagnostics)
             {
                 hash = (hash * 31) + diagnostic.GetHashCode();

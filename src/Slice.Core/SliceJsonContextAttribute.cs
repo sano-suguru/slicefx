@@ -27,7 +27,7 @@ public enum SliceJsonTarget
     Wasi = 1,
 
     /// <summary>
-    /// Use the marked context for generated Lambda per-feature handlers.
+    /// Use the marked context for generated Lambda function-per-feature handlers.
     /// </summary>
-    LambdaPerFeature = 2,
+    LambdaFunctionPerFeature = 2,
 }

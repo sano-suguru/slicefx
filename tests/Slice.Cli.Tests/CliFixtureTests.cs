@@ -131,8 +131,8 @@ public class CliFixtureTests
 
         Assert.Contains("RequireApiKeyFilter<AdminPolicy>", route.Filters);
         Assert.Equal(RouteCatalog.PortabilityPartial, route.Portability);
-        Assert.Equal(RouteCatalog.LambdaIneligible, route.LambdaPerFeatureStatus);
-        Assert.Equal("endpoint filters require the ASP.NET endpoint filter pipeline", route.LambdaPerFeatureReason);
+        Assert.Equal(RouteCatalog.LambdaIneligible, route.LambdaFunctionPerFeatureStatus);
+        Assert.Equal("endpoint filters require the ASP.NET endpoint filter pipeline", route.LambdaFunctionPerFeatureReason);
     }
 
     [Fact]
@@ -211,10 +211,10 @@ public class CliFixtureTests
         };
 
         Assert.Equal(RouteTargetCapabilities.Eligible, RouteTargetCapabilities.Classify(aspNetOnlyRoute).LambdaHostedApp.Status);
-        Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(aspNetOnlyRoute).LambdaPerFeature.Status);
-        Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(typedAspNetRoute).LambdaPerFeature.Status);
-        Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(filteredRoute).LambdaPerFeature.Status);
-        Assert.Equal(RouteTargetCapabilities.Eligible, RouteTargetCapabilities.Classify(portableRoute).LambdaPerFeature.Status);
+        Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(aspNetOnlyRoute).LambdaFunctionPerFeature.Status);
+        Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(typedAspNetRoute).LambdaFunctionPerFeature.Status);
+        Assert.Equal(RouteTargetCapabilities.Ineligible, RouteTargetCapabilities.Classify(filteredRoute).LambdaFunctionPerFeature.Status);
+        Assert.Equal(RouteTargetCapabilities.Eligible, RouteTargetCapabilities.Classify(portableRoute).LambdaFunctionPerFeature.Status);
 
         var generatedRoute = portableRoute with
         {
@@ -388,11 +388,11 @@ public class CliFixtureTests
                     string? portabilityReason,
                     string? serializedFilterTypes,
                     string? serializedParameters,
-                    string? lambdaPerFeatureStatus,
-                    string? lambdaPerFeatureReason,
-                    string? lambdaPerFeatureHandlerAssembly,
-                    string? lambdaPerFeatureHandlerType,
-                    string? lambdaPerFeatureHandlerMethod)
+                    string? lambdaFunctionPerFeatureStatus,
+                    string? lambdaFunctionPerFeatureReason,
+                    string? lambdaFunctionPerFeatureHandlerAssembly,
+                    string? lambdaFunctionPerFeatureHandlerType,
+                    string? lambdaFunctionPerFeatureHandlerMethod)
                 {
                 }
             }
@@ -1361,7 +1361,17 @@ public class CliFixtureTests
     }
 
     [Fact]
-    public async Task Manifest_aws_lambda_per_feature_mode_emits_eligible_functions_and_exclusions()
+    public async Task Manifest_aws_lambda_rejects_unimplemented_per_feature_artifact_layout()
+    {
+        var exitCode = await ManifestAwsLambdaCommand.Build()
+            .Parse(["--mode", "function-per-feature", "--artifact-layout", "per-feature"])
+            .InvokeAsync();
+
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public async Task Manifest_aws_lambda_function_per_feature_mode_emits_eligible_functions_and_exclusions()
     {
         using var fixture = CliProjectFixture.Create(
             "lambda-per-feature-app",
@@ -1373,7 +1383,7 @@ public class CliFixtureTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
-                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.FunctionPerFeature", "Slice.Lambda.FunctionPerFeature.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
               </ItemGroup>
             </Project>
@@ -1385,13 +1395,13 @@ public class CliFixtureTests
             using System.Text.Json;
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace Lambda.PerFeature.App;
 
-            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaPerFeature)]
+            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaFunctionPerFeature)]
 
             public sealed class LambdaJsonContext : JsonSerializerContext
             {
@@ -1447,23 +1457,24 @@ public class CliFixtureTests
 
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "per-feature"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature", "--artifact-layout", "shared"])
             .InvokeAsync();
 
         Assert.Equal(0, exitCode);
         var yaml = await File.ReadAllTextAsync(outputFile);
 
-        Assert.Contains("Per-feature mode: each eligible [Feature] becomes an independent Lambda function.", yaml);
+        Assert.Contains("Function-per-feature mode: each eligible [Feature] becomes a separate Lambda function resource.", yaml);
+        Assert.Contains("Artifact layout: shared. Multiple functions point at the same publish artifact", yaml);
         Assert.Contains("HealthGetHealthFunction:", yaml);
         Assert.Contains("HealthGetHealthEvent:", yaml);
-        Assert.Contains("Handler: 'lambda-per-feature-app::Slice.lambda_per_feature_app_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
+        Assert.Contains("Handler: 'lambda-per-feature-app::Slice.lambda_per_feature_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth'", yaml);
         Assert.Contains("Path: '/health'", yaml);
         Assert.DoesNotContain("HealthGetFilteredHealthFunction:", yaml);
         Assert.Contains("# - Health.GetFilteredHealth: endpoint filters require the ASP.NET endpoint filter pipeline", yaml);
     }
 
     [Fact]
-    public async Task Manifest_aws_lambda_per_feature_uses_referenced_feature_assembly_handlers()
+    public async Task Manifest_aws_lambda_function_per_feature_uses_referenced_feature_assembly_handlers()
     {
         using var fixture = CliProjectFixture.Create(
             "host-app",
@@ -1502,7 +1513,7 @@ public class CliFixtureTests
               <ItemGroup>
                 <FrameworkReference Include="Microsoft.AspNetCore.App" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
-                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.FunctionPerFeature", "Slice.Lambda.FunctionPerFeature.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
               </ItemGroup>
             </Project>
@@ -1514,15 +1525,15 @@ public class CliFixtureTests
             using System.Text.Json;
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace Feature.Lib;
 
             public sealed class Marker;
 
-            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaPerFeature)]
+            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaFunctionPerFeature)]
 
             public sealed class LambdaJsonContext : JsonSerializerContext
             {
@@ -1566,18 +1577,18 @@ public class CliFixtureTests
 
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "per-feature"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature", "--artifact-layout", "shared"])
             .InvokeAsync();
 
         Assert.Equal(0, exitCode);
         var yaml = await File.ReadAllTextAsync(outputFile);
 
-        Assert.Contains("Handler: 'feature-lib::Slice.feature_lib_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
-        Assert.DoesNotContain("Handler: 'host-app::Slice.host_app_SliceLambdaPerFunctionHandlers::Health_GetHealth'", yaml);
+        Assert.Contains("Handler: 'feature-lib::Slice.feature_lib_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth'", yaml);
+        Assert.DoesNotContain("Handler: 'host-app::Slice.host_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth'", yaml);
     }
 
     [Fact]
-    public async Task Package_aws_lambda_per_feature_writes_artifact_manifest()
+    public async Task Package_aws_lambda_function_per_feature_writes_artifact_manifest()
     {
         using var fixture = CliProjectFixture.Create(
             "lambda-package-app",
@@ -1589,7 +1600,7 @@ public class CliFixtureTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Core", "Slice.Core.csproj")}}" />
-                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.PerFunction", "Slice.Lambda.PerFunction.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.Lambda.FunctionPerFeature", "Slice.Lambda.FunctionPerFeature.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "Slice.SourceGenerator", "Slice.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
               </ItemGroup>
             </Project>
@@ -1601,13 +1612,13 @@ public class CliFixtureTests
             using System.Text.Json;
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace Lambda.Package.App;
 
-            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaPerFeature)]
+            [Slice.SliceJsonContext(Slice.SliceJsonTarget.LambdaFunctionPerFeature)]
 
             public sealed class LambdaJsonContext : JsonSerializerContext
             {
@@ -1641,7 +1652,7 @@ public class CliFixtureTests
 
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "per-feature", "--skip-publish"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "shared", "--skip-publish"])
             .InvokeAsync();
 
         Assert.Equal(0, exitCode);
@@ -1649,11 +1660,22 @@ public class CliFixtureTests
         Assert.True(File.Exists(manifestPath));
 
         var json = await File.ReadAllTextAsync(manifestPath);
-        Assert.Contains("\"mode\": \"per-feature\"", json);
+        Assert.Contains("\"mode\": \"function-per-feature\"", json);
+        Assert.Contains("\"artifactLayout\": \"shared\"", json);
         Assert.Contains("\"publishDirectory\": \"publish\"", json);
         Assert.Contains("\"endpointName\": \"Health.GetHealth\"", json);
-        Assert.Contains("lambda-package-app::Slice.lambda_package_app_SliceLambdaPerFunctionHandlers::Health_GetHealth", json);
+        Assert.Contains("lambda-package-app::Slice.lambda_package_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth", json);
         Assert.DoesNotContain(outputDir, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_rejects_unimplemented_per_feature_artifact_layout()
+    {
+        var exitCode = await PackageAwsLambdaCommand.Build()
+            .Parse(["--mode", "function-per-feature", "--artifact-layout", "per-feature"])
+            .InvokeAsync();
+
+        Assert.Equal(1, exitCode);
     }
 
     [Fact]

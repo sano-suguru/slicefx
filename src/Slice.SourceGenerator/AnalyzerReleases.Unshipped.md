@@ -12,12 +12,12 @@ SLICE008 | Slice | Info | UnsupportedReturnTypeForWasi
 SLICE009 | Slice | Warning | MissingWasiJsonContext
 SLICE010 | Slice | Warning | FilterOrderViolation
 SLICE011 | Slice | Warning | UnsupportedValidationForWasi
-SLICE012 | Slice | Info | UnsupportedReturnTypeForLambdaPerFeature
-SLICE013 | Slice | Info | UnsupportedFilterForLambdaPerFeature
+SLICE012 | Slice | Info | UnsupportedReturnTypeForLambdaFunctionPerFeature
+SLICE013 | Slice | Info | UnsupportedFilterForLambdaFunctionPerFeature
 SLICE014 | Slice | Warning | MissingLambdaJsonContext
-SLICE015 | Slice | Warning | UnsupportedParameterForLambdaPerFeature
-SLICE016 | Slice | Warning | UnsupportedValidationForLambdaPerFeature
-SLICE017 | Slice | Error | InvalidLambdaPerFeatureStartupType
+SLICE015 | Slice | Warning | UnsupportedParameterForLambdaFunctionPerFeature
+SLICE016 | Slice | Warning | UnsupportedValidationForLambdaFunctionPerFeature
+SLICE017 | Slice | Error | InvalidLambdaFunctionPerFeatureStartupType
 SLICE018 | Slice | Error | DuplicateJsonContextOverride
 SLICE019 | Slice | Error | InvalidJsonContextOverride
 SLICE020 | Slice | Error | InvalidSliceValidator

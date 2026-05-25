@@ -22,11 +22,11 @@ public sealed class SliceFeatureRouteAttribute : Attribute
         string? portabilityReason,
         string? serializedFilterTypes,
         string? serializedParameters,
-        string? lambdaPerFeatureStatus,
-        string? lambdaPerFeatureReason,
-        string? lambdaPerFeatureHandlerAssembly,
-        string? lambdaPerFeatureHandlerType,
-        string? lambdaPerFeatureHandlerMethod,
+        string? lambdaFunctionPerFeatureStatus,
+        string? lambdaFunctionPerFeatureReason,
+        string? lambdaFunctionPerFeatureHandlerAssembly,
+        string? lambdaFunctionPerFeatureHandlerType,
+        string? lambdaFunctionPerFeatureHandlerMethod,
         string manifestSchemaVersion,
         string? wasiDispatchStatus,
         string? wasiDispatchReason)
@@ -43,11 +43,11 @@ public sealed class SliceFeatureRouteAttribute : Attribute
         PortabilityReason = portabilityReason;
         SerializedFilterTypes = serializedFilterTypes;
         SerializedParameters = serializedParameters;
-        LambdaPerFeatureStatus = lambdaPerFeatureStatus;
-        LambdaPerFeatureReason = lambdaPerFeatureReason;
-        LambdaPerFeatureHandlerAssembly = lambdaPerFeatureHandlerAssembly;
-        LambdaPerFeatureHandlerType = lambdaPerFeatureHandlerType;
-        LambdaPerFeatureHandlerMethod = lambdaPerFeatureHandlerMethod;
+        LambdaFunctionPerFeatureStatus = lambdaFunctionPerFeatureStatus;
+        LambdaFunctionPerFeatureReason = lambdaFunctionPerFeatureReason;
+        LambdaFunctionPerFeatureHandlerAssembly = lambdaFunctionPerFeatureHandlerAssembly;
+        LambdaFunctionPerFeatureHandlerType = lambdaFunctionPerFeatureHandlerType;
+        LambdaFunctionPerFeatureHandlerMethod = lambdaFunctionPerFeatureHandlerMethod;
         ManifestSchemaVersion = manifestSchemaVersion;
         WasiDispatchStatus = wasiDispatchStatus;
         WasiDispatchReason = wasiDispatchReason;
@@ -114,29 +114,29 @@ public sealed class SliceFeatureRouteAttribute : Attribute
     public string? SerializedParameters { get; }
 
     /// <summary>
-    /// Gets the Lambda per-feature eligibility status.
+    /// Gets the Lambda function-per-feature eligibility status.
     /// </summary>
-    public string? LambdaPerFeatureStatus { get; }
+    public string? LambdaFunctionPerFeatureStatus { get; }
 
     /// <summary>
-    /// Gets the reason for the Lambda per-feature eligibility status when one exists.
+    /// Gets the reason for the Lambda function-per-feature eligibility status when one exists.
     /// </summary>
-    public string? LambdaPerFeatureReason { get; }
+    public string? LambdaFunctionPerFeatureReason { get; }
 
     /// <summary>
-    /// Gets the assembly that contains the generated Lambda per-feature handler when emitted.
+    /// Gets the assembly that contains the generated Lambda function-per-feature handler when emitted.
     /// </summary>
-    public string? LambdaPerFeatureHandlerAssembly { get; }
+    public string? LambdaFunctionPerFeatureHandlerAssembly { get; }
 
     /// <summary>
-    /// Gets the generated Lambda per-feature handler type when emitted.
+    /// Gets the generated Lambda function-per-feature handler type when emitted.
     /// </summary>
-    public string? LambdaPerFeatureHandlerType { get; }
+    public string? LambdaFunctionPerFeatureHandlerType { get; }
 
     /// <summary>
-    /// Gets the generated Lambda per-feature handler method when emitted.
+    /// Gets the generated Lambda function-per-feature handler method when emitted.
     /// </summary>
-    public string? LambdaPerFeatureHandlerMethod { get; }
+    public string? LambdaFunctionPerFeatureHandlerMethod { get; }
 
     /// <summary>
     /// Gets the generated route manifest schema version.

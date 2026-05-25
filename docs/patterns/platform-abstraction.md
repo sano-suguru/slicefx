@@ -108,4 +108,4 @@ public static class DeleteProduct
 }
 ```
 
-This feature is excluded from WASI route tables (`SLICE008`) and per-feature Lambda, but it is a full Minimal API endpoint on the ASP.NET and hosted Lambda path. Mixing `portable` and `aspnet-only` features in the same project is the expected pattern, not an error condition.
+This feature is excluded from WASI route tables (`SLICE008`) and function-per-feature Lambda, but it is a full Minimal API endpoint on the ASP.NET and hosted Lambda path. Mixing `portable` and `aspnet-only` features in the same project is the expected pattern, not an error condition.

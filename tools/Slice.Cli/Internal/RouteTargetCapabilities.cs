@@ -14,16 +14,16 @@ internal static class RouteTargetCapabilities
                 ? new RouteCapability(Unknown, "WASI dispatch metadata missing")
                 : new RouteCapability(route.Portability, route.PortabilityReason);
         var lambdaHostedApp = new RouteCapability(Eligible, null);
-        var lambdaPerFeature = ClassifyLambdaPerFeature(route);
+        var lambdaFunctionPerFeature = ClassifyLambdaFunctionPerFeature(route);
 
-        return new RouteCapabilities(wasi, lambdaHostedApp, lambdaPerFeature);
+        return new RouteCapabilities(wasi, lambdaHostedApp, lambdaFunctionPerFeature);
     }
 
-    private static RouteCapability ClassifyLambdaPerFeature(SliceRouteInfo route)
+    private static RouteCapability ClassifyLambdaFunctionPerFeature(SliceRouteInfo route)
     {
-        if (!string.IsNullOrWhiteSpace(route.LambdaPerFeatureStatus))
+        if (!string.IsNullOrWhiteSpace(route.LambdaFunctionPerFeatureStatus))
         {
-            return new RouteCapability(route.LambdaPerFeatureStatus, route.LambdaPerFeatureReason);
+            return new RouteCapability(route.LambdaFunctionPerFeatureStatus, route.LambdaFunctionPerFeatureReason);
         }
 
         if (string.IsNullOrWhiteSpace(route.ReturnType))
@@ -37,13 +37,13 @@ internal static class RouteTargetCapabilities
             return new RouteCapability(Ineligible, route.PortabilityReason ?? "returns ASP.NET IResult");
         }
 
-        return RouteCatalog.ClassifyLambdaPerFeature(route.ReturnType, route.Filters, route.Parameters, route.Pattern);
+        return RouteCatalog.ClassifyLambdaFunctionPerFeature(route.ReturnType, route.Filters, route.Parameters, route.Pattern);
     }
 }
 
 internal sealed record RouteCapabilities(
     RouteCapability WasiDispatch,
     RouteCapability LambdaHostedApp,
-    RouteCapability LambdaPerFeature);
+    RouteCapability LambdaFunctionPerFeature);
 
 internal sealed record RouteCapability(string Status, string? Reason);

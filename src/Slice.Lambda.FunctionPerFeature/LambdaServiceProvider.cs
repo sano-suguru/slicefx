@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
-/// Builds service providers for generated per-feature Lambda handlers.
+/// Builds service providers for generated Lambda function-per-feature handlers.
 /// </summary>
 public static class LambdaServiceProvider
 {

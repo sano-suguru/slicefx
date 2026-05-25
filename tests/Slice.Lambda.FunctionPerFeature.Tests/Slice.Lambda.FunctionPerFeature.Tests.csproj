@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Slice.Lambda.PerFunction\Slice.Lambda.PerFunction.csproj" />
+    <ProjectReference Include="..\..\src\Slice.Lambda.FunctionPerFeature\Slice.Lambda.FunctionPerFeature.csproj" />
   </ItemGroup>
 
 </Project>

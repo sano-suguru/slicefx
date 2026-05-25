@@ -1,10 +1,10 @@
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
-/// Provides request, service, Lambda, and cancellation state to generated per-feature handlers.
+/// Provides request, service, Lambda, and cancellation state to generated function-per-feature handlers.
 /// </summary>
 public sealed class LambdaInvocationContext(
     APIGatewayHttpApiV2ProxyRequest request,

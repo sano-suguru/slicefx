@@ -151,29 +151,29 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a feature return type cannot be used by Lambda per-feature handlers.
+    /// Diagnostic reported when a feature return type cannot be used by Lambda function-per-feature handlers.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaPerFeature = new(
+    public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaFunctionPerFeature = new(
         "SLICE012",
-        "Return type not supported in Lambda per-feature path",
-        "Feature '{0}': return type '{1}' is not supported in Lambda per-feature handlers and the feature will be excluded. Use a POCO, Task<T>, ValueTask<T>, or APIGatewayHttpApiV2ProxyResponse return type.",
+        "Return type not supported in Lambda function-per-feature path",
+        "Feature '{0}': return type '{1}' is not supported in Lambda function-per-feature handlers and the feature will be excluded. Use a POCO, Task<T>, ValueTask<T>, or APIGatewayHttpApiV2ProxyResponse return type.",
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a feature uses endpoint filters unsupported by Lambda per-feature handlers.
+    /// Diagnostic reported when a feature uses endpoint filters unsupported by Lambda function-per-feature handlers.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnsupportedFilterForLambdaPerFeature = new(
+    public static readonly DiagnosticDescriptor UnsupportedFilterForLambdaFunctionPerFeature = new(
         "SLICE013",
-        "Endpoint filter not supported in Lambda per-feature path",
-        "Feature '{0}' uses endpoint filters and will be excluded from Lambda per-feature handlers",
+        "Endpoint filter not supported in Lambda function-per-feature path",
+        "Feature '{0}' uses endpoint filters and will be excluded from Lambda function-per-feature handlers",
         Category,
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when Lambda per-feature JSON metadata cannot be produced safely.
+    /// Diagnostic reported when Lambda function-per-feature JSON metadata cannot be produced safely.
     /// </summary>
     public static readonly DiagnosticDescriptor MissingLambdaJsonContext = new(
         "SLICE014",
@@ -184,34 +184,34 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a route or query parameter type is unsupported by Lambda per-feature binding.
+    /// Diagnostic reported when a route or query parameter type is unsupported by Lambda function-per-feature binding.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnsupportedParameterForLambdaPerFeature = new(
+    public static readonly DiagnosticDescriptor UnsupportedParameterForLambdaFunctionPerFeature = new(
         "SLICE015",
-        "Parameter type not supported in Lambda per-feature path",
-        "Feature '{0}': parameter '{1}' of type '{2}' cannot be bound by Lambda per-feature handlers and the feature will be excluded",
+        "Parameter type not supported in Lambda function-per-feature path",
+        "Feature '{0}': parameter '{1}' of type '{2}' cannot be bound by Lambda function-per-feature handlers and the feature will be excluded",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a Lambda per-feature route would need reflection-based DataAnnotations validation.
+    /// Diagnostic reported when a Lambda function-per-feature route would need reflection-based DataAnnotations validation.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnsupportedValidationForLambdaPerFeature = new(
+    public static readonly DiagnosticDescriptor UnsupportedValidationForLambdaFunctionPerFeature = new(
         "SLICE016",
-        "DataAnnotations validation is not supported in Lambda per-feature path",
-        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda per-feature handlers. Use supported validation attributes or ISliceValidator<T>.",
+        "DataAnnotations validation is not supported in Lambda function-per-feature path",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda function-per-feature handlers. Use supported validation attributes or ISliceValidator<T>.",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a Lambda per-feature startup type cannot be constructed by generated handlers.
+    /// Diagnostic reported when a Lambda function-per-feature startup type cannot be constructed by generated handlers.
     /// </summary>
-    public static readonly DiagnosticDescriptor InvalidLambdaPerFeatureStartupType = new(
+    public static readonly DiagnosticDescriptor InvalidLambdaFunctionPerFeatureStartupType = new(
         "SLICE017",
-        "Lambda per-feature startup type is invalid",
-        "Lambda per-feature startup type '{0}' must implement ILambdaPerFunctionStartup and define a public parameterless constructor",
+        "Lambda function-per-feature startup type is invalid",
+        "Lambda function-per-feature startup type '{0}' must implement ILambdaFunctionPerFeatureStartup and define a public parameterless constructor",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

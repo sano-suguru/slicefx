@@ -10,7 +10,7 @@ internal static class RouteManifestEmitter
         ImmutableArray<ValidatorModel> validators,
         string assemblyName,
         ImmutableArray<ReferencedSliceModule> referencedModules,
-        bool emitLambdaPerFunctionHandlers,
+        bool emitLambdaFunctionPerFeatureHandlers,
         JsonContextPlan wasiJsonContextPlan,
         JsonContextPlan lambdaJsonContextPlan)
     {
@@ -18,7 +18,7 @@ internal static class RouteManifestEmitter
         var routes = BuildRouteManifestEntries(
             features,
             assemblyName,
-            emitLambdaPerFunctionHandlers,
+            emitLambdaFunctionPerFeatureHandlers,
             wasiJsonContextPlan,
             lambdaJsonContextPlan);
         var sb = new StringBuilder();
@@ -123,11 +123,11 @@ internal static class RouteManifestEmitter
         sb.AppendLine("        string? PortabilityReason,");
         sb.AppendLine("        string? WasiDispatchStatus,");
         sb.AppendLine("        string? WasiDispatchReason,");
-        sb.AppendLine("        string? LambdaPerFeatureStatus,");
-        sb.AppendLine("        string? LambdaPerFeatureReason,");
-        sb.AppendLine("        string? LambdaPerFeatureHandlerAssembly,");
-        sb.AppendLine("        string? LambdaPerFeatureHandlerType,");
-        sb.AppendLine("        string? LambdaPerFeatureHandlerMethod,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureStatus,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureReason,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureHandlerAssembly,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureHandlerType,");
+        sb.AppendLine("        string? LambdaFunctionPerFeatureHandlerMethod,");
         sb.AppendLine("        global::System.Collections.Generic.IReadOnlyList<string> FilterTypes);");
     }
 
@@ -169,7 +169,7 @@ internal static class RouteManifestEmitter
     private static ImmutableArray<RouteManifestEntry> BuildRouteManifestEntries(
         ImmutableArray<FeatureModel> features,
         string assemblyName,
-        bool emitLambdaPerFunctionHandlers,
+        bool emitLambdaFunctionPerFeatureHandlers,
         JsonContextPlan wasiJsonContextPlan,
         JsonContextPlan lambdaJsonContextPlan)
     {
@@ -180,7 +180,7 @@ internal static class RouteManifestEmitter
             var wasiStatus = JsonContextPlanner.StatusForWasi(feature, wasiJsonContextPlan);
             var wasiReason = JsonContextPlanner.ReasonForWasi(feature, wasiJsonContextPlan);
             var (lambdaStatus, lambdaReason, lambdaHandlerAssembly, lambdaHandlerType, lambdaHandlerMethod) =
-                GetEmittedLambdaMetadata(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextPlan);
+                GetEmittedLambdaMetadata(feature, assemblyName, emitLambdaFunctionPerFeatureHandlers, lambdaJsonContextPlan);
             routes.Add(new RouteManifestEntry(
                 feature,
                 portability,
@@ -244,41 +244,41 @@ internal static class RouteManifestEmitter
     private static (string? Status, string? Reason, string? HandlerAssembly, string? HandlerType, string? HandlerMethod) GetEmittedLambdaMetadata(
         FeatureModel feature,
         string assemblyName,
-        bool emitLambdaPerFunctionHandlers,
+        bool emitLambdaFunctionPerFeatureHandlers,
         JsonContextPlan lambdaJsonContextPlan)
     {
-        if (!emitLambdaPerFunctionHandlers)
+        if (!emitLambdaFunctionPerFeatureHandlers)
         {
             return (null, null, null, null, null);
         }
 
-        var lambda = ClassifyLambdaPerFeature(feature, assemblyName, emitLambdaPerFunctionHandlers, lambdaJsonContextPlan);
+        var lambda = ClassifyLambdaFunctionPerFeature(feature, assemblyName, emitLambdaFunctionPerFeatureHandlers, lambdaJsonContextPlan);
         return (lambda.Status, lambda.Reason, lambda.HandlerAssembly, lambda.HandlerType, lambda.HandlerMethod);
     }
 
-    internal static LambdaPerFeatureEligibility ClassifyLambdaPerFeature(
+    internal static LambdaFunctionPerFeatureEligibility ClassifyLambdaFunctionPerFeature(
         FeatureModel feature,
         string assemblyName,
-        bool emitLambdaPerFunctionHandlers,
+        bool emitLambdaFunctionPerFeatureHandlers,
         JsonContextPlan lambdaJsonContextPlan)
     {
         var reason = JsonContextPlanner.GetLambdaStructuralSkipReason(feature)
             ?? JsonContextPlanner.FindExclusion(lambdaJsonContextPlan, feature)?.Reason;
         if (reason is not null)
         {
-            return LambdaPerFeatureEligibility.Ineligible(reason);
+            return LambdaFunctionPerFeatureEligibility.Ineligible(reason);
         }
 
-        if (!emitLambdaPerFunctionHandlers)
+        if (!emitLambdaFunctionPerFeatureHandlers)
         {
-            return new LambdaPerFeatureEligibility(SourceGenerationHelpers.ManifestEligible, null, null, null, null);
+            return new LambdaFunctionPerFeatureEligibility(SourceGenerationHelpers.ManifestEligible, null, null, null, null);
         }
 
-        return new LambdaPerFeatureEligibility(
+        return new LambdaFunctionPerFeatureEligibility(
             SourceGenerationHelpers.ManifestEligible,
             null,
             assemblyName,
-            $"Slice.{GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaPerFunctionHandlers")}",
+            $"Slice.{GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaFunctionPerFeatureHandlers")}",
             SanitizeIdentifier(feature.EndpointName));
     }
 
@@ -341,13 +341,13 @@ internal readonly record struct RouteManifestEntry(
     string? LambdaHandlerType,
     string? LambdaHandlerMethod);
 
-internal readonly record struct LambdaPerFeatureEligibility(
+internal readonly record struct LambdaFunctionPerFeatureEligibility(
     string Status,
     string? Reason,
     string? HandlerAssembly,
     string? HandlerType,
     string? HandlerMethod)
 {
-    internal static LambdaPerFeatureEligibility Ineligible(string reason)
+    internal static LambdaFunctionPerFeatureEligibility Ineligible(string reason)
         => new(SourceGenerationHelpers.ManifestIneligible, reason, null, null, null);
 }

@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
 /// Describes the result of binding a Lambda scalar argument.

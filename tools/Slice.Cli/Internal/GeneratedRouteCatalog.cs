@@ -15,7 +15,7 @@ internal static class GeneratedRouteCatalog
         }
 
         var routes = new List<SliceRouteInfo>();
-        var hasLambdaPerFunctionHandlers = false;
+        var hasLambdaFunctionPerFeatureHandlers = false;
         var primaryAssemblyName = Path.GetFileNameWithoutExtension(assemblyFiles[0].Name);
         foreach (var assemblyFile in assemblyFiles)
         {
@@ -23,7 +23,7 @@ internal static class GeneratedRouteCatalog
             {
                 var metadata = ReadMetadata(assemblyFile);
                 routes.AddRange(metadata.Routes);
-                hasLambdaPerFunctionHandlers |= metadata.LambdaPerFunctionHandlerTypeName is not null;
+                hasLambdaFunctionPerFeatureHandlers |= metadata.LambdaFunctionPerFeatureHandlerTypeName is not null;
             }
             catch (UnsupportedRouteManifestSchemaException ex)
             {
@@ -66,7 +66,7 @@ internal static class GeneratedRouteCatalog
             .DistinctBy(static route => (route.EndpointName, route.Method, route.Pattern, route.FeatureType))
             .OrderBy(static route => route.Pattern, StringComparer.Ordinal)
             .ThenBy(static route => route.Method, StringComparer.Ordinal)
-            .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)], hasLambdaPerFunctionHandlers, aggregatedSourceAssemblies);
+            .ThenBy(static route => route.EndpointName, StringComparer.Ordinal)], hasLambdaFunctionPerFeatureHandlers, aggregatedSourceAssemblies);
     }
 
     private static FileInfo[]? FindAssemblyFiles(ProjectContext ctx)
@@ -131,11 +131,11 @@ internal static class GeneratedRouteCatalog
 
         var reader = peReader.GetMetadataReader();
         var sourceAssemblyName = reader.GetString(reader.GetAssemblyDefinition().Name);
-        var lambdaHandlerTypeName = ReadLambdaPerFunctionHandlerTypeName(reader);
+        var lambdaHandlerTypeName = ReadLambdaFunctionPerFeatureHandlerTypeName(reader);
         foreach (var attributeHandle in reader.GetAssemblyDefinition().GetCustomAttributes())
         {
             var attribute = reader.GetCustomAttribute(attributeHandle);
-            if (IsLambdaPerFunctionModuleAttribute(reader, attribute))
+            if (IsLambdaFunctionPerFeatureModuleAttribute(reader, attribute))
             {
                 continue;
             }
@@ -235,8 +235,8 @@ internal static class GeneratedRouteCatalog
     private static bool IsSliceAggregatedFeatureAssemblyAttribute(MetadataReader reader, CustomAttribute attribute)
         => IsAttribute(reader, attribute, "Slice", "SliceAggregatedFeatureAssemblyAttribute", "Slice.Core");
 
-    private static bool IsLambdaPerFunctionModuleAttribute(MetadataReader reader, CustomAttribute attribute)
-        => IsAttribute(reader, attribute, "Slice.Lambda.PerFunction", "LambdaPerFunctionModuleAttribute", "Slice.Lambda.PerFunction");
+    private static bool IsLambdaFunctionPerFeatureModuleAttribute(MetadataReader reader, CustomAttribute attribute)
+        => IsAttribute(reader, attribute, "Slice.Lambda.FunctionPerFeature", "LambdaFunctionPerFeatureModuleAttribute", "Slice.Lambda.FunctionPerFeature");
 
     private static bool IsAttribute(
         MetadataReader reader,
@@ -274,12 +274,12 @@ internal static class GeneratedRouteCatalog
                   assemblyName);
     }
 
-    private static string? ReadLambdaPerFunctionHandlerTypeName(MetadataReader reader)
+    private static string? ReadLambdaFunctionPerFeatureHandlerTypeName(MetadataReader reader)
     {
         foreach (var attributeHandle in reader.GetAssemblyDefinition().GetCustomAttributes())
         {
             var attribute = reader.GetCustomAttribute(attributeHandle);
-            if (!IsLambdaPerFunctionModuleAttribute(reader, attribute))
+            if (!IsLambdaFunctionPerFeatureModuleAttribute(reader, attribute))
             {
                 continue;
             }
@@ -465,10 +465,10 @@ internal static class GeneratedRouteCatalog
 internal sealed record GeneratedRouteDiscovery(
     bool Found,
     SliceRouteInfo[] Routes,
-    bool HasLambdaPerFunctionHandlers,
+    bool HasLambdaFunctionPerFeatureHandlers,
     string[] AggregatedSourceAssemblyNames);
 
-internal sealed record GeneratedAssemblyRouteMetadata(SliceRouteInfo[] Routes, string? LambdaPerFunctionHandlerTypeName);
+internal sealed record GeneratedAssemblyRouteMetadata(SliceRouteInfo[] Routes, string? LambdaFunctionPerFeatureHandlerTypeName);
 
 internal sealed record PrimaryAssemblyMetadata(
     HashSet<string> ReferencedAssemblyNames,

@@ -2,7 +2,7 @@ using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Slice.Lambda.PerFunction.Tests;
+namespace Slice.Lambda.FunctionPerFeature.Tests;
 
 internal static class LambdaTestHelpers
 {

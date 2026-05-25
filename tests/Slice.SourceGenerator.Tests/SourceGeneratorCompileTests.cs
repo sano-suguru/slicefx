@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Slice.Lambda.PerFunction;
+using Slice.Lambda.FunctionPerFeature;
 using Slice.Wasi;
 
 namespace Slice.SourceGenerator.Tests;
@@ -680,7 +680,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_emits_lambda_per_feature_handlers_when_opted_in()
+    public void Generator_emits_lambda_function_per_feature_handlers_when_opted_in()
     {
         var source = """
             using System;
@@ -690,13 +690,13 @@ public class SourceGeneratorCompileTests
             using System.Text.Json.Serialization.Metadata;
             using Microsoft.Extensions.DependencyInjection;
             using Slice;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction(typeof(LambdaApp.LambdaStartup))]
+            [assembly: LambdaFunctionPerFeature(typeof(LambdaApp.LambdaStartup))]
 
             namespace LambdaApp
             {
-                public sealed class LambdaStartup : ILambdaPerFunctionStartup
+                public sealed class LambdaStartup : ILambdaFunctionPerFeatureStartup
                 {
                     public void ConfigureServices(IServiceCollection services)
                     {
@@ -706,7 +706,7 @@ public class SourceGeneratorCompileTests
 
                 public sealed class Clock;
 
-                [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
 
                 public sealed class LambdaJsonContext : JsonSerializerContext
                 {
@@ -749,12 +749,12 @@ public class SourceGeneratorCompileTests
         GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Contains("public static class LambdaApp_SliceLambdaPerFunctionHandlers", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("public static class LambdaApp_SliceLambdaFunctionPerFeatureHandlers", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("global::Slice.LambdaApp_SliceRegistrations.AddSliceValidatorServices(services);", lambdaSource, StringComparison.Ordinal);
         Assert.DoesNotContain("AddSliceServices(services);", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("Users_GetUser", lambdaSource, StringComparison.Ordinal);
@@ -764,7 +764,7 @@ public class SourceGeneratorCompileTests
         Assert.Contains("GetRequiredService<global::LambdaApp.Clock>()", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("LambdaResponseFactory.Ok<global::LambdaApp.Features.Users.GetUser.Response>", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("\"LambdaApp\"", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("\"Slice.LambdaApp_SliceLambdaPerFunctionHandlers\"", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("\"Slice.LambdaApp_SliceLambdaFunctionPerFeatureHandlers\"", manifestSource, StringComparison.Ordinal);
         Assert.Contains("\"Users_GetUser\"", manifestSource, StringComparison.Ordinal);
     }
 
@@ -775,9 +775,9 @@ public class SourceGeneratorCompileTests
             #nullable enable
 
             using Slice;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace LambdaQueryApp.Features.Items;
 
@@ -794,7 +794,7 @@ public class SourceGeneratorCompileTests
         GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -816,13 +816,13 @@ public class SourceGeneratorCompileTests
             using Amazon.Lambda.APIGatewayEvents;
             using Microsoft.AspNetCore.Mvc;
             using Slice;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace LambdaBindingApp
             {
-                [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
                 public sealed class LambdaJsonContext : JsonSerializerContext
                 {
                     public static LambdaJsonContext Default { get; } = new();
@@ -860,7 +860,7 @@ public class SourceGeneratorCompileTests
         GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -878,9 +878,9 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using Slice;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace MissingJsonLambdaApp.Features.Users;
 
@@ -903,7 +903,7 @@ public class SourceGeneratorCompileTests
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE014");
         Assert.Contains("\"ineligible\"", manifestSource, StringComparison.Ordinal);
         Assert.Contains("explicit [SliceJsonContext] JsonSerializerContext", manifestSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("Slice.MissingJsonLambdaApp_SliceLambdaPerFunctionHandlers", manifestSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Slice.MissingJsonLambdaApp_SliceLambdaFunctionPerFeatureHandlers", manifestSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -969,7 +969,7 @@ public class SourceGeneratorCompileTests
 
             namespace InvalidJsonContextApp;
 
-            [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+            [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
             public sealed class NotAJsonContext
             {
             }
@@ -986,7 +986,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_omits_lambda_per_feature_metadata_when_handlers_are_not_emitted()
+    public void Generator_omits_lambda_function_per_feature_metadata_when_handlers_are_not_emitted()
     {
         var source = """
             using Slice;
@@ -1012,7 +1012,7 @@ public class SourceGeneratorCompileTests
             .Replace(" ", "", StringComparison.Ordinal)
             .Replace("\r", "", StringComparison.Ordinal)
             .Replace("\n", "", StringComparison.Ordinal);
-        Assert.Contains("string? LambdaPerFeatureStatus", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("string? LambdaFunctionPerFeatureStatus", manifestSource, StringComparison.Ordinal);
         Assert.Contains("string? WasiDispatchStatus", manifestSource, StringComparison.Ordinal);
         Assert.Contains("null,null,null,null,null,\"1\",\"eligible\",null)]", compactManifestSource, StringComparison.Ordinal);
         Assert.Contains("\"1\",true,\"portable\",null,\"eligible\",null,null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
@@ -1029,13 +1029,13 @@ public class SourceGeneratorCompileTests
             using System.Text.Json.Serialization;
             using System.Text.Json.Serialization.Metadata;
             using Slice;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace LambdaCatchAllApp
             {
-                [SliceJsonContext(SliceJsonTarget.LambdaPerFeature)]
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
                 public sealed class LambdaJsonContext : JsonSerializerContext
                 {
                     public static LambdaJsonContext Default { get; } = new();
@@ -1065,7 +1065,7 @@ public class SourceGeneratorCompileTests
         GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
-        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaPerFunctionHandlers.g.cs");
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -1078,9 +1078,9 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using Slice;
-            using Slice.Lambda.PerFunction;
+            using Slice.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaPerFunction(typeof(InvalidStartupApp.BadStartup))]
+            [assembly: LambdaFunctionPerFeature(typeof(InvalidStartupApp.BadStartup))]
 
             namespace InvalidStartupApp
             {
@@ -2124,7 +2124,7 @@ public class SourceGeneratorCompileTests
                            && (includeWasiReference
                                || !string.Equals(Path.GetFileName(path), "Slice.Wasi.dll", StringComparison.OrdinalIgnoreCase)))
             .Where(path => includeLambdaReference
-                           || !string.Equals(Path.GetFileName(path), "Slice.Lambda.PerFunction.dll", StringComparison.OrdinalIgnoreCase))
+                           || !string.Equals(Path.GetFileName(path), "Slice.Lambda.FunctionPerFeature.dll", StringComparison.OrdinalIgnoreCase))
             .Select(static path => MetadataReference.CreateFromFile(path))
             .Cast<MetadataReference>()
             .ToList()

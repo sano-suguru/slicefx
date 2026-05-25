@@ -1,11 +1,11 @@
-namespace Slice.Lambda.PerFunction;
+namespace Slice.Lambda.FunctionPerFeature;
 
 /// <summary>
-/// Identifies an assembly containing generated Slice Lambda per-feature handlers.
+/// Identifies an assembly containing generated Slice Lambda function-per-feature handlers.
 /// </summary>
 /// <param name="handlerTypeName">The generated handler type name.</param>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
-public sealed class LambdaPerFunctionModuleAttribute(string handlerTypeName) : Attribute
+public sealed class LambdaFunctionPerFeatureModuleAttribute(string handlerTypeName) : Attribute
 {
     /// <summary>
     /// Gets the generated handler type name.

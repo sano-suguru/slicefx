@@ -13,7 +13,7 @@
   <Folder Name="/src/">
     <Project Path="src/Slice.Core/Slice.Core.csproj" />
     <Project Path="src/Slice.Lambda/Slice.Lambda.csproj" />
-    <Project Path="src/Slice.Lambda.PerFunction/Slice.Lambda.PerFunction.csproj" />
+    <Project Path="src/Slice.Lambda.FunctionPerFeature/Slice.Lambda.FunctionPerFeature.csproj" />
     <Project Path="src/Slice.SourceGenerator/Slice.SourceGenerator.csproj" />
     <Project Path="src/Slice.TestHost/Slice.TestHost.csproj" />
     <Project Path="src/Slice.Wasi/Slice.Wasi.csproj" />
@@ -21,7 +21,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Slice.Core.Tests/Slice.Core.Tests.csproj" />
     <Project Path="tests/Slice.Cli.Tests/Slice.Cli.Tests.csproj" />
-    <Project Path="tests/Slice.Lambda.PerFunction.Tests/Slice.Lambda.PerFunction.Tests.csproj" />
+    <Project Path="tests/Slice.Lambda.FunctionPerFeature.Tests/Slice.Lambda.FunctionPerFeature.Tests.csproj" />
     <Project Path="tests/Slice.Lambda.Tests/Slice.Lambda.Tests.csproj" />
     <Project Path="tests/Slice.SourceGenerator.Tests/Slice.SourceGenerator.Tests.csproj" />
     <Project Path="tests/Slice.TestHost.Tests/Slice.TestHost.Tests.csproj" />
