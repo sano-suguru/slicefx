@@ -32,4 +32,5 @@ This project follows semantic versioning once stable packages are published. Bef
 ### Fixed before first publish
 
 - Hardened handler discovery, duplicate endpoint detection, generated identifier sanitization, and WASI malformed JSON handling.
+- Fixed generated `RegularExpression` validation to match DataAnnotations full-value matching semantics across ASP.NET, WASI, and Lambda function-per-feature paths.
 - Improved CLI handling for hyphenated project names, partial feature classes, generic handler parameters, nullable query parameters, and array query parameters.

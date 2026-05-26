@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 
 namespace SliceFx.SourceGenerator;
@@ -10,8 +11,7 @@ internal static class LambdaFunctionPerFeatureEmitter
         string assemblyName,
         ImmutableArray<ValidatorModel> validators,
         ImmutableArray<ReferencedSliceModule> referencedModules,
-        JsonContextPlan jsonContextPlan,
-        string? startupTypeFqn)
+        JsonContextPlan jsonContextPlan)
     {
         var className = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaFunctionPerFeatureHandlers");
         var sb = new StringBuilder();
@@ -34,54 +34,50 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
         sb.AppendLine($"public static class {className}");
         sb.AppendLine("{");
-        EmitServiceProvider(sb, assemblyName, referencedModules, startupTypeFqn);
-        var lambdaJsonContextFqn = jsonContextPlan.ContextFqn;
-        if (lambdaJsonContextFqn is not null)
-        {
-            sb.AppendLine();
-            EmitJsonTypeInfoHelper(sb, lambdaJsonContextFqn);
-        }
+        sb.AppendLine("}");
 
         foreach (var feature in features)
         {
-            EmitFeatureHandler(sb, feature, validators, jsonContextPlan, diagnostics);
+            EmitFeatureHandlerClass(sb, className, feature, validators, referencedModules, jsonContextPlan, diagnostics);
         }
-
-        EmitValidationHelpers(sb, features);
-        sb.AppendLine("}");
 
         return (sb.ToString(), diagnostics.ToImmutable());
     }
 
     private static void EmitServiceProvider(
         StringBuilder sb,
-        string assemblyName,
-        ImmutableArray<ReferencedSliceModule> referencedModules,
-        string? startupTypeFqn)
+        FeatureModel feature,
+        HandleParamModel? bodyParam,
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<ReferencedSliceModule> referencedModules)
     {
-        var registrationClassName = GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceRegistrations");
         sb.AppendLine("    private static readonly global::System.Lazy<global::Microsoft.Extensions.DependencyInjection.ServiceProvider> s_services = new(");
         sb.AppendLine("        static () => global::SliceFx.Lambda.FunctionPerFeature.LambdaServiceProvider.Build(static services =>");
         sb.AppendLine("        {");
-        if (startupTypeFqn is not null)
+        if (feature.LambdaStartupTypeFqn is not null)
         {
-            sb.AppendLine($"            new {startupTypeFqn}().ConfigureServices(services);");
+            sb.AppendLine($"            new {feature.LambdaStartupTypeFqn}().ConfigureServices(services);");
         }
-        sb.AppendLine($"            global::SliceFx.{registrationClassName}.AddSliceValidatorServices(services);");
-        foreach (var module in referencedModules)
+        if (bodyParam is not null)
         {
-            if (module.HasValidatorServices)
+            foreach (var validator in validators.Where(validator => validator.RequestTypeFqn == bodyParam.TypeFqn))
             {
-                sb.AppendLine($"            {module.RegistrationTypeFqn}.AddSliceValidatorServices(services);");
+                sb.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<global::SliceFx.ISliceValidator<{validator.RequestTypeFqn}>, {validator.ImplementationTypeFqn}>(services);");
+            }
+            foreach (var validator in referencedModules.SelectMany(static module => module.Validators).Where(validator => NormalizeTypeFqn(validator.RequestType) == bodyParam.TypeFqn))
+            {
+                sb.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<global::SliceFx.ISliceValidator<{NormalizeTypeFqn(validator.RequestType)}>, {NormalizeTypeFqn(validator.ValidatorType)}>(services);");
             }
         }
         sb.AppendLine("        }));");
     }
 
-    private static void EmitFeatureHandler(
+    private static void EmitFeatureHandlerClass(
         StringBuilder sb,
+        string moduleClassName,
         FeatureModel feature,
         ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<ReferencedSliceModule> referencedModules,
         JsonContextPlan jsonContextPlan,
         ImmutableArray<EquatableDiagnostic>.Builder diagnostics)
     {
@@ -90,7 +86,7 @@ internal static class LambdaFunctionPerFeatureEmitter
         if (jsonExclusion is not null)
         {
             sb.AppendLine();
-            sb.AppendLine($"    // SLICE014: {ToSingleLineComment(feature.EndpointName)} — {jsonExclusion.Value.Reason}; skipped.");
+            sb.AppendLine($"// SLICE014: {ToSingleLineComment(feature.EndpointName)} — {jsonExclusion.Value.Reason}; skipped.");
             return;
         }
 
@@ -98,44 +94,60 @@ internal static class LambdaFunctionPerFeatureEmitter
         {
             ReportSkipDiagnostic(feature, skip.Value, diagnostics);
             sb.AppendLine();
-            sb.AppendLine($"    // {skip.Value.DiagnosticId}: {ToSingleLineComment(feature.EndpointName)} — {skip.Value.Reason}; skipped.");
+            sb.AppendLine($"// {skip.Value.DiagnosticId}: {ToSingleLineComment(feature.EndpointName)} — {skip.Value.Reason}; skipped.");
             return;
         }
 
         var @params = feature.GetParams();
         var bodyParam = FindBodyParam(feature, @params);
+        var bodyValidation = bodyParam is null ? null : FindValidationParameter(feature, @params.IndexOf(bodyParam));
         var awaitedReturnType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
 
         sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine($"/// Provides the generated Slice Lambda function-per-feature handler for {CSharpXmlText(feature.EndpointName)}.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+        sb.AppendLine($"public static class {HandlerTypeName(moduleClassName, feature)}");
+        sb.AppendLine("{");
+        EmitServiceProvider(sb, feature, bodyParam, validators, referencedModules);
+        EmitJsonTypeInfoHelper(sb, feature);
+        sb.AppendLine();
         sb.AppendLine($"    /// <summary>Handles {CSharpXmlText(feature.HttpMethod + " " + feature.Pattern)} for {CSharpXmlText(feature.EndpointName)}.</summary>");
         sb.AppendLine($"    public static async global::System.Threading.Tasks.Task<global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyResponse> {HandlerMethodName(feature)}(");
-        sb.AppendLine("        global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyRequest request,");
+        sb.AppendLine("        global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyRequest lambdaRequest,");
         sb.AppendLine("        global::Amazon.Lambda.Core.ILambdaContext lambdaContext)");
         sb.AppendLine("    {");
         sb.AppendLine("        using var __timeout = global::SliceFx.Lambda.FunctionPerFeature.LambdaCancellation.Create(lambdaContext);");
         sb.AppendLine("        using var __scope = s_services.Value.CreateScope();");
-        sb.AppendLine("        var ctx = new global::SliceFx.Lambda.FunctionPerFeature.LambdaInvocationContext(request, __scope.ServiceProvider, lambdaContext, __timeout.Token);");
+        sb.AppendLine("        var ctx = new global::SliceFx.Lambda.FunctionPerFeature.LambdaInvocationContext(lambdaRequest, __scope.ServiceProvider, lambdaContext, __timeout.Token);");
 
         if (bodyParam is not null)
         {
-            sb.AppendLine($"        {bodyParam.TypeFqn}? {bodyParam.Name};");
+            var bodyTargetName = bodyParam.Name;
+            var bodyReadName = bodyParam.IsValueType && !bodyParam.IsNullable ? "__" + bodyParam.Name + "Body" : bodyParam.Name;
+            sb.AppendLine($"        {bodyParam.TypeFqn}? {bodyReadName};");
             sb.AppendLine("        try");
             sb.AppendLine("        {");
-            sb.AppendLine($"            {bodyParam.Name} = await global::SliceFx.Lambda.FunctionPerFeature.LambdaJsonBodyReader.ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>()).ConfigureAwait(false);");
+            sb.AppendLine($"            {bodyReadName} = await global::SliceFx.Lambda.FunctionPerFeature.LambdaJsonBodyReader.ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>()).ConfigureAwait(false);");
             sb.AppendLine("        }");
             sb.AppendLine("        catch (global::System.Exception ex) when (ex is global::System.Text.Json.JsonException or global::System.FormatException)");
             sb.AppendLine("        {");
             sb.AppendLine("            return global::SliceFx.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
             sb.AppendLine("        }");
-            sb.AppendLine($"        if ({bodyParam.Name} is null) return global::SliceFx.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body is required.\");");
-
-            if (ShouldUseGeneratedValidation(feature))
+            sb.AppendLine($"        if ({bodyReadName} is null) return global::SliceFx.Lambda.FunctionPerFeature.LambdaResponseFactory.Problem(400, \"Bad Request\", \"Request body is required.\");");
+            if (bodyReadName != bodyTargetName)
             {
-                sb.AppendLine($"        var __daErrors = {ValidationMethodName(feature)}({bodyParam.Name});");
+                sb.AppendLine($"        var {bodyTargetName} = {bodyReadName}.Value;");
+            }
+
+            if (bodyValidation is not null)
+            {
+                sb.AppendLine($"        var __daErrors = {ValidationMethodName(feature, bodyValidation.Value)}({bodyParam.Name});");
                 sb.AppendLine("        if (__daErrors is not null) return global::SliceFx.Lambda.FunctionPerFeature.LambdaResponseFactory.ValidationProblem(__daErrors);");
             }
 
-            if (HasValidatorForParameter(bodyParam, validators))
+            if (HasValidatorForParameter(bodyParam, validators, referencedModules))
             {
                 sb.AppendLine($"        var __validator = __scope.ServiceProvider.GetService<global::SliceFx.ISliceValidator<{bodyParam.TypeFqn}>>();");
                 sb.AppendLine("        if (__validator is not null)");
@@ -225,6 +237,8 @@ internal static class LambdaFunctionPerFeatureEmitter
         }
 
         sb.AppendLine("    }");
+        EmitValidationHelpers(sb, feature);
+        sb.AppendLine("}");
     }
 
     private static LambdaSkipReason? GetSkipReason(FeatureModel feature)
@@ -307,8 +321,11 @@ internal static class LambdaFunctionPerFeatureEmitter
         diagnostics.Add(diagnostic);
     }
 
-    private static string HandlerMethodName(FeatureModel feature)
-        => SanitizeIdentifier(feature.EndpointName);
+    internal static string HandlerMethodName(FeatureModel feature)
+        => GeneratedIdentifier.Sanitize(feature.EndpointName) + "_" + StableIdentifierSuffix(feature.FullyQualifiedTypeName);
+
+    internal static string HandlerTypeName(string moduleClassName, FeatureModel feature)
+        => moduleClassName + "_" + GeneratedIdentifier.Sanitize(feature.EndpointName) + "_" + StableIdentifierSuffix(feature.FullyQualifiedTypeName);
 
     private static List<string> BuildArgList(ImmutableArray<HandleParamModel> parameters)
     {
@@ -321,26 +338,23 @@ internal static class LambdaFunctionPerFeatureEmitter
         return args;
     }
 
-    private static bool ShouldUseGeneratedValidation(FeatureModel feature)
-        => !feature.RequiresReflectionValidation && !string.IsNullOrEmpty(feature.SerializedValidationRules);
-
-    private static void EmitValidationHelpers(StringBuilder sb, ImmutableArray<FeatureModel> features)
+    private static void EmitValidationHelpers(StringBuilder sb, FeatureModel feature)
     {
         var emittedAny = false;
-        foreach (var feature in features)
+        if (feature.RequiresReflectionValidation)
         {
-            if (!ShouldUseGeneratedValidation(feature))
-            {
-                continue;
-            }
+            return;
+        }
 
+        foreach (var parameter in feature.GetValidationParameters())
+        {
             if (!emittedAny)
             {
                 emittedAny = true;
                 sb.AppendLine();
             }
 
-            EmitValidationMethod(sb, feature);
+            EmitValidationMethod(sb, feature, parameter);
             sb.AppendLine();
         }
 
@@ -349,8 +363,10 @@ internal static class LambdaFunctionPerFeatureEmitter
             return;
         }
 
-        sb.AppendLine("    private static void __AddValidationError(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>> errors, string key, string message)");
+        DataAnnotationsValidationEmitter.EmitValidationAttributeFields(sb, feature.GetValidationParameters());
+        sb.AppendLine("    private static void __AddValidationError(ref global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors, string key, string message)");
         sb.AppendLine("    {");
+        sb.AppendLine("        errors ??= new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>(global::System.StringComparer.Ordinal);");
         sb.AppendLine("        if (!errors.TryGetValue(key, out var messages))");
         sb.AppendLine("        {");
         sb.AppendLine("            messages = [];");
@@ -360,9 +376,9 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine("        messages.Add(message);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? __ToValidationErrors(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>> errors)");
+        sb.AppendLine("    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? __ToValidationErrors(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors)");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (errors.Count == 0)");
+        sb.AppendLine("        if (errors is null || errors.Count == 0)");
         sb.AppendLine("        {");
         sb.AppendLine("            return null;");
         sb.AppendLine("        }");
@@ -377,57 +393,20 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine("    }");
     }
 
-    private static void EmitValidationMethod(StringBuilder sb, FeatureModel feature)
+    private static void EmitValidationMethod(StringBuilder sb, FeatureModel feature, ValidationParameterModel parameter)
     {
-        var requestType = feature.FullyQualifiedTypeName + ".Request";
-        sb.AppendLine($"    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? {ValidationMethodName(feature)}({requestType} value)");
+        sb.AppendLine($"    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? {ValidationMethodName(feature, parameter)}({parameter.TypeFqn} value)");
         sb.AppendLine("    {");
-        sb.AppendLine("        var errors = new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>(global::System.StringComparer.Ordinal);");
+        sb.AppendLine("        global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors = null;");
 
-        foreach (var line in feature.SerializedValidationRules.Split('\n'))
+        foreach (var line in parameter.SerializedRules.Split('\n'))
         {
             if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
             }
 
-            var parts = line.Split('|');
-            if (parts.Length < 2)
-            {
-                continue;
-            }
-
-            var propertyName = parts[0];
-            var propertyAccess = $"value.{propertyName}";
-            var localName = "__" + SanitizeIdentifier(propertyName);
-            if (parts[1] == "Required")
-            {
-                var allowEmptyStrings = parts.Length > 2 && parts[2] == "true";
-                var message = DecodeValidationMessage(parts, 3, $"The {propertyName} field is required.");
-                sb.AppendLine(allowEmptyStrings
-                    ? $"        if ({propertyAccess} is null)"
-                    : $"        if ({propertyAccess} is null || ({propertyAccess} is string {localName}Required && {localName}Required.Length == 0))");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
-                sb.AppendLine("        }");
-            }
-            else if (parts[1] == "StringLength" && parts.Length > 3)
-            {
-                var message = DecodeValidationMessage(parts, 4, $"The field {propertyName} must be a string with a minimum length of {parts[2]} and a maximum length of {parts[3]}.");
-                sb.AppendLine($"        if ({propertyAccess} is string {localName}StringLength && ({localName}StringLength.Length < {parts[2]} || {localName}StringLength.Length > {parts[3]}))");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
-                sb.AppendLine("        }");
-            }
-            else if (parts[1] == "MinLength" && parts.Length > 2)
-            {
-                var lengthMember = parts.Length > 3 ? parts[3] : "Length";
-                var message = DecodeValidationMessage(parts, 4, $"The field {propertyName} must be a string or array type with a minimum length of '{parts[2]}'.");
-                sb.AppendLine($"        if ({propertyAccess} is not null && {propertyAccess}.{lengthMember} < {parts[2]})");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
-                sb.AppendLine("        }");
-            }
+            DataAnnotationsValidationEmitter.EmitValidationRule(sb, line);
         }
 
         sb.AppendLine();
@@ -435,16 +414,19 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine("    }");
     }
 
-    private static string DecodeValidationMessage(string[] parts, int index, string fallback)
-        => parts.Length <= index ? fallback : Encoding.UTF8.GetString(Convert.FromBase64String(parts[index]));
+    private static string ValidationMethodName(FeatureModel feature, ValidationParameterModel parameter)
+        => "__Validate_" + SanitizeIdentifier(feature.FullyQualifiedTypeName) + "_" + parameter.Index;
 
-    private static string ValidationMethodName(FeatureModel feature)
-        => "__Validate_" + SanitizeIdentifier(feature.FullyQualifiedTypeName);
-
-    private static void EmitJsonTypeInfoHelper(StringBuilder sb, string lambdaJsonContextFqn)
+    private static void EmitJsonTypeInfoHelper(StringBuilder sb, FeatureModel feature)
     {
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>Provides route-local JSON metadata for this generated handler.</summary>");
+        sb.AppendLine("    public static global::System.Func<global::System.Type, global::System.Text.Json.Serialization.Metadata.JsonTypeInfo?> JsonTypeInfoProvider { get; set; } =");
+        sb.AppendLine($"        static type => throw new global::System.InvalidOperationException({Str($"Lambda function-per-feature JSON metadata provider was not configured for {feature.EndpointName}. Use slicefx package aws-lambda to generate the route-local NativeAOT wrapper.")});");
+        sb.AppendLine();
         sb.AppendLine("    private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> __JsonTypeInfo<T>()");
-        sb.AppendLine($"        => (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>){lambdaJsonContextFqn}.Default.GetTypeInfo(typeof(T))!;");
+        sb.AppendLine("        => (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>)(JsonTypeInfoProvider(typeof(T))");
+        sb.AppendLine($"            ?? throw new global::System.InvalidOperationException({Str($"Lambda function-per-feature JSON metadata provider did not contain required metadata for {feature.EndpointName}.")}));");
     }
 
     private static HandleParamModel? FindBodyParam(FeatureModel feature, ImmutableArray<HandleParamModel> parameters)
@@ -461,10 +443,45 @@ internal static class LambdaFunctionPerFeatureEmitter
         return null;
     }
 
+    private static ValidationParameterModel? FindValidationParameter(FeatureModel feature, int parameterIndex)
+    {
+        foreach (var parameter in feature.GetValidationParameters())
+        {
+            if (parameter.Index == parameterIndex)
+            {
+                return parameter;
+            }
+        }
+
+        return null;
+    }
+
     private static bool HasValidatorForParameter(
         HandleParamModel parameter,
-        ImmutableArray<ValidatorModel> validators)
-        => validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn);
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<ReferencedSliceModule> referencedModules)
+        => validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn)
+           || referencedModules
+               .SelectMany(static module => module.Validators)
+               .Any(validator => NormalizeTypeFqn(validator.RequestType) == parameter.TypeFqn);
+
+    private static string NormalizeTypeFqn(string typeName)
+        => typeName.StartsWith("global::", StringComparison.Ordinal) ? typeName : "global::" + typeName;
+
+    private static string StableIdentifierSuffix(string value)
+    {
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var ch in value)
+            {
+                hash ^= ch;
+                hash *= 16777619u;
+            }
+
+            return hash.ToString("x8", CultureInfo.InvariantCulture);
+        }
+    }
 
     private static string SanitizeIdentifier(string value)
     {

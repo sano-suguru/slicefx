@@ -151,6 +151,28 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Diagnostic reported when ASP.NET generated registrations would need reflection-based DataAnnotations validation.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedValidationForAspNet = new(
+        "SLICE026",
+        "DataAnnotations validation requires reflection",
+        "Feature '{0}' uses unsupported DataAnnotations attribute '{1}' in generated registrations. Use supported validation attributes or ISliceValidator<T>.",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when generated Lambda function-per-feature artifact IDs collide.
+    /// </summary>
+    public static readonly DiagnosticDescriptor DuplicateLambdaFunctionPerFeatureArtifactId = new(
+        "SLICE027",
+        "Duplicate Lambda artifact ID",
+        "Lambda function-per-feature artifact ID '{0}' would be generated for both '{1}' and '{2}'. Use distinct feature names or FeatureAttribute.Tag values.",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// Diagnostic reported when a feature return type cannot be used by Lambda function-per-feature handlers.
     /// </summary>
     public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaFunctionPerFeature = new(
@@ -270,4 +292,5 @@ internal static class SliceDiagnostics
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
 }

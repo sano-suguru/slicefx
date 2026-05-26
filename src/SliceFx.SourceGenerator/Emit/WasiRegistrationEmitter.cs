@@ -223,6 +223,7 @@ internal static class WasiRegistrationEmitter
         var @params = f.GetParams();
 
         var bodyParam = FindBodyParam(f, @params);
+        var bodyValidation = bodyParam is null ? null : FindValidationParameter(f, @params.IndexOf(bodyParam));
 
         sb.AppendLine($"        table.Add(");
         sb.AppendLine($"            {Str(f.HttpMethod)},");
@@ -235,21 +236,27 @@ internal static class WasiRegistrationEmitter
         // 1. Body binding + null check + DataAnnotations
         if (bodyParam is not null)
         {
-            sb.AppendLine($"                    {bodyParam.TypeFqn}? {bodyParam.Name};");
+            var bodyTargetName = bodyParam.Name;
+            var bodyReadName = bodyParam.IsValueType && !bodyParam.IsNullable ? "__" + bodyParam.Name + "Body" : bodyParam.Name;
+            sb.AppendLine($"                    {bodyParam.TypeFqn}? {bodyReadName};");
             sb.AppendLine("                    try");
             sb.AppendLine("                    {");
-            sb.AppendLine($"                        {bodyParam.Name} = await global::SliceFx.Wasi.Binding.JsonBodyReader");
+            sb.AppendLine($"                        {bodyReadName} = await global::SliceFx.Wasi.Binding.JsonBodyReader");
             sb.AppendLine($"                            .ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>());");
             sb.AppendLine("                    }");
             sb.AppendLine("                    catch (global::System.Text.Json.JsonException)");
             sb.AppendLine("                    {");
             sb.AppendLine("                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
             sb.AppendLine("                    }");
-            sb.AppendLine($"                    if ({bodyParam.Name} is null) return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", \"Request body is required.\");");
-
-            if (ShouldUseGeneratedValidation(f))
+            sb.AppendLine($"                    if ({bodyReadName} is null) return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", \"Request body is required.\");");
+            if (bodyReadName != bodyTargetName)
             {
-                sb.AppendLine($"                    var __daErrors = {ValidationMethodName(f)}({bodyParam.Name});");
+                sb.AppendLine($"                    var {bodyTargetName} = {bodyReadName}.Value;");
+            }
+
+            if (bodyValidation is not null)
+            {
+                sb.AppendLine($"                    var __daErrors = {ValidationMethodName(f, bodyValidation.Value)}({bodyParam.Name});");
                 sb.AppendLine($"                    if (__daErrors is not null) return global::SliceFx.Wasi.SliceResult.ValidationProblem(__daErrors);");
             }
 
@@ -376,65 +383,20 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine($"            }});");
     }
 
-    private static bool ShouldUseGeneratedValidation(FeatureModel f)
-        => !f.RequiresReflectionValidation && !string.IsNullOrEmpty(f.SerializedValidationRules);
-
-    private static void EmitValidationMethod(StringBuilder sb, FeatureModel f)
+    private static void EmitValidationMethod(StringBuilder sb, FeatureModel f, ValidationParameterModel parameter)
     {
-        var requestType = f.FullyQualifiedTypeName + ".Request";
-        sb.AppendLine($"    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? {ValidationMethodName(f)}({requestType} value)");
+        sb.AppendLine($"    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? {ValidationMethodName(f, parameter)}({parameter.TypeFqn} value)");
         sb.AppendLine("    {");
-        sb.AppendLine("        var errors = new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>(global::System.StringComparer.Ordinal);");
+        sb.AppendLine("        global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors = null;");
 
-        foreach (var line in f.SerializedValidationRules.Split('\n'))
+        foreach (var line in parameter.SerializedRules.Split('\n'))
         {
             if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
             }
 
-            var parts = line.Split('|');
-            if (parts.Length < 2)
-            {
-                continue;
-            }
-
-            var propertyName = parts[0];
-            var propertyAccess = $"value.{propertyName}";
-            var localName = "__" + SanitizeIdentifier(propertyName);
-            if (parts[1] == "Required")
-            {
-                var allowEmptyStrings = parts.Length > 2 && parts[2] == "true";
-                var message = DecodeValidationMessage(parts, 3, $"The {propertyName} field is required.");
-                if (allowEmptyStrings)
-                {
-                    sb.AppendLine($"        if ({propertyAccess} is null)");
-                }
-                else
-                {
-                    sb.AppendLine($"        if ({propertyAccess} is null || ({propertyAccess} is string {localName}Required && {localName}Required.Length == 0))");
-                }
-                sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
-                sb.AppendLine("        }");
-            }
-            else if (parts[1] == "StringLength" && parts.Length > 3)
-            {
-                var message = DecodeValidationMessage(parts, 4, $"The field {propertyName} must be a string with a minimum length of {parts[2]} and a maximum length of {parts[3]}.");
-                sb.AppendLine($"        if ({propertyAccess} is string {localName}StringLength && ({localName}StringLength.Length < {parts[2]} || {localName}StringLength.Length > {parts[3]}))");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
-                sb.AppendLine("        }");
-            }
-            else if (parts[1] == "MinLength" && parts.Length > 2)
-            {
-                var lengthMember = parts.Length > 3 ? parts[3] : "Length";
-                var message = DecodeValidationMessage(parts, 4, $"The field {propertyName} must be a string or array type with a minimum length of '{parts[2]}'.");
-                sb.AppendLine($"        if ({propertyAccess} is not null && {propertyAccess}.{lengthMember} < {parts[2]})");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            __AddValidationError(errors, {Str(propertyName)}, {Str(message)});");
-                sb.AppendLine("        }");
-            }
+            DataAnnotationsValidationEmitter.EmitValidationRule(sb, line);
         }
 
         sb.AppendLine();
@@ -447,19 +409,22 @@ internal static class WasiRegistrationEmitter
         var emittedAny = false;
         foreach (var f in features)
         {
-            if (!ShouldUseGeneratedValidation(f))
+            if (f.RequiresReflectionValidation)
             {
                 continue;
             }
 
-            if (!emittedAny)
+            foreach (var parameter in f.GetValidationParameters())
             {
-                emittedAny = true;
+                if (!emittedAny)
+                {
+                    emittedAny = true;
+                    sb.AppendLine();
+                }
+
+                EmitValidationMethod(sb, f, parameter);
                 sb.AppendLine();
             }
-
-            EmitValidationMethod(sb, f);
-            sb.AppendLine();
         }
 
         if (!emittedAny)
@@ -467,8 +432,12 @@ internal static class WasiRegistrationEmitter
             return;
         }
 
-        sb.AppendLine("    private static void __AddValidationError(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>> errors, string key, string message)");
+        DataAnnotationsValidationEmitter.EmitValidationAttributeFields(
+            sb,
+            features.SelectMany(static feature => feature.GetValidationParameters()));
+        sb.AppendLine("    private static void __AddValidationError(ref global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors, string key, string message)");
         sb.AppendLine("    {");
+        sb.AppendLine("        errors ??= new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>(global::System.StringComparer.Ordinal);");
         sb.AppendLine("        if (!errors.TryGetValue(key, out var messages))");
         sb.AppendLine("        {");
         sb.AppendLine("            messages = [];");
@@ -478,9 +447,9 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("        messages.Add(message);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? __ToValidationErrors(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>> errors)");
+        sb.AppendLine("    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? __ToValidationErrors(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors)");
         sb.AppendLine("    {");
-        sb.AppendLine("        if (errors.Count == 0)");
+        sb.AppendLine("        if (errors is null || errors.Count == 0)");
         sb.AppendLine("        {");
         sb.AppendLine("            return null;");
         sb.AppendLine("        }");
@@ -495,18 +464,8 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("    }");
     }
 
-    private static string ValidationMethodName(FeatureModel f)
-        => "__Validate_" + SanitizeIdentifier(f.FullyQualifiedTypeName);
-
-    private static string DecodeValidationMessage(string[] parts, int index, string fallback)
-    {
-        if (parts.Length <= index)
-        {
-            return fallback;
-        }
-
-        return Encoding.UTF8.GetString(Convert.FromBase64String(parts[index]));
-    }
+    private static string ValidationMethodName(FeatureModel f, ValidationParameterModel parameter)
+        => "__Validate_" + SanitizeIdentifier(f.FullyQualifiedTypeName) + "_" + parameter.Index;
 
     private static string SanitizeIdentifier(string value)
     {
@@ -540,6 +499,19 @@ internal static class WasiRegistrationEmitter
                 return p;
             }
         }
+        return null;
+    }
+
+    private static ValidationParameterModel? FindValidationParameter(FeatureModel feature, int parameterIndex)
+    {
+        foreach (var parameter in feature.GetValidationParameters())
+        {
+            if (parameter.Index == parameterIndex)
+            {
+                return parameter;
+            }
+        }
+
         return null;
     }
 

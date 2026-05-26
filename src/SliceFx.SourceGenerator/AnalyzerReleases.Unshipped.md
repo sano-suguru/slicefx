@@ -26,3 +26,5 @@ SLICE022 | Slice | Error | UnmatchedSliceValidator
 SLICE023 | Slice | Warning | UnsupportedParameterForWasi
 SLICE024 | Slice | Warning | UnconfiguredReferencedSliceModules
 SLICE025 | Slice | Error | InvalidSliceFxAggregateReferences
+SLICE026 | Slice | Error | UnsupportedValidationForAspNet
+SLICE027 | Slice | Error | DuplicateLambdaFunctionPerFeatureArtifactId

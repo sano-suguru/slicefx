@@ -37,7 +37,7 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
 - [x] Review public API names before the first package push.
-  - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`DataAnnotationsValidationFilter`, `ISliceValidator<T>`).
+  - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`ISliceValidator<T>`, `SliceValidationResult`).
   - Generated API (emitted by the `SliceFx.SourceGenerator` package): `AddSlice`, `MapSlices`, route manifest (`GetSliceRoutesGenerated`), cross-assembly module helpers, WASI registrations (`AddSlice(WasiHostBuilder)`, `RegisterWasiRoutes`).
   - WASI API: `WasiHost`, `WasiApp`, `WasiRequest`, `WasiResponse`, `SliceResult`, `WasiRouteTable`.
   - Naming decision: keep `SliceFx.Wasi` namespace APIs / `Wasi*` types as the preview public API because the adapter targets any `wasi:http` host. `SliceFx.Workers` / `Worker*` would overfit the API to Cloudflare Workers, which is only one deployment target.

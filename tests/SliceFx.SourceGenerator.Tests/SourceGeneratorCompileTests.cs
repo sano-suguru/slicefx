@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
@@ -73,6 +74,7 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using Microsoft.AspNetCore.Http;
+            using System.ComponentModel.DataAnnotations;
             using System.Threading;
             using System.Threading.Tasks;
             using SliceFx;
@@ -83,7 +85,7 @@ public class SourceGeneratorCompileTests
             [Filter<AuditFilter>]
             public static class CreateUser
             {
-                public sealed record Request(string Name);
+                public sealed record Request([Required] string Name);
 
                 public sealed record Response(string Name);
 
@@ -114,7 +116,9 @@ public class SourceGeneratorCompileTests
         Assert.Contains("TryAddScoped<global::SliceFx.ISliceValidator<global::ValidatorApp.Features.Users.CreateUser.Request>, global::ValidatorApp.Features.Users.CreateUserValidator>(services)", generatedSource, StringComparison.Ordinal);
         Assert.Contains("GetService<global::SliceFx.ISliceValidator<global::ValidatorApp.Features.Users.CreateUser.Request>>(invocationContext.HttpContext.RequestServices)", generatedSource, StringComparison.Ordinal);
 
-        var dataAnnotationsIndex = generatedSource.IndexOf("DataAnnotationsValidationFilter.CreateFilterFactory", StringComparison.Ordinal);
+        Assert.DoesNotContain("DataAnnotationsValidationFilter", generatedSource, StringComparison.Ordinal);
+
+        var dataAnnotationsIndex = generatedSource.IndexOf("__CreateDataAnnotationsValidationFactory_global__ValidatorApp_Features_Users_CreateUser", StringComparison.Ordinal);
         var validatorIndex = generatedSource.IndexOf("__CreateSliceValidatorFactory_global__ValidatorApp_Features_Users_CreateUser", StringComparison.Ordinal);
         var userFilterIndex = generatedSource.IndexOf(".AddEndpointFilter<global::ValidatorApp.Features.Users.AuditFilter>()", StringComparison.Ordinal);
         Assert.True(dataAnnotationsIndex >= 0 && dataAnnotationsIndex < validatorIndex);
@@ -654,7 +658,11 @@ public class SourceGeneratorCompileTests
                         [StringLength(10, MinimumLength = 2, ErrorMessage = "Name length is invalid.")]
                         string? Name,
                         [MinLength(2, ErrorMessage = "At least two items are required.")]
-                        int[] Items);
+                        int[] Items,
+                        [Range(1, 10, ErrorMessage = "Count is out of range.")]
+                        int Count,
+                        [EmailAddress(ErrorMessage = "Email is invalid.")]
+                        string? Email);
 
                     public sealed record Response(string Name);
 
@@ -675,6 +683,9 @@ public class SourceGeneratorCompileTests
         Assert.Contains("Name is required.", wasiSource, StringComparison.Ordinal);
         Assert.Contains("Name length is invalid.", wasiSource, StringComparison.Ordinal);
         Assert.Contains("At least two items are required.", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("Count is out of range.", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("EmailAddressAttribute", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("Email is invalid.", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("WasiValidationRunner.Validate", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ISliceValidator<global::WasiValidationApp.Features.Items.CreateItem.Request>", wasiSource, StringComparison.Ordinal);
     }
@@ -692,7 +703,7 @@ public class SourceGeneratorCompileTests
             using SliceFx;
             using SliceFx.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaFunctionPerFeature(typeof(LambdaApp.LambdaStartup))]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace LambdaApp
             {
@@ -726,6 +737,7 @@ public class SourceGeneratorCompileTests
             namespace LambdaApp.Features.Users
             {
                 [Feature("GET /users/{id:guid}")]
+                [LambdaFunctionStartup(typeof(LambdaApp.LambdaStartup))]
                 public static class GetUser
                 {
                     public sealed record Response(Guid Id);
@@ -755,7 +767,9 @@ public class SourceGeneratorCompileTests
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("public static class LambdaApp_SliceLambdaFunctionPerFeatureHandlers", lambdaSource, StringComparison.Ordinal);
-        Assert.Contains("global::SliceFx.LambdaApp_SliceRegistrations.AddSliceValidatorServices(services);", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("public static class LambdaApp_SliceLambdaFunctionPerFeatureHandlers_Users_GetUser", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("new global::LambdaApp.LambdaStartup().ConfigureServices(services);", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddSliceValidatorServices(services);", lambdaSource, StringComparison.Ordinal);
         Assert.DoesNotContain("AddSliceServices(services);", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("Users_GetUser", lambdaSource, StringComparison.Ordinal);
         Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var id)", lambdaSource, StringComparison.Ordinal);
@@ -764,8 +778,136 @@ public class SourceGeneratorCompileTests
         Assert.Contains("GetRequiredService<global::LambdaApp.Clock>()", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("LambdaResponseFactory.Ok<global::LambdaApp.Features.Users.GetUser.Response>", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("\"LambdaApp\"", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("\"SliceFx.LambdaApp_SliceLambdaFunctionPerFeatureHandlers\"", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("\"Users_GetUser\"", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("\"SliceFx.LambdaApp_SliceLambdaFunctionPerFeatureHandlers_Users_GetUser_", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("\"Users_GetUser_", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_valid_lambda_handler_identifiers_for_digit_leading_tags()
+    {
+        var source = """
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            namespace LambdaIdentifierApp.Features.Users;
+
+            [Feature("GET /users", Tag = "123")]
+            public static class GetUser
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateHostCompilation("LambdaIdentifierApp", source, includeLambdaReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
+        var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("public static class LambdaIdentifierApp_SliceLambdaFunctionPerFeatureHandlers__123_GetUser_", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("Task<global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyResponse> _123_GetUser_", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("\"_123_GetUser_", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE027_for_duplicate_lambda_artifact_ids()
+    {
+        var source = """
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            namespace LambdaArtifactApp.Features.First
+            {
+                [Feature("GET /first", Tag = "A-B")]
+                public static class GetThing
+                {
+                    public static string Handle() => "ok";
+                }
+            }
+
+            namespace LambdaArtifactApp.Features.Second
+            {
+                [Feature("GET /second", Tag = "A_B")]
+                public static class GetThing
+                {
+                    public static string Handle() => "ok";
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("LambdaArtifactApp", source, includeLambdaReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE027"));
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("a-b-getthing", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_registers_referenced_validators_for_lambda_function_per_feature_body_requests()
+    {
+        var featureSource = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace FeatureLib.Features.Users;
+
+            [Feature("POST /shared-users")]
+            public static class SharedCreateUser
+            {
+                public sealed record Request(string Name);
+
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed class SharedCreateUserValidator : ISliceValidator<SharedCreateUser.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(SharedCreateUser.Request value, CancellationToken ct)
+                    => ValueTask.FromResult(SliceValidationResult.Success);
+            }
+            """;
+        using var featureAssembly = CompileGeneratedAssembly("FeatureLib", featureSource);
+
+        var hostSource = """
+            using Microsoft.AspNetCore.Mvc;
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            namespace HostApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public static string Handle([FromBody] FeatureLib.Features.Users.SharedCreateUser.Request req)
+                    => req.Name;
+            }
+            """;
+
+        var hostCompilation = CreateHostCompilation(
+            "HostApp",
+            hostSource,
+            includeLambdaReference: true,
+            extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
+        GeneratorDriver driver = CreateDriver(("SliceFxAggregateReferences", "true"));
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("TryAddScoped<global::SliceFx.ISliceValidator<global::FeatureLib.Features.Users.SharedCreateUser.Request>, global::FeatureLib.Features.Users.SharedCreateUserValidator>(services)", lambdaSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -874,7 +1016,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_reports_lambda_json_context_diagnostic_when_missing()
+    public void Generator_emits_lambda_function_per_feature_without_global_json_context()
     {
         var source = """
             using SliceFx;
@@ -897,13 +1039,15 @@ public class SourceGeneratorCompileTests
         GeneratorDriver driver = CreateDriver();
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE014");
-        Assert.Contains("\"ineligible\"", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("explicit [SliceJsonContext] JsonSerializerContext", manifestSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("SliceFx.MissingJsonLambdaApp_SliceLambdaFunctionPerFeatureHandlers", manifestSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE014");
+        Assert.Contains("JsonTypeInfoProvider", lambdaSource, StringComparison.Ordinal);
+        Assert.Contains("\"eligible\"", manifestSource, StringComparison.Ordinal);
+        Assert.Contains("SliceFx.MissingJsonLambdaApp_SliceLambdaFunctionPerFeatureHandlers", manifestSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1082,7 +1226,7 @@ public class SourceGeneratorCompileTests
             using SliceFx;
             using SliceFx.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaFunctionPerFeature(typeof(InvalidStartupApp.BadStartup))]
+            [assembly: LambdaFunctionPerFeature]
 
             namespace InvalidStartupApp
             {
@@ -1097,6 +1241,7 @@ public class SourceGeneratorCompileTests
             namespace InvalidStartupApp.Features.Health;
 
             [Feature("GET /health")]
+            [LambdaFunctionStartup(typeof(InvalidStartupApp.BadStartup))]
             public static class GetHealth
             {
                 public static void Handle()
@@ -1223,11 +1368,16 @@ public class SourceGeneratorCompileTests
             [Feature("POST /items")]
             public static class CreateItem
             {
-                public sealed record Request([Range(1, 10)] int Count);
+                public sealed record Request([CustomValidation] int Count);
 
                 public sealed record Response(int Count);
 
                 public static Response Handle(Request req) => new(req.Count);
+            }
+
+            public sealed class CustomValidationAttribute : ValidationAttribute
+            {
+                public override bool IsValid(object? value) => true;
             }
             """;
 
@@ -1237,7 +1387,7 @@ public class SourceGeneratorCompileTests
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE026" && diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
@@ -1720,6 +1870,7 @@ public class SourceGeneratorCompileTests
     {
         var source = """
             using Microsoft.AspNetCore.Http;
+            using System.ComponentModel.DataAnnotations;
             using System.Threading.Tasks;
             using SliceFx;
 
@@ -1730,7 +1881,9 @@ public class SourceGeneratorCompileTests
             [Filter<SecondFilter>]
             public static class ListProducts
             {
-                public static string Handle() => "ok";
+                public sealed record Request([Required] string Name);
+
+                public static string Handle(Request request) => request.Name;
             }
 
             public sealed class FirstFilter : IEndpointFilter
@@ -1752,8 +1905,8 @@ public class SourceGeneratorCompileTests
         driver = driver.RunGenerators(compilation);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
-        AssertBefore(generatedSource, "app.MapMethods(", ".AddEndpointFilterFactory(");
-        AssertBefore(generatedSource, ".AddEndpointFilterFactory(", ".AddEndpointFilter<global::OrderedApp.Features.Products.FirstFilter>()");
+        AssertBefore(generatedSource, "app.MapMethods(", "__CreateDataAnnotationsValidationFactory_global__OrderedApp_Features_Products_ListProducts");
+        AssertBefore(generatedSource, "__CreateDataAnnotationsValidationFactory_global__OrderedApp_Features_Products_ListProducts", ".AddEndpointFilter<global::OrderedApp.Features.Products.FirstFilter>()");
         AssertBefore(generatedSource, ".AddEndpointFilter<global::OrderedApp.Features.Products.FirstFilter>()", ".AddEndpointFilter<global::OrderedApp.Features.Products.SecondFilter>()");
         AssertBefore(generatedSource, ".AddEndpointFilter<global::OrderedApp.Features.Products.SecondFilter>()", ".WithTags(\"Products\")");
         AssertBefore(generatedSource, ".WithTags(\"Products\")", ".WithName(\"Products.ListProducts\")");
@@ -2034,6 +2187,241 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Runtime_generated_required_validation_is_type_aware()
+    {
+        var source = """
+            using SliceFx;
+            using System.ComponentModel.DataAnnotations;
+
+            #nullable enable
+
+            namespace RuntimeRequiredApp.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public sealed record Request(
+                    [Required] string? Name,
+                    [Required] int? Count,
+                    [Required] int Quantity);
+
+                public static string Handle(Request request) => request.Name!;
+            }
+
+            """;
+
+        using var assemblyStream = CompileGeneratedHostAssembly("RuntimeRequiredApp", source);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var requestType = assembly.GetType("RuntimeRequiredApp.Features.Items.CreateItem+Request", throwOnError: true)!;
+        var registrationsType = assembly.GetType("SliceFx.RuntimeRequiredApp_SliceRegistrations", throwOnError: true)!;
+        var validate = registrationsType.GetMethod(
+            "__ValidateDataAnnotations_global__RuntimeRequiredApp_Features_Items_CreateItem_0",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var emptyNameErrors = validate.Invoke(null, [Activator.CreateInstance(requestType, ["", 1, 0])]);
+        var missingNullableErrors = validate.Invoke(null, [Activator.CreateInstance(requestType, ["ok", null, 0])]);
+        var validValueTypeErrors = validate.Invoke(null, [Activator.CreateInstance(requestType, ["ok", 1, 0])]);
+
+        Assert.NotNull(emptyNameErrors);
+        Assert.NotNull(missingNullableErrors);
+        Assert.Null(validValueTypeErrors);
+    }
+
+    [Fact]
+    public void Runtime_generated_supported_data_annotations_match_framework()
+    {
+        var source = """
+            using SliceFx;
+            using System.ComponentModel.DataAnnotations;
+
+            #nullable enable
+
+            namespace RegexAspNetApp.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public sealed record Request(
+                    [property: Required(ErrorMessage = "Name is required.")] string? Name,
+                    [property: StringLength(5, MinimumLength = 2, ErrorMessage = "Sized is invalid.")] string? Sized,
+                    [property: MinLength(2, ErrorMessage = "Items is invalid.")] int[] Items,
+                    [property: MaxLength(2, ErrorMessage = "Tags is invalid.")] string[] Tags,
+                    [property: EmailAddress(ErrorMessage = "Email is invalid.")] string? Email,
+                    [property: Url(ErrorMessage = "Website is invalid.")] string? Website,
+                    [property: RegularExpression("[A-Z]+", ErrorMessage = "Code is invalid.")] string? Code,
+                    [property: RegularExpression(@"\d{3}", ErrorMessage = "Number is invalid.")] int Number,
+                    [property: Range(1, 10, ErrorMessage = "Count is invalid.")] int Count);
+
+                public static string Handle(Request request) => request.Name!;
+            }
+
+            """;
+
+        using var assemblyStream = CompileGeneratedHostAssembly("RegexAspNetApp", source);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var requestType = assembly.GetType("RegexAspNetApp.Features.Items.CreateItem+Request", throwOnError: true)!;
+        var validate = GetGeneratedValidationMethod(
+            assembly,
+            "SliceFx.RegexAspNetApp_SliceRegistrations",
+            "__ValidateDataAnnotations_global__RegexAspNetApp_Features_Items_CreateItem_0");
+
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("Alice", "abcd", [1, 2], ["blue"], "alice@example.com", "https://example.com", "ABC", 123, 5));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("Alice", "abcd", [1, 2], ["blue"], "alice@example.com", "https://example.com", "", 123, 5));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("Alice", "abcd", [1, 2], ["blue"], "alice@example.com", "https://example.com", "abcDEFxyz", 123, 5));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest(null, "a", [1], ["blue", "green", "red"], "not-email", "not-url", "abcDEFxyz", 12, 99));
+
+        object CreateRequest(
+            string? name,
+            string? sized,
+            int[] items,
+            string[] tags,
+            string? email,
+            string? website,
+            string? code,
+            int number,
+            int count)
+        {
+            return Activator.CreateInstance(requestType, [name, sized, items, tags, email, website, code, number, count])!;
+        }
+    }
+
+    [Fact]
+    public void Runtime_generated_wasi_regular_expression_validation_matches_framework()
+    {
+        var source = """
+            using System;
+            using System.ComponentModel.DataAnnotations;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using SliceFx;
+
+            #nullable enable
+
+            namespace RegexWasiApp
+            {
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+
+                    private WasiJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace RegexWasiApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public sealed record Request(
+                        [property: RegularExpression("[A-Z]+", ErrorMessage = "Code is invalid.")] string? Code,
+                        [property: RegularExpression(@"\d{3}", ErrorMessage = "Number is invalid.")] int Number);
+
+                    public static string Handle(Request request) => request.Code ?? "";
+                }
+            }
+
+            """;
+
+        using var assemblyStream = CompileGeneratedAssembly(CreateHostCompilation("RegexWasiApp", source, includeWasiReference: true));
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var requestType = assembly.GetType("RegexWasiApp.Features.Items.CreateItem+Request", throwOnError: true)!;
+        var validate = GetGeneratedValidationMethod(
+            assembly,
+            "SliceFx.RegexWasiApp_SliceWasiRegistrations",
+            "__Validate_global__RegexWasiApp_Features_Items_CreateItem_0");
+
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("ABC", 123));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("", 123));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("abcDEFxyz", 123));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("ABC", 12));
+
+        object CreateRequest(string? code, int number)
+        {
+            return Activator.CreateInstance(requestType, [code, number])!;
+        }
+    }
+
+    [Fact]
+    public void Runtime_generated_lambda_regular_expression_validation_matches_framework()
+    {
+        var source = """
+            using System;
+            using System.ComponentModel.DataAnnotations;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            #nullable enable
+
+            namespace RegexLambdaApp
+            {
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
+                public sealed class LambdaJsonContext : JsonSerializerContext
+                {
+                    public static LambdaJsonContext Default { get; } = new();
+
+                    private LambdaJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace RegexLambdaApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public sealed record Request(
+                        [property: RegularExpression("[A-Z]+", ErrorMessage = "Code is invalid.")] string? Code,
+                        [property: RegularExpression(@"\d{3}", ErrorMessage = "Number is invalid.")] int Number);
+
+                    public static string Handle(Request request) => request.Code ?? "";
+                }
+            }
+
+            """;
+
+        using var assemblyStream = CompileGeneratedAssembly(CreateHostCompilation("RegexLambdaApp", source, includeLambdaReference: true));
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var requestType = assembly.GetType("RegexLambdaApp.Features.Items.CreateItem+Request", throwOnError: true)!;
+        const string validationMethodName = "__Validate_global__RegexLambdaApp_Features_Items_CreateItem_0";
+        var handlerType = assembly.GetTypes().Single(static type =>
+            type.FullName?.StartsWith("SliceFx.RegexLambdaApp_SliceLambdaFunctionPerFeatureHandlers_Items_CreateItem_", StringComparison.Ordinal) == true
+            && type.GetMethod(validationMethodName, BindingFlags.NonPublic | BindingFlags.Static) is not null);
+        var validate = handlerType.GetMethod(
+            validationMethodName,
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("ABC", 123));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("", 123));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("abcDEFxyz", 123));
+        AssertGeneratedValidationMatchesFramework(validate, CreateRequest("ABC", 12));
+
+        object CreateRequest(string? code, int number)
+        {
+            return Activator.CreateInstance(requestType, [code, number])!;
+        }
+    }
+
+    [Fact]
     public void Generator_reports_SLICE001_for_feature_missing_handle_method()
     {
         var source = """
@@ -2080,6 +2468,45 @@ public class SourceGeneratorCompileTests
 
         Assert.Contains(generatorDiagnostics, static d =>
             d.Id == "SLICE005" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    private static MethodInfo GetGeneratedValidationMethod(
+        Assembly assembly,
+        string typeName,
+        string methodName)
+    {
+        var registrationsType = assembly.GetType(typeName, throwOnError: true)!;
+        return registrationsType.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static)!;
+    }
+
+    private static void AssertGeneratedValidationMatchesFramework(MethodInfo validate, object value)
+    {
+        var generatedKeys = GetGeneratedValidationKeys(validate.Invoke(null, [value]));
+        var frameworkKeys = GetFrameworkValidationKeys(value);
+
+        Assert.Equal(frameworkKeys, generatedKeys);
+    }
+
+    private static string[] GetGeneratedValidationKeys(object? errors)
+    {
+        if (errors is null)
+        {
+            return [];
+        }
+
+        var typedErrors = Assert.IsType<IReadOnlyDictionary<string, string[]>>(errors, exactMatch: false);
+        return [.. typedErrors.Keys.OrderBy(static key => key, StringComparer.Ordinal)];
+    }
+
+    private static string[] GetFrameworkValidationKeys(object value)
+    {
+        var results = new List<ValidationResult>();
+        Validator.TryValidateObject(value, new ValidationContext(value), results, validateAllProperties: true);
+
+        return [.. results
+            .SelectMany(static result => result.MemberNames.DefaultIfEmpty(""))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static key => key, StringComparer.Ordinal)];
     }
 
     private static CSharpCompilation CreateHostCompilation(

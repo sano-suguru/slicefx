@@ -56,7 +56,9 @@ internal static class RegistrationEmitter
             EmitMapSlices(sb, className, referencedModules);
         }
 
+        EmitDataAnnotationsValidationHelpers(sb, features);
         EmitSliceValidatorHelpers(sb, features, validators);
+        EmitValidationProblemErrorHelper(sb, features, validators);
 
         sb.AppendLine("}");
 
@@ -79,6 +81,7 @@ internal static class RegistrationEmitter
         sb.AppendLine("    {");
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var feature in features)
         {
             foreach (var ft in feature.GetFilterFqns())
@@ -211,8 +214,11 @@ internal static class RegistrationEmitter
         sb.AppendLine($"            new[] {{ {CSharpLiteral.String(f.HttpMethod)} }},");
         sb.AppendLine($"            new {delegateType}(");
         sb.AppendLine($"                {f.FullyQualifiedTypeName}.Handle))");
-        sb.AppendLine($"        .AddEndpointFilterFactory(");
-        sb.AppendLine($"            global::SliceFx.DataAnnotationsValidationFilter.CreateFilterFactory)");
+        if (HasGeneratedDataAnnotationsValidation(f))
+        {
+            sb.AppendLine($"        .AddEndpointFilterFactory(");
+            sb.AppendLine($"            {GeneratedDataAnnotationsFactoryName(f)})");
+        }
 
         if (HasSliceValidatorCandidates(paramModels, validators))
         {
@@ -248,6 +254,98 @@ internal static class RegistrationEmitter
         ImmutableArray<ValidatorModel> validators)
         => SourceGenerationHelpers.IsRequestLikeParameter(parameter)
            && validators.Any(validator => validator.RequestTypeFqn == parameter.TypeFqn);
+
+    private static bool HasGeneratedDataAnnotationsValidation(FeatureModel feature)
+        => feature.GetValidationParameters().Length > 0;
+
+    private static void EmitDataAnnotationsValidationFactory(StringBuilder sb, FeatureModel f)
+    {
+        var candidates = f.GetValidationParameters();
+        if (candidates.Length == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"    private static global::Microsoft.AspNetCore.Http.EndpointFilterDelegate {GeneratedDataAnnotationsFactoryName(f)}(");
+        sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterFactoryContext context,");
+        sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterDelegate next)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var __serviceProviderIsService = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService>(context.ApplicationServices);");
+        foreach (var candidate in candidates)
+        {
+            sb.AppendLine($"        var __validate{candidate.Index} = __ShouldValidateDataAnnotationsParameter<{candidate.TypeFqn}>(__serviceProviderIsService);");
+        }
+
+        sb.AppendLine($"        if ({string.Join(" && ", candidates.Select(static c => $"!__validate{c.Index}"))})");
+        sb.AppendLine("        {");
+        sb.AppendLine("            return next;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        return invocationContext =>");
+        sb.AppendLine("        {");
+        foreach (var candidate in candidates)
+        {
+            sb.AppendLine($"            if (__validate{candidate.Index} && invocationContext.Arguments[{candidate.Index}] is {candidate.TypeFqn} __arg{candidate.Index})");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var __errors{candidate.Index} = {ValidationMethodName(f, candidate)}(__arg{candidate.Index});");
+            sb.AppendLine($"                if (__errors{candidate.Index} is not null)");
+            sb.AppendLine("                {");
+            sb.AppendLine($"                    return global::System.Threading.Tasks.ValueTask.FromResult<object?>(global::Microsoft.AspNetCore.Http.Results.ValidationProblem(__ToValidationProblemErrors(__errors{candidate.Index})));");
+            sb.AppendLine("                }");
+            sb.AppendLine("            }");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("            return next(invocationContext);");
+        sb.AppendLine("        };");
+        sb.AppendLine("    }");
+    }
+
+    private static void EmitDataAnnotationsValidationHelpers(StringBuilder sb, ImmutableArray<FeatureModel> features)
+    {
+        if (!features.Any(HasGeneratedDataAnnotationsValidation))
+        {
+            return;
+        }
+
+        DataAnnotationsValidationEmitter.EmitValidationAttributeFields(
+            sb,
+            features.SelectMany(static feature => feature.GetValidationParameters()));
+
+        foreach (var feature in features)
+        {
+            EmitDataAnnotationsValidationFactory(sb, feature);
+            foreach (var parameter in feature.GetValidationParameters())
+            {
+                EmitValidationMethod(sb, feature, parameter);
+                sb.AppendLine();
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("    private static bool __ShouldValidateDataAnnotationsParameter<T>(");
+        sb.AppendLine("        global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService? serviceProviderIsService)");
+        sb.AppendLine("        => serviceProviderIsService?.IsService(typeof(T)) != true;");
+        sb.AppendLine();
+        EmitGeneratedValidationHelpers(sb);
+    }
+
+    private static void EmitValidationMethod(StringBuilder sb, FeatureModel feature, ValidationParameterModel parameter)
+    {
+        sb.AppendLine($"    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? {ValidationMethodName(feature, parameter)}({parameter.TypeFqn} value)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors = null;");
+
+        foreach (var line in parameter.SerializedRules.Split('\n'))
+        {
+            DataAnnotationsValidationEmitter.EmitValidationRule(sb, line);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("        return __ToValidationErrors(errors);");
+        sb.AppendLine("    }");
+    }
 
     private static void EmitSliceValidatorFactory(
         StringBuilder sb,
@@ -323,6 +421,50 @@ internal static class RegistrationEmitter
         sb.AppendLine("    private static bool __ShouldValidateSliceValidatorParameter<T>(");
         sb.AppendLine("        global::Microsoft.Extensions.DependencyInjection.IServiceProviderIsService? serviceProviderIsService)");
         sb.AppendLine("        => serviceProviderIsService is null || serviceProviderIsService.IsService(typeof(global::SliceFx.ISliceValidator<T>));");
+    }
+
+    private static void EmitGeneratedValidationHelpers(StringBuilder sb)
+    {
+        sb.AppendLine("    private static void __AddValidationError(ref global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors, string key, string message)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        errors ??= new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>(global::System.StringComparer.Ordinal);");
+        sb.AppendLine("        if (!errors.TryGetValue(key, out var messages))");
+        sb.AppendLine("        {");
+        sb.AppendLine("            messages = [];");
+        sb.AppendLine("            errors.Add(key, messages);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        messages.Add(message);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::System.Collections.Generic.IReadOnlyDictionary<string, string[]>? __ToValidationErrors(global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<string>>? errors)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (errors is null || errors.Count == 0)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            return null;");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        var result = new global::System.Collections.Generic.Dictionary<string, string[]>(global::System.StringComparer.Ordinal);");
+        sb.AppendLine("        foreach (var entry in errors)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            result.Add(entry.Key, entry.Value.ToArray());");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        return result;");
+        sb.AppendLine("    }");
+    }
+
+    private static void EmitValidationProblemErrorHelper(
+        StringBuilder sb,
+        ImmutableArray<FeatureModel> features,
+        ImmutableArray<ValidatorModel> validators)
+    {
+        if (!features.Any(HasGeneratedDataAnnotationsValidation)
+            && !features.Any(f => HasSliceValidatorCandidates(f.GetParams(), validators)))
+        {
+            return;
+        }
+
         sb.AppendLine();
         sb.AppendLine("    private static global::System.Collections.Generic.Dictionary<string, string[]> __ToValidationProblemErrors(");
         sb.AppendLine("        global::System.Collections.Generic.IReadOnlyDictionary<string, string[]> errors)");
@@ -363,6 +505,12 @@ internal static class RegistrationEmitter
 
     private static string GeneratedValidatorFactoryName(FeatureModel feature)
         => "__CreateSliceValidatorFactory_" + SanitizeIdentifier(feature.FullyQualifiedTypeName);
+
+    private static string GeneratedDataAnnotationsFactoryName(FeatureModel feature)
+        => "__CreateDataAnnotationsValidationFactory_" + SanitizeIdentifier(feature.FullyQualifiedTypeName);
+
+    private static string ValidationMethodName(FeatureModel feature, ValidationParameterModel parameter)
+        => "__ValidateDataAnnotations_" + SanitizeIdentifier(feature.FullyQualifiedTypeName) + "_" + parameter.Index;
 
     private static string SanitizeIdentifier(string value)
     {

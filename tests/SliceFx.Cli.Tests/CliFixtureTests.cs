@@ -1,5 +1,6 @@
 extern alias SliceSample;
 
+using System.Reflection;
 using System.Text.Json;
 using SliceFx.Cli.Commands;
 using SliceFx.Cli.Internal;
@@ -259,6 +260,7 @@ public class CliFixtureTests
         fixture.WriteFeature(
             "Features/Things/GetThing.cs",
             """
+            using Microsoft.AspNetCore.Mvc;
             using SliceFx;
 
             namespace Generated.App.Features.Things;
@@ -266,7 +268,7 @@ public class CliFixtureTests
             [Feature("GET /things/{id:int}", Summary = "Get a generated thing")]
             public static class GetThing
             {
-                public static Response Handle(int id) => new(id);
+                public static Response Handle(int id, [FromHeader(Name = "X|Tenant\nName;Segment")] string tenant) => new(id);
 
                 public sealed record Response(int Id);
             }
@@ -280,6 +282,7 @@ public class CliFixtureTests
         Assert.Equal("Generated.App.Features.Things.GetThing.Response", route.ReturnType);
         Assert.Equal(RouteCatalog.PortabilityPortable, route.Portability);
         Assert.Contains(route.Parameters, static parameter => parameter is { Type: "int", Name: "id" });
+        Assert.Contains(route.Parameters, static parameter => parameter is { Type: "string", Name: "tenant", BindingSource: "header", BindingName: "X|Tenant\nName;Segment" });
     }
 
     [Fact]
@@ -1367,10 +1370,10 @@ public class CliFixtureTests
     }
 
     [Fact]
-    public async Task Manifest_aws_lambda_rejects_unimplemented_per_feature_artifact_layout()
+    public async Task Manifest_aws_lambda_rejects_removed_shared_function_per_feature_layout()
     {
         var exitCode = await ManifestAwsLambdaCommand.Build()
-            .Parse(["--mode", "function-per-feature", "--artifact-layout", "per-feature"])
+            .Parse(["--mode", "function-per-feature", "--artifact-layout", "shared"])
             .InvokeAsync();
 
         Assert.Equal(1, exitCode);
@@ -1463,17 +1466,18 @@ public class CliFixtureTests
 
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature", "--artifact-layout", "shared"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature"])
             .InvokeAsync();
 
         Assert.Equal(0, exitCode);
         var yaml = await File.ReadAllTextAsync(outputFile);
 
         Assert.Contains("Function-per-feature mode: each eligible [Feature] becomes a separate Lambda function resource.", yaml);
-        Assert.Contains("Artifact layout: shared. Multiple functions point at the same publish artifact", yaml);
+        Assert.Contains("Artifact layout: per-feature. Each function points at its own NativeAOT custom-runtime artifact.", yaml);
         Assert.Contains("HealthGetHealthFunction:", yaml);
         Assert.Contains("HealthGetHealthEvent:", yaml);
-        Assert.Contains("Handler: 'lambda-per-feature-app::SliceFx.lambda_per_feature_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth'", yaml);
+        Assert.Contains("CodeUri: './artifacts/health-gethealth'", yaml);
+        Assert.Contains("Handler: 'bootstrap'", yaml);
         Assert.Contains("Path: '/health'", yaml);
         Assert.DoesNotContain("HealthGetFilteredHealthFunction:", yaml);
         Assert.Contains("# - Health.GetFilteredHealth: endpoint filters require the ASP.NET endpoint filter pipeline", yaml);
@@ -1583,82 +1587,27 @@ public class CliFixtureTests
 
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature", "--artifact-layout", "shared"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature"])
             .InvokeAsync();
 
         Assert.Equal(0, exitCode);
         var yaml = await File.ReadAllTextAsync(outputFile);
 
-        Assert.Contains("Handler: 'feature-lib::SliceFx.feature_lib_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth'", yaml);
-        Assert.DoesNotContain("Handler: 'host-app::SliceFx.host_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth'", yaml);
+        Assert.Contains("HealthGetHealthFunction:", yaml);
+        Assert.Contains("CodeUri: './artifacts/health-gethealth'", yaml);
+        Assert.DoesNotContain("host_app_SliceLambdaFunctionPerFeatureHandlers", yaml);
     }
 
     [Fact]
     public async Task Package_aws_lambda_function_per_feature_writes_artifact_manifest()
     {
-        using var fixture = CliProjectFixture.Create(
-            "lambda-package-app",
-            $$"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <TargetFramework>net10.0</TargetFramework>
-                <RootNamespace>Lambda.Package.App</RootNamespace>
-              </PropertyGroup>
-              <ItemGroup>
-                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
-                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Lambda.FunctionPerFeature", "SliceFx.Lambda.FunctionPerFeature.csproj")}}" />
-                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-              </ItemGroup>
-            </Project>
-            """);
-        fixture.WriteFeature(
-            "LambdaSetup.cs",
-            """
-            using System;
-            using System.Text.Json;
-            using System.Text.Json.Serialization;
-            using System.Text.Json.Serialization.Metadata;
-            using SliceFx.Lambda.FunctionPerFeature;
-
-            [assembly: LambdaFunctionPerFeature]
-
-            namespace Lambda.Package.App;
-
-            [SliceFx.SliceJsonContext(SliceFx.SliceJsonTarget.LambdaFunctionPerFeature)]
-
-            public sealed class LambdaJsonContext : JsonSerializerContext
-            {
-                public static LambdaJsonContext Default { get; } = new();
-
-                private LambdaJsonContext()
-                    : base(null)
-                {
-                }
-
-                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
-
-                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
-            }
-            """);
-        fixture.WriteFeature(
-            "Features/Health/GetHealth.cs",
-            """
-            using SliceFx;
-
-            namespace Lambda.Package.App.Features.Health;
-
-            [Feature("GET /health")]
-            public static class GetHealth
-            {
-                public static string Handle() => "ok";
-            }
-            """);
+        using var fixture = CreateLambdaPackageFixture();
 
         await fixture.BuildAsync();
 
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "shared", "--skip-publish"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--skip-publish"])
             .InvokeAsync();
 
         Assert.Equal(0, exitCode);
@@ -1667,55 +1616,231 @@ public class CliFixtureTests
 
         var json = await File.ReadAllTextAsync(manifestPath);
         Assert.Contains("\"mode\": \"function-per-feature\"", json);
-        Assert.Contains("\"artifactLayout\": \"shared\"", json);
+        Assert.Contains("\"artifactLayout\": \"per-feature\"", json);
         Assert.Contains("\"artifacts\": [", json);
-        Assert.Contains("\"artifactId\": \"shared\"", json);
-        Assert.Contains("\"codeUri\": \"publish\"", json);
-        Assert.Contains("\"bootstrapMode\": \"generated-handler\"", json);
+        Assert.Contains("\"artifactId\": \"health-gethealth\"", json);
+        Assert.Contains("\"codeUri\": \"artifacts/health-gethealth\"", json);
+        Assert.Contains("\"bootstrapMode\": \"native-aot-bootstrap\"", json);
         Assert.Contains("\"endpointName\": \"Health.GetHealth\"", json);
-        Assert.Contains("\"artifactId\": \"shared\"", json);
-        Assert.Contains("lambda-package-app::SliceFx.lambda_package_app_SliceLambdaFunctionPerFeatureHandlers::Health_GetHealth", json);
+        Assert.Contains("lambda-package-app::SliceFx.lambda_package_app_SliceLambdaFunctionPerFeatureHandlers_Health_GetHealth_", json);
         Assert.DoesNotContain(outputDir, json, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Manifest_aws_lambda_function_per_feature_rejects_inconsistent_shared_artifact_metadata()
+    public async Task Package_aws_lambda_function_per_feature_writes_per_feature_artifacts()
     {
-        using var fixture = CreateProjectWithLambdaArtifactMetadata(codeUri: "../publish");
-        await fixture.BuildAsync();
-
-        var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
-        var exitCode = await ManifestAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature", "--artifact-layout", "shared"])
-            .InvokeAsync();
-
-        Assert.Equal(1, exitCode);
-        Assert.False(File.Exists(outputFile));
-    }
-
-    [Fact]
-    public async Task Package_aws_lambda_function_per_feature_rejects_inconsistent_shared_artifact_metadata()
-    {
-        using var fixture = CreateProjectWithLambdaArtifactMetadata(bootstrapMode: "custom-bootstrap");
+        using var fixture = CreateLambdaPackageFixture(includeSecondEligibleRoute: true, includeFilteredRoute: true);
         await fixture.BuildAsync();
 
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
-            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "shared", "--skip-publish"])
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "per-feature", "--skip-publish"])
+            .InvokeAsync();
+
+        Assert.Equal(0, exitCode);
+        var manifestPath = Path.Combine(outputDir, "slicefx-lambda-package.json");
+        var reportPath = Path.Combine(outputDir, "slicefx-lambda-package-report.json");
+        Assert.True(File.Exists(manifestPath));
+        Assert.True(File.Exists(reportPath));
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
+        var root = document.RootElement;
+
+        Assert.Equal("function-per-feature", root.GetProperty("mode").GetString());
+        Assert.Equal("per-feature", root.GetProperty("artifactLayout").GetString());
+        Assert.True(root.GetProperty("selfContained").GetBoolean());
+        Assert.Equal(1, root.GetProperty("excludedRouteCount").GetInt32());
+
+        var artifacts = root.GetProperty("artifacts").EnumerateArray().ToArray();
+        Assert.Equal(2, artifacts.Length);
+        Assert.All(artifacts, static artifact =>
+        {
+            Assert.Equal("per-feature", artifact.GetProperty("artifactLayout").GetString());
+            Assert.Equal("native-aot-bootstrap", artifact.GetProperty("bootstrapMode").GetString());
+        });
+
+        var artifactIds = artifacts.Select(static artifact => artifact.GetProperty("artifactId").GetString()).ToArray();
+        Assert.Contains("health-gethealth", artifactIds);
+        Assert.Contains("users-getuser", artifactIds);
+
+        var codeUris = artifacts.Select(static artifact => artifact.GetProperty("codeUri").GetString()).ToArray();
+        Assert.Equal(2, codeUris.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains("artifacts/health-gethealth", codeUris);
+        Assert.Contains("artifacts/users-getuser", codeUris);
+        Assert.DoesNotContain(outputDir, string.Join('\n', codeUris), StringComparison.Ordinal);
+
+        var functions = root.GetProperty("functions").EnumerateArray().ToArray();
+        Assert.Equal(2, functions.Length);
+        Assert.Contains(functions, static function =>
+            function.GetProperty("endpointName").GetString() == "Health.GetHealth" &&
+            function.GetProperty("artifactId").GetString() == "health-gethealth");
+        Assert.Contains(functions, static function =>
+            function.GetProperty("endpointName").GetString() == "Users.GetUser" &&
+            function.GetProperty("artifactId").GetString() == "users-getuser");
+        Assert.DoesNotContain(functions, static function => function.GetProperty("endpointName").GetString() == "Health.GetFilteredHealth");
+
+        var healthProject = Path.Combine(outputDir, "obj", "aws-lambda", "per-feature", "health-gethealth", "bootstrap.csproj");
+        var healthProgram = Path.Combine(outputDir, "obj", "aws-lambda", "per-feature", "health-gethealth", "Program.slicefx");
+        Assert.True(File.Exists(healthProject));
+        Assert.True(File.Exists(healthProgram));
+        Assert.True(Directory.Exists(Path.Combine(outputDir, "artifacts", "health-gethealth")));
+
+        var projectXml = await File.ReadAllTextAsync(healthProject);
+        Assert.Contains("<AssemblyName>bootstrap</AssemblyName>", projectXml);
+        Assert.Contains("<PublishAot>true</PublishAot>", projectXml);
+        Assert.Contains("<TrimMode>full</TrimMode>", projectXml);
+        Assert.Contains("<IlcOptimizationPreference>Size</IlcOptimizationPreference>", projectXml);
+        Assert.Contains("<StripSymbols>false</StripSymbols>", projectXml);
+        Assert.Contains("<BaseIntermediateOutputPath>", projectXml);
+        Assert.Contains("<BaseOutputPath>", projectXml);
+        Assert.Contains(Path.Combine("obj", "aws-lambda", "per-feature", "health-gethealth", "build"), projectXml);
+        Assert.Contains("""<Compile Include="Program.slicefx" />""", projectXml);
+        Assert.Contains("<Reference Include=\"lambda-package-app\"", projectXml);
+        Assert.Contains("""<FrameworkReference Include="Microsoft.AspNetCore.App" />""", projectXml);
+        Assert.Contains("Amazon.Lambda.APIGatewayEvents", projectXml);
+        Assert.Contains("Amazon.Lambda.RuntimeSupport", projectXml);
+        Assert.Contains("Amazon.Lambda.Serialization.SystemTextJson", projectXml);
+
+        var programSource = await File.ReadAllTextAsync(healthProgram);
+        Assert.Contains("JsonTypeInfoProvider = static type => LambdaFeatureJsonContext.Default.GetTypeInfo(type);", programSource);
+        Assert.Contains("SourceGeneratorLambdaJsonSerializer<LambdaFeatureJsonContext>", programSource);
+        Assert.Contains("SliceFx.lambda_package_app_SliceLambdaFunctionPerFeatureHandlers_Health_GetHealth_", programSource);
+        Assert.Contains("[JsonSerializable(typeof(APIGatewayHttpApiV2ProxyRequest))]", programSource);
+        Assert.Contains("[JsonSerializable(typeof(APIGatewayHttpApiV2ProxyResponse))]", programSource);
+
+        using var reportDocument = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath));
+        var reportRoot = reportDocument.RootElement;
+        Assert.Equal("1", reportRoot.GetProperty("schemaVersion").GetString());
+        Assert.Equal("function-per-feature", reportRoot.GetProperty("mode").GetString());
+        Assert.Equal("per-feature", reportRoot.GetProperty("artifactLayout").GetString());
+        Assert.Equal("native-aot", reportRoot.GetProperty("reportKind").GetString());
+        Assert.True(reportRoot.GetProperty("skippedPublish").GetBoolean());
+        Assert.Equal(0, reportRoot.GetProperty("warningBaseline").GetProperty("currentWarningCount").GetInt32());
+
+        var reportArtifacts = reportRoot.GetProperty("artifacts").EnumerateArray().ToArray();
+        Assert.Equal(2, reportArtifacts.Length);
+        Assert.Contains(reportArtifacts, static artifact =>
+            artifact.GetProperty("artifactId").GetString() == "health-gethealth" &&
+            artifact.GetProperty("endpointName").GetString() == "Health.GetHealth" &&
+            artifact.GetProperty("skippedPublish").GetBoolean() &&
+            artifact.GetProperty("sizeBytes").GetInt64() == 0 &&
+            artifact.GetProperty("topFiles").GetArrayLength() == 0 &&
+            artifact.GetProperty("warnings").GetArrayLength() == 0 &&
+            artifact.GetProperty("closureInspection").GetProperty("status").GetString() == "skipped");
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_function_per_feature_rejects_stale_warning_baseline()
+    {
+        using var fixture = CreateLambdaPackageFixture();
+        await fixture.BuildAsync();
+
+        var baselinePath = Path.Combine(fixture.Directory.FullName, "lambda-warning-baseline.json");
+        await File.WriteAllTextAsync(
+            baselinePath,
+            JsonSerializer.Serialize(
+                new
+                {
+                    warnings = new[]
+                    {
+                        new
+                        {
+                            code = "IL2026",
+                            project = "stale.csproj",
+                            file = "Program.cs",
+                            line = 12,
+                            messageHash = "stale-warning-hash",
+                            message = "Stale warning",
+                        },
+                    },
+                }));
+
+        var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
+        var exitCode = await PackageAwsLambdaCommand.Build()
+            .Parse([
+                "--project", fixture.ProjectFile.FullName,
+                "--output", outputDir,
+                "--mode", "function-per-feature",
+                "--skip-publish",
+                "--warning-baseline", baselinePath,
+            ])
+            .InvokeAsync();
+
+        Assert.Equal(1, exitCode);
+
+        var reportPath = Path.Combine(outputDir, "slicefx-lambda-package-report.json");
+        using var reportDocument = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath));
+        var baseline = reportDocument.RootElement.GetProperty("warningBaseline");
+        Assert.Equal(0, baseline.GetProperty("currentWarningCount").GetInt32());
+        Assert.Equal(1, baseline.GetProperty("staleBaselineCount").GetInt32());
+        Assert.Equal("stale-warning-hash", baseline.GetProperty("staleEntries")[0].GetProperty("messageHash").GetString());
+    }
+
+    [Fact]
+    public void Lambda_package_closure_inspection_fails_on_sibling_feature_type_leak()
+    {
+        var packageRoot = Path.Combine(Path.GetTempPath(), "slice-cli-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(packageRoot);
+        try
+        {
+            var artifactDir = Path.Combine(packageRoot, "artifacts", "health-gethealth");
+            var buildRoot = Path.Combine(packageRoot, "obj", "aws-lambda", "per-feature", "health-gethealth", "build");
+            Directory.CreateDirectory(artifactDir);
+            Directory.CreateDirectory(buildRoot);
+
+            File.Copy(typeof(CliFixtureTests).Assembly.Location, Path.Combine(buildRoot, "bootstrap.mstat"));
+            File.WriteAllText(Path.Combine(buildRoot, "bootstrap.map"), "");
+
+            var current = CreateClosureTestRoute("Health", "GetHealth");
+            var sibling = CreateClosureTestRoute("Users", "GetUser");
+
+            var inspection = LambdaPackageClosureInspector.Inspect(
+                current,
+                [current, sibling],
+                artifactDir,
+                buildRoot,
+                packageRoot,
+                skippedPublish: false);
+
+            Assert.False(inspection.Passed);
+            Assert.Equal("failed", inspection.Status);
+            Assert.Empty(inspection.MissingFiles);
+            Assert.Contains(inspection.ForbiddenHits, static hit =>
+                hit.TypeIdentity == "SliceFx.Cli.Tests.ClosureFixture.Features.Users.GetUser" &&
+                hit.Reason.Contains("sibling feature entrypoint", StringComparison.Ordinal));
+            Assert.Contains(inspection.ForbiddenHits, static hit =>
+                hit.TypeIdentity == "SliceFx.Cli.Tests.ClosureFixture.Features.Users.GetUserValidator" &&
+                hit.Reason.Contains("sibling validator", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(packageRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_rejects_unknown_artifact_layout()
+    {
+        var exitCode = await PackageAwsLambdaCommand.Build()
+            .Parse(["--mode", "function-per-feature", "--artifact-layout", "unknown"])
+            .InvokeAsync();
+
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_per_feature_requires_rid_when_publishing()
+    {
+        using var fixture = CreateLambdaPackageFixture();
+        await fixture.BuildAsync();
+
+        var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
+        var exitCode = await PackageAwsLambdaCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "per-feature"])
             .InvokeAsync();
 
         Assert.Equal(1, exitCode);
         Assert.False(Directory.Exists(outputDir));
-    }
-
-    [Fact]
-    public async Task Package_aws_lambda_rejects_unimplemented_per_feature_artifact_layout()
-    {
-        var exitCode = await PackageAwsLambdaCommand.Build()
-            .Parse(["--mode", "function-per-feature", "--artifact-layout", "per-feature"])
-            .InvokeAsync();
-
-        Assert.Equal(1, exitCode);
     }
 
     [Fact]
@@ -1902,72 +2027,91 @@ public class CliFixtureTests
         return fixture;
     }
 
-    private static CliProjectFixture CreateProjectWithLambdaArtifactMetadata(
-        string? artifactId = "shared",
-        string? artifactLayout = "shared",
-        string? codeUri = "publish",
-        string? bootstrapMode = "generated-handler")
+    private static CliProjectFixture CreateLambdaPackageFixture(
+        bool includeSecondEligibleRoute = false,
+        bool includeFilteredRoute = false)
     {
         var fixture = CliProjectFixture.Create(
-            "invalid-lambda-metadata-app",
+            "lambda-package-app",
             $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
-                <RootNamespace>Invalid.Lambda.Metadata.App</RootNamespace>
+                <RootNamespace>Lambda.Package.App</RootNamespace>
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
                 <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Lambda.FunctionPerFeature", "SliceFx.Lambda.FunctionPerFeature.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
               </ItemGroup>
             </Project>
             """);
         fixture.WriteFeature(
-            "RouteMetadata.cs",
-            $$"""
-            using SliceFx;
+            "LambdaSetup.cs",
+            """
             using SliceFx.Lambda.FunctionPerFeature;
 
-            [assembly: LambdaFunctionPerFeatureModuleAttribute("SliceFx.InvalidHandlers")]
-            [assembly: SliceFeatureRouteAttribute(
-                "Health.GetHealth",
-                "Invalid.Lambda.Metadata.App.Features.Health.GetHealth",
-                "GET",
-                "/health",
-                "Health",
-                null,
-                null,
-                "System.String",
-                "portable",
-                null,
-                null,
-                null,
-                "eligible",
-                null,
-                "invalid-lambda-metadata-app",
-                "SliceFx.InvalidHandlers",
-                "Health_GetHealth",
-                "1",
-                "eligible",
-                null,
-                {{CSharpStringOrNull(artifactId)}},
-                {{CSharpStringOrNull(artifactLayout)}},
-                {{CSharpStringOrNull(codeUri)}},
-                {{CSharpStringOrNull(bootstrapMode)}},
-                null)]
+            [assembly: LambdaFunctionPerFeature]
+            """);
+        fixture.WriteFeature(
+            "Features/Health/GetHealth.cs",
+            """
+            using SliceFx;
 
-            namespace Invalid.Lambda.Metadata.App.Features.Health;
+            namespace Lambda.Package.App.Features.Health;
 
+            [Feature("GET /health")]
             public static class GetHealth
             {
+                public static string Handle() => "ok";
             }
             """);
 
+        if (includeSecondEligibleRoute)
+        {
+            fixture.WriteFeature(
+                "Features/Users/GetUser.cs",
+                """
+                using SliceFx;
+
+                namespace Lambda.Package.App.Features.Users;
+
+                [Feature("GET /users/{id:int}")]
+                public static class GetUser
+                {
+                    public static string Handle(int id) => id.ToString();
+                }
+                """);
+        }
+
+        if (includeFilteredRoute)
+        {
+            fixture.WriteFeature(
+                "Features/Health/GetFilteredHealth.cs",
+                """
+                using System.Threading.Tasks;
+                using Microsoft.AspNetCore.Http;
+                using SliceFx;
+
+                namespace Lambda.Package.App.Features.Health;
+
+                [Feature("GET /health/filtered")]
+                [Filter<AuditFilter>]
+                public static class GetFilteredHealth
+                {
+                    public static string Handle() => "ok";
+                }
+
+                public sealed class AuditFilter : IEndpointFilter
+                {
+                    public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                        => next(context);
+                }
+                """);
+        }
+
         return fixture;
     }
-
-    private static string CSharpStringOrNull(string? value)
-        => value is null ? "null" : $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
 
     private static string FindRepoRoot()
     {
@@ -1983,6 +2127,67 @@ public class CliFixtureTests
         }
 
         throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    [Fact]
+    public async Task Package_aws_lambda_rejects_invalid_generated_handler_metadata()
+    {
+        var route = CreateClosureTestRoute("Health", "GetHealth") with
+        {
+            LambdaFunctionPerFeatureHandlerType = "SliceFx.Bad\"Handler",
+        };
+        var projectDir = Path.Combine(Path.GetTempPath(), "slice-cli-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(projectDir);
+        try
+        {
+            var method = typeof(PackageAwsLambdaCommand).GetMethod(
+                "WritePerFeatureProjectAsync",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+
+            var task = (Task)method.Invoke(
+                null,
+                [route, route.LambdaFunctionPerFeatureArtifactId!, projectDir, Array.Empty<FileInfo>(), CancellationToken.None])!;
+
+            var ex = await Assert.ThrowsAsync<CliException>(async () => await task.ConfigureAwait(false));
+            Assert.Contains("invalid Lambda function-per-feature handler type metadata", ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(projectDir, recursive: true);
+        }
+    }
+
+    private static SliceRouteInfo CreateClosureTestRoute(string tag, string featureName)
+    {
+        var artifactId = (tag + "-" + featureName).ToLowerInvariant();
+        var @namespace = $"SliceFx.Cli.Tests.ClosureFixture.Features.{tag}";
+        var validatorTypes = tag == "Users"
+            ? [$"{@namespace}.GetUserValidator"]
+            : Array.Empty<string>();
+        return new SliceRouteInfo(
+            "GET",
+            "/" + tag.ToLowerInvariant(),
+            @namespace,
+            featureName,
+            tag,
+            tag + "." + featureName,
+            null,
+            null,
+            "System.String",
+            "portable",
+            null,
+            [],
+            [],
+            LambdaFunctionPerFeatureStatus: "eligible",
+            LambdaFunctionPerFeatureHandlerAssembly: "SliceFx.Cli.Tests",
+            LambdaFunctionPerFeatureHandlerType: @namespace + "." + featureName + "Handler",
+            LambdaFunctionPerFeatureHandlerMethod: "FunctionHandler",
+            LambdaFunctionPerFeatureArtifactId: artifactId,
+            LambdaFunctionPerFeatureArtifactLayout: "per-feature",
+            LambdaFunctionPerFeatureArtifactCodeUri: "artifacts/" + artifactId,
+            LambdaFunctionPerFeatureBootstrapMode: "native-aot-bootstrap",
+            HasGeneratedMetadata: true,
+            ValidatorTypes: validatorTypes);
     }
 
     private sealed class CliProjectFixture : IDisposable

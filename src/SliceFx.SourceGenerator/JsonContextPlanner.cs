@@ -167,10 +167,11 @@ internal static class JsonContextPlanner
             }
 
             var featureRoots = CollectRoots(target, feature);
-            var exclusionReason = explicitContextFqn is null && !featureRoots.IsEmpty
+            var requiresExplicitContext = target == JsonContextTarget.Wasi;
+            var exclusionReason = requiresExplicitContext && explicitContextFqn is null && !featureRoots.IsEmpty
                 ? CreateMissingContextReason(target, featureRoots)
                 : null;
-            exclusionReason ??= explicitContextFqn is null ? ValidateRoots(featureRoots) : null;
+            exclusionReason ??= ValidateRoots(featureRoots);
             if (exclusionReason is not null)
             {
                 var exclusion = new FeatureJsonExclusion(

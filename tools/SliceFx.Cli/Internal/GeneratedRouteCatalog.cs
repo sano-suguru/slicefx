@@ -122,6 +122,7 @@ internal static class GeneratedRouteCatalog
     private static GeneratedAssemblyRouteMetadata ReadMetadata(FileInfo assemblyFile)
     {
         var routes = new List<SliceRouteInfo>();
+        var validatorsByRequestType = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         using var stream = new FileStream(assemblyFile.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var peReader = new PEReader(stream);
         if (!peReader.HasMetadata)
@@ -137,6 +138,30 @@ internal static class GeneratedRouteCatalog
             var attribute = reader.GetCustomAttribute(attributeHandle);
             if (IsLambdaFunctionPerFeatureModuleAttribute(reader, attribute))
             {
+                continue;
+            }
+
+            if (IsSliceValidatorAttribute(reader, attribute))
+            {
+                try
+                {
+                    var (requestType, validatorType) = DecodeValidator(attribute);
+                    if (!string.IsNullOrWhiteSpace(requestType) && !string.IsNullOrWhiteSpace(validatorType))
+                    {
+                        if (!validatorsByRequestType.TryGetValue(requestType, out var validators))
+                        {
+                            validators = [];
+                            validatorsByRequestType.Add(requestType, validators);
+                        }
+
+                        validators.Add(validatorType);
+                    }
+                }
+                catch (BadImageFormatException)
+                {
+                    continue;
+                }
+
                 continue;
             }
 
@@ -161,7 +186,13 @@ internal static class GeneratedRouteCatalog
             }
         }
 
-        return new GeneratedAssemblyRouteMetadata([.. routes], lambdaHandlerTypeName);
+        return new GeneratedAssemblyRouteMetadata([.. routes.Select(route =>
+        {
+            var validators = route.RequestType is not null && validatorsByRequestType.TryGetValue(route.RequestType, out var routeValidators)
+                ? routeValidators.Distinct(StringComparer.Ordinal).OrderBy(static type => type, StringComparer.Ordinal).ToArray()
+                : [];
+            return route with { ValidatorTypes = validators };
+        })], lambdaHandlerTypeName);
     }
 
     private static PrimaryAssemblyMetadata ReadPrimaryAssemblyMetadata(FileInfo assemblyFile)
@@ -229,8 +260,19 @@ internal static class GeneratedRouteCatalog
         return value.FixedArguments.Length == 0 ? null : GetString(value.FixedArguments[0]);
     }
 
+    private static (string? RequestType, string? ValidatorType) DecodeValidator(CustomAttribute attribute)
+    {
+        var value = attribute.DecodeValue(StringAttributeTypeProvider.Instance);
+        return value.FixedArguments.Length < 2
+            ? (null, null)
+            : (TrimGlobalPrefix(GetString(value.FixedArguments[0])), TrimGlobalPrefix(GetString(value.FixedArguments[1])));
+    }
+
     private static bool IsSliceRouteAttribute(MetadataReader reader, CustomAttribute attribute)
         => IsAttribute(reader, attribute, "SliceFx", "SliceFeatureRouteAttribute", "SliceFx.Core");
+
+    private static bool IsSliceValidatorAttribute(MetadataReader reader, CustomAttribute attribute)
+        => IsAttribute(reader, attribute, "SliceFx", "SliceFeatureValidatorAttribute", "SliceFx.Core");
 
     private static bool IsSliceAggregatedFeatureAssemblyAttribute(MetadataReader reader, CustomAttribute attribute)
         => IsAttribute(reader, attribute, "SliceFx", "SliceAggregatedFeatureAssemblyAttribute", "SliceFx.Core");
@@ -323,13 +365,6 @@ internal static class GeneratedRouteCatalog
         var returnType = GetString(args[7]) ?? "";
         var portability = GetString(args[8]);
         var portabilityReason = GetString(args[9]);
-        var filters = SplitLines(GetString(args[10]));
-        var parameters = ReadParameters(GetString(args[11]));
-        var lambdaStatus = GetString(args[12]);
-        var lambdaReason = GetString(args[13]);
-        var lambdaHandlerAssembly = GetString(args[14]);
-        var lambdaHandlerType = TrimGlobalPrefix(GetString(args[15]));
-        var lambdaHandlerMethod = GetString(args[16]);
         var manifestSchemaVersion = GetString(args[17]);
         if (string.IsNullOrWhiteSpace(manifestSchemaVersion))
         {
@@ -341,6 +376,13 @@ internal static class GeneratedRouteCatalog
             throw new UnsupportedRouteManifestSchemaException(manifestSchemaVersion);
         }
 
+        var filters = SplitLines(GetString(args[10]));
+        var parameters = ReadParameters(GetString(args[11]));
+        var lambdaStatus = GetString(args[12]);
+        var lambdaReason = GetString(args[13]);
+        var lambdaHandlerAssembly = GetString(args[14]);
+        var lambdaHandlerType = TrimGlobalPrefix(GetString(args[15]));
+        var lambdaHandlerMethod = GetString(args[16]);
         var wasiStatus = GetString(args[18]);
         var wasiReason = GetString(args[19]);
         var lambdaArtifactId = GetString(args[20]);
@@ -426,20 +468,32 @@ internal static class GeneratedRouteCatalog
         foreach (var line in SplitLines(value))
         {
             var parts = line.Split('|');
-            if (parts.Length < 2 || parts[0].Length == 0 || parts[1].Length == 0)
+            if (parts.Length != 5 || parts[0].Length == 0 || parts[1].Length == 0)
             {
                 continue;
             }
 
             parameters.Add(new SliceRouteParameter(
-                parts[0],
-                parts[1],
-                IsNullable: parts.Length > 2 && parts[2] == "N",
-                BindingSource: parts.Length > 3 && parts[3].Length > 0 ? parts[3] : null,
-                BindingName: parts.Length > 4 && parts[4].Length > 0 ? parts[4] : null));
+                DecodeManifestField(parts[0]),
+                DecodeManifestField(parts[1]),
+                IsNullable: parts[2] == "N",
+                BindingSource: parts[3].Length > 0 ? DecodeManifestField(parts[3]) : null,
+                BindingName: parts[4].Length > 0 ? DecodeManifestField(parts[4]) : null));
         }
 
         return [.. parameters];
+    }
+
+    private static string DecodeManifestField(string value)
+    {
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value));
+        }
+        catch (FormatException)
+        {
+            throw new InvalidRouteManifestException("parameter metadata contains an invalid encoded field");
+        }
     }
 
     private sealed class StringAttributeTypeProvider : ICustomAttributeTypeProvider<string>

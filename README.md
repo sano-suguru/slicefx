@@ -119,7 +119,7 @@ public static class DeleteUser
 }
 ```
 
-`AddSlice()` registers referenced filters and matching validators as scoped services, and `[Filter<T>]` applies filters in declaration order. DataAnnotations validation runs first; closed `ISliceValidator<TRequest>` implementations are discovered when `TRequest` is a Slice request parameter and run automatically before feature filters for rules that need code. A request type can have one Slice validator; orphan validators fail the build so validation is never skipped silently.
+`AddSlice()` registers referenced filters and matching validators as scoped services, and `[Filter<T>]` applies filters in declaration order. Supported DataAnnotations rules are generated and run first; closed `ISliceValidator<TRequest>` implementations are discovered when `TRequest` is a Slice request parameter and run automatically before feature filters for rules that need code. A request type can have one Slice validator; orphan validators fail the build so validation is never skipped silently.
 
 For production authorization policies, prefer ASP.NET Core Authorization. Slice filters are best for explicit per-feature endpoint filter behavior.
 
@@ -136,7 +136,7 @@ Read more:
 | `[Feature("METHOD /path")]` declarative routing | Implemented |
 | Source-generated `AddSlice()` / `MapSlices()` | Implemented |
 | Static handlers with body / route / query / DI / `CancellationToken` binding | Implemented |
-| DataAnnotations validation, including positional records and model-level validation | Implemented |
+| Source-generated DataAnnotations validation for supported property/positional-record attributes | Implemented |
 | `ISliceValidator<T>` custom validation | Implemented |
 | `[Filter<T>]` endpoint filters | Implemented |
 | Route metadata manifest | Experimental |
@@ -145,7 +145,7 @@ Read more:
 | `slicefx client typescript` typed fetch client generation | Experimental |
 | AWS SAM manifest generation | Experimental |
 | ASP.NET-hosted Lambda adapter | Experimental |
-| Function-per-feature Lambda handlers | Experimental HTTP API v2 MVP with shared artifact layout |
+| Function-per-feature Lambda handlers | Experimental HTTP API v2 NativeAOT binary-per-feature packaging |
 | TestHost helper | Experimental |
 | WASI adapter | Experimental in-process wasi:http dispatch |
 

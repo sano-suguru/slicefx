@@ -199,6 +199,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             return new EmitPlan([], diagnostics.ToImmutable());
         }
 
+        if (lambdaOptions.Enabled)
+        {
+            diagnostics.AddRange(FindLambdaArtifactIdDiagnostics(models));
+        }
         diagnostics.AddRange(FindFilterOrderDiagnostics(models));
         diagnostics.AddRange(FindUnmatchedValidatorDiagnostics(validators, requestTypeFqns));
         diagnostics.AddRange(FindDuplicateValidatorDiagnostics(matchedValidators, referencedModules));
@@ -206,6 +210,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         diagnostics.AddRange(jsonContextOverrides.Diagnostics);
         diagnostics.AddRange(wasiJsonContextPlan.Diagnostics);
         diagnostics.AddRange(lambdaJsonContextPlan.Diagnostics);
+        if (emitAspNet)
+        {
+            diagnostics.AddRange(FindAspNetUnsupportedValidationDiagnostics(models));
+        }
 
         var sources = ImmutableArray.CreateBuilder<GeneratedSource>();
         sources.Add(new GeneratedSource(
@@ -233,8 +241,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 asmName,
                 matchedValidators,
                 referencedModules,
-                lambdaJsonContextPlan,
-                lambdaOptions.StartupTypeFqn);
+                lambdaJsonContextPlan);
             diagnostics.AddRange(lambdaDiagnostics);
             sources.Add(new GeneratedSource(
                 $"{asmName}.SliceLambdaFunctionPerFeatureHandlers.g.cs",
@@ -299,8 +306,6 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             return new LambdaFunctionPerFeatureOptions(false, null, []);
         }
 
-        var startupInterface = compilation.GetTypeByMetadataName("SliceFx.Lambda.FunctionPerFeature.ILambdaFunctionPerFeatureStartup");
-
         foreach (var attribute in compilation.Assembly.GetAttributes())
         {
             if (!IsAttribute(attribute.AttributeClass, attributeType, "SliceFx.Lambda.FunctionPerFeature.LambdaFunctionPerFeatureAttribute"))
@@ -308,20 +313,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 continue;
             }
 
-            string? startupTypeFqn = null;
-            if (attribute.ConstructorArguments.Length > 0
-                && attribute.ConstructorArguments[0].Value is INamedTypeSymbol startupType)
-            {
-                var diagnostic = ValidateLambdaFunctionPerFeatureStartupType(startupType, startupInterface);
-                if (diagnostic is not null)
-                {
-                    return new LambdaFunctionPerFeatureOptions(true, null, [diagnostic.Value]);
-                }
-
-                startupTypeFqn = startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            }
-
-            return new LambdaFunctionPerFeatureOptions(true, startupTypeFqn, []);
+            return new LambdaFunctionPerFeatureOptions(true, null, []);
         }
 
         return new LambdaFunctionPerFeatureOptions(false, null, []);
@@ -769,8 +761,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         ct.ThrowIfCancellationRequested();
 
-        // Serialise params as "typeFqn|name|K|N-|bindingSource|bindingName;..." where
+        // Serialise params as "b64(typeFqn)|b64(name)|K|N-|b64(bindingSource)|b64(bindingName)|VR;..." where
         // K = 'I' (interface/abstract) or 'C' (concrete), and N marks nullable.
+        // V marks value types so emitters can avoid null checks that produce nullable warnings.
         var paramParts = new string[handle.Parameters.Length];
         for (var i = 0; i < handle.Parameters.Length; i++)
         {
@@ -778,13 +771,15 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             var kind = (p.Type.TypeKind == TypeKind.Interface
                         || (p.Type is INamedTypeSymbol nt && nt.IsAbstract)) ? "I" : "C";
             var nullable = IsNullableParameter(p) ? "N" : "-";
+            var valueType = p.Type.IsValueType ? "V" : "R";
             var (bindingSource, bindingName) = GetBindingMetadata(p);
-            paramParts[i] = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "|" +
-                p.Name + "|" +
+            paramParts[i] = Encode(p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) + "|" +
+                Encode(p.Name) + "|" +
                 kind + "|" +
                 nullable + "|" +
-                bindingSource + "|" +
-                bindingName;
+                Encode(bindingSource) + "|" +
+                Encode(bindingName) + "|" +
+                valueType;
         }
         var serializedParams = string.Join(";", paramParts);
 
@@ -826,7 +821,13 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
         var serializedFilters = string.Join(";", filterParts);
         var serializedOrderHints = string.Join(";", orderHintParts);
-        var (serializedValidationRules, requiresReflectionValidation) = CreateValidationRules(featureType, handle);
+        var (lambdaStartupTypeFqn, lambdaStartupDiagnostic) = FindLambdaFeatureStartup(featureType, ctx.SemanticModel.Compilation);
+        if (lambdaStartupDiagnostic is not null)
+        {
+            return FeatureResult.Error(lambdaStartupDiagnostic.Value);
+        }
+
+        var (serializedValidationRules, requiresReflectionValidation, serializedUnsupportedValidationAttributes) = CreateValidationRules(handle);
         var returnsAspNetResult = ReturnsAspNetResult(handle.ReturnType, ctx.SemanticModel.Compilation);
 
         var featureLocation = CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null);
@@ -844,7 +845,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             serializedFilters,
             serializedValidationRules,
             requiresReflectionValidation,
+            serializedUnsupportedValidationAttributes,
             serializedOrderHints,
+            lambdaStartupTypeFqn,
             featureLocation.FilePath,
             featureLocation.SourceStart,
             featureLocation.SourceLength,
@@ -859,6 +862,37 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
                 featureType.Name))
             : new FeatureResult(model, null);
+    }
+
+    private static (string? StartupTypeFqn, EquatableDiagnostic? Diagnostic) FindLambdaFeatureStartup(
+        INamedTypeSymbol featureType,
+        Compilation compilation)
+    {
+        var startupInterface = compilation.GetTypeByMetadataName("SliceFx.Lambda.FunctionPerFeature.ILambdaFunctionPerFeatureStartup");
+        foreach (var attribute in featureType.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) !=
+                "global::SliceFx.Lambda.FunctionPerFeature.LambdaFunctionStartupAttribute")
+            {
+                continue;
+            }
+
+            if (attribute.ConstructorArguments.Length == 0 ||
+                attribute.ConstructorArguments[0].Value is not INamedTypeSymbol startupType)
+            {
+                continue;
+            }
+
+            var diagnostic = ValidateLambdaFunctionPerFeatureStartupType(startupType, startupInterface);
+            if (diagnostic is not null)
+            {
+                return (null, diagnostic.Value);
+            }
+
+            return (startupType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), null);
+        }
+
+        return (null, null);
     }
 
     private static bool IsNullableParameter(IParameterSymbol parameter)
@@ -905,58 +939,112 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return ("", "");
     }
 
-    private static (string SerializedRules, bool RequiresReflectionValidation) CreateValidationRules(
-        INamedTypeSymbol featureType,
+    private static (string SerializedRules, bool RequiresReflectionValidation, string SerializedUnsupportedValidationAttributes) CreateValidationRules(
         IMethodSymbol handle)
     {
-        var requestType = featureType.GetTypeMembers("Request").FirstOrDefault();
-        if (requestType is null || !handle.Parameters.Any(p => SymbolEqualityComparer.Default.Equals(p.Type, requestType)))
-        {
-            return (string.Empty, RequiresReflectionValidation: false);
-        }
-
-        var requiresReflectionValidation =
-            requestType.GetAttributes().Any(IsValidationAttribute)
-            || ImplementsIValidatableObject(requestType);
-
-        var primaryCtorParams = requestType.InstanceConstructors
-            .OrderByDescending(c => c.Parameters.Length)
-            .FirstOrDefault()
-            ?.Parameters
-            .Where(p => p.Name is not null)
-            .ToDictionary(p => p.Name, StringComparer.Ordinal)
-            ?? new Dictionary<string, IParameterSymbol>(StringComparer.Ordinal);
-
         var rules = new List<string>();
-        foreach (var property in requestType.GetMembers().OfType<IPropertySymbol>())
+        var unsupportedAttributes = new List<string>();
+        var requiresReflectionValidation = false;
+
+        for (var parameterIndex = 0; parameterIndex < handle.Parameters.Length; parameterIndex++)
         {
-            if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic || property.GetMethod is null)
+            var parameter = handle.Parameters[parameterIndex];
+            if (!IsRequestLikeParameter(parameter) || parameter.Type is not INamedTypeSymbol requestType)
             {
                 continue;
             }
 
-            var attributes = property.GetAttributes().Where(IsValidationAttribute).ToList();
-            if (primaryCtorParams.TryGetValue(property.Name, out var matchingParameter))
+            foreach (var attribute in requestType.GetAttributes().Where(IsValidationAttribute))
             {
-                attributes.AddRange(matchingParameter.GetAttributes().Where(IsValidationAttribute));
-            }
-
-            foreach (var attribute in attributes)
-            {
-                var rule = TryCreateValidationRule(property, attribute);
-                if (rule is null)
+                if (IsMetadataOnlyValidationAttribute(attribute))
                 {
-                    requiresReflectionValidation = true;
                     continue;
                 }
 
-                rules.Add(rule);
+                requiresReflectionValidation = true;
+                unsupportedAttributes.Add(SerializeUnsupportedValidationAttribute(handle.ContainingType.Name, attribute));
+            }
+
+            if (ImplementsIValidatableObject(requestType))
+            {
+                requiresReflectionValidation = true;
+                unsupportedAttributes.Add(SerializeUnsupportedValidationType(handle.ContainingType.Name, requestType, "IValidatableObject"));
+            }
+
+            var primaryCtorParams = requestType.InstanceConstructors
+                .OrderByDescending(c => c.Parameters.Length)
+                .FirstOrDefault()
+                ?.Parameters
+                .Where(p => p.Name is not null)
+                .ToDictionary(p => p.Name, StringComparer.Ordinal)
+                ?? new Dictionary<string, IParameterSymbol>(StringComparer.Ordinal);
+
+            foreach (var property in requestType.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (property.DeclaredAccessibility != Accessibility.Public || property.IsStatic || property.GetMethod is null)
+                {
+                    continue;
+                }
+
+                var attributes = property.GetAttributes().Where(IsValidationAttribute).ToList();
+                if (primaryCtorParams.TryGetValue(property.Name, out var matchingParameter))
+                {
+                    attributes.AddRange(matchingParameter.GetAttributes().Where(IsValidationAttribute));
+                }
+
+                foreach (var attribute in attributes)
+                {
+                    if (IsMetadataOnlyValidationAttribute(attribute))
+                    {
+                        continue;
+                    }
+
+                    var rule = TryCreateValidationRule(property, attribute);
+                    if (rule is null)
+                    {
+                        requiresReflectionValidation = true;
+                        unsupportedAttributes.Add(SerializeUnsupportedValidationAttribute(handle.ContainingType.Name, attribute));
+                        continue;
+                    }
+
+                    if (rule.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    rules.Add(parameterIndex + "|" + parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "|" + rule);
+                }
             }
         }
 
-        return requiresReflectionValidation
-            ? (string.Empty, RequiresReflectionValidation: true)
-            : (string.Join("\n", rules), RequiresReflectionValidation: false);
+        return (
+            string.Join("\n", rules),
+            requiresReflectionValidation,
+            string.Join("\n", unsupportedAttributes));
+    }
+
+    private static bool IsRequestLikeParameter(IParameterSymbol parameter)
+    {
+        var typeFqn = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return typeFqn != "global::System.Threading.CancellationToken"
+            && parameter.Type.TypeKind != TypeKind.Interface
+            && parameter.Type is not INamedTypeSymbol { IsAbstract: true }
+            && !SourceGenerationHelpers.IsSimpleType(typeFqn)
+            && !SourceGenerationHelpers.IsFrameworkType(typeFqn)
+            && !HasExplicitServicesBinding(parameter);
+    }
+
+    private static bool HasExplicitServicesBinding(IParameterSymbol parameter)
+    {
+        foreach (var attribute in parameter.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Microsoft.AspNetCore.Mvc.FromServicesAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool ImplementsIValidatableObject(INamedTypeSymbol type)
@@ -974,6 +1062,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
     private static bool IsValidationAttribute(AttributeData attribute)
         => InheritsFrom(attribute.AttributeClass, "System.ComponentModel.DataAnnotations.ValidationAttribute");
+
+    private static bool IsMetadataOnlyValidationAttribute(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.DataTypeAttribute";
 
     private static bool InheritsFrom(INamedTypeSymbol? type, string metadataName)
     {
@@ -1031,6 +1122,12 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         var attributeName = attribute.AttributeClass?.ToDisplayString();
         if (attributeName == "System.ComponentModel.DataAnnotations.RequiredAttribute")
         {
+            var requiredKind = GetRequiredValidationKind(property);
+            if (requiredKind is null)
+            {
+                return "";
+            }
+
             var allowEmptyStrings = false;
             foreach (var namedArgument in attribute.NamedArguments)
             {
@@ -1041,7 +1138,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
 
             var message = GetErrorMessage(attribute) ?? $"The {propertyName} field is required.";
-            return $"{propertyName}|Required|{(allowEmptyStrings ? "true" : "false")}|{EncodeValidationMessage(message)}";
+            return $"{propertyName}|Required|{requiredKind}|{(allowEmptyStrings ? "true" : "false")}|{EncodeValidationMessage(message)}";
         }
 
         if (attributeName == "System.ComponentModel.DataAnnotations.StringLengthAttribute"
@@ -1082,8 +1179,211 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             return $"{propertyName}|MinLength|{length}|{lengthMember}|{EncodeValidationMessage(message)}";
         }
 
+        if (attributeName == "System.ComponentModel.DataAnnotations.MaxLengthAttribute"
+            && attribute.ConstructorArguments.Length <= 1)
+        {
+            if (attribute.ConstructorArguments.Length == 0 || attribute.ConstructorArguments[0].Value is not int maxLength)
+            {
+                return null;
+            }
+
+            var lengthMember = TryGetLengthMember(property.Type);
+            if (lengthMember is null)
+            {
+                return null;
+            }
+
+            var message = GetErrorMessage(attribute)
+                ?? $"The field {propertyName} must be a string or array type with a maximum length of '{maxLength}'.";
+            return $"{propertyName}|MaxLength|{maxLength}|{lengthMember}|{EncodeValidationMessage(message)}";
+        }
+
+        if (attributeName == "System.ComponentModel.DataAnnotations.EmailAddressAttribute")
+        {
+            var message = GetErrorMessage(attribute) ?? $"The {propertyName} field is not a valid e-mail address.";
+            return $"{propertyName}|EmailAddress|{EncodeValidationMessage(message)}";
+        }
+
+        if (attributeName == "System.ComponentModel.DataAnnotations.UrlAttribute")
+        {
+            var message = GetErrorMessage(attribute) ?? $"The {propertyName} field is not a valid fully-qualified http, https, or ftp URL.";
+            return $"{propertyName}|Url|{EncodeValidationMessage(message)}";
+        }
+
+        if (attributeName == "System.ComponentModel.DataAnnotations.RegularExpressionAttribute"
+            && attribute.ConstructorArguments.Length == 1
+            && attribute.ConstructorArguments[0].Value is string pattern)
+        {
+            var matchTimeoutInMilliseconds = 2000;
+            foreach (var namedArgument in attribute.NamedArguments)
+            {
+                if (namedArgument.Key == "MatchTimeoutInMilliseconds"
+                    && namedArgument.Value.Value is int value)
+                {
+                    matchTimeoutInMilliseconds = value;
+                }
+            }
+
+            var message = GetErrorMessage(attribute)
+                ?? $"The field {propertyName} must match the regular expression '{pattern}'.";
+            return $"{propertyName}|RegularExpression|{EncodeValidationMessage(pattern)}|{EncodeValidationMessage(message)}|{matchTimeoutInMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        }
+
+        if (attributeName == "System.ComponentModel.DataAnnotations.RangeAttribute"
+            && TryCreateRangeValidationRule(property, attribute) is { } rangeRule)
+        {
+            return rangeRule;
+        }
+
         return null;
     }
+
+    private static string? GetRequiredValidationKind(IPropertySymbol property)
+    {
+        if (property.Type.SpecialType == SpecialType.System_String)
+        {
+            return "String";
+        }
+
+        if (IsNullableValueType(property.Type))
+        {
+            return "Nullable";
+        }
+
+        if (property.Type.IsValueType)
+        {
+            return null;
+        }
+
+        return "Reference";
+    }
+
+    private static bool IsNullableValueType(ITypeSymbol type)
+        => type is INamedTypeSymbol named
+           && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+
+    private static string? TryCreateRangeValidationRule(IPropertySymbol property, AttributeData attribute)
+    {
+        if (attribute.ConstructorArguments.Length != 2)
+        {
+            return null;
+        }
+
+        var propertyType = property.Type;
+        if (property.Type is INamedTypeSymbol { IsGenericType: true } named
+            && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            propertyType = named.TypeArguments[0];
+        }
+        string? typeName = null;
+        if (propertyType.SpecialType == SpecialType.System_Int32)
+        {
+            typeName = "int";
+        }
+        else if (propertyType.SpecialType == SpecialType.System_Int64)
+        {
+            typeName = "long";
+        }
+        else if (propertyType.SpecialType == SpecialType.System_Double)
+        {
+            typeName = "double";
+        }
+        else if (propertyType.SpecialType == SpecialType.System_Single)
+        {
+            typeName = "float";
+        }
+        else if (propertyType.SpecialType == SpecialType.System_Decimal)
+        {
+            typeName = "decimal";
+        }
+        if (typeName is null)
+        {
+            return null;
+        }
+
+        var minimum = FormatRangeLiteral(attribute.ConstructorArguments[0], propertyType.SpecialType);
+        var maximum = FormatRangeLiteral(attribute.ConstructorArguments[1], propertyType.SpecialType);
+        if (minimum is null || maximum is null)
+        {
+            return null;
+        }
+
+        var propertyName = property.Name;
+        var displayMinimum = Convert.ToString(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        var displayMaximum = Convert.ToString(attribute.ConstructorArguments[1].Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        var message = GetErrorMessage(attribute)
+            ?? $"The field {propertyName} must be between {displayMinimum} and {displayMaximum}.";
+        return $"{propertyName}|Range|{typeName}|{minimum}|{maximum}|{EncodeValidationMessage(message)}";
+    }
+
+    private static string? FormatRangeLiteral(TypedConstant constant, SpecialType specialType)
+    {
+        if (constant.Value is null)
+        {
+            return null;
+        }
+
+        if (specialType == SpecialType.System_Int32)
+        {
+            return constant.Value is int value ? value.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+        }
+
+        if (specialType == SpecialType.System_Int64)
+        {
+            return constant.Value is long value ? value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "L" : null;
+        }
+
+        if (specialType == SpecialType.System_Double)
+        {
+            return constant.Value is double value ? value.ToString("R", System.Globalization.CultureInfo.InvariantCulture) : null;
+        }
+
+        if (specialType == SpecialType.System_Single)
+        {
+            return constant.Value is float value ? value.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "F" : null;
+        }
+
+        if (specialType == SpecialType.System_Decimal)
+        {
+            return constant.Value is decimal value ? value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "M" : null;
+        }
+
+        return null;
+    }
+
+    private static string SerializeUnsupportedValidationAttribute(string featureName, AttributeData attribute)
+    {
+        var location = attribute.ApplicationSyntaxReference is null
+            ? DiagnosticLocationModel.None
+            : CreateDiagnosticLocation(attribute.ApplicationSyntaxReference.SyntaxTree.GetLocation(attribute.ApplicationSyntaxReference.Span));
+        var attributeName = attribute.AttributeClass?.Name ?? "ValidationAttribute";
+        return SerializeUnsupportedValidation(featureName, attributeName, location);
+    }
+
+    private static string SerializeUnsupportedValidationType(string featureName, INamedTypeSymbol type, string attributeName)
+    {
+        var location = CreateDiagnosticLocation(type.Locations.Length > 0 ? type.Locations[0] : null);
+        return SerializeUnsupportedValidation(featureName, attributeName, location);
+    }
+
+    private static string SerializeUnsupportedValidation(
+        string featureName,
+        string attributeName,
+        DiagnosticLocationModel location)
+        => string.Join("|", [
+            Encode(location.FilePath),
+            location.SourceStart.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            location.SourceLength.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            location.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            location.StartCharacter.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            location.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            location.EndCharacter.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Encode(featureName),
+            Encode(attributeName),
+        ]);
+
+    private static string Encode(string value)
+        => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
 
     private static string? TryGetLengthMember(ITypeSymbol type)
     {
@@ -1170,6 +1470,24 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             return dot < 0 ? rest : rest.Substring(0, dot);
         }
         return "Default";
+    }
+
+    private static ImmutableArray<EquatableDiagnostic> FindAspNetUnsupportedValidationDiagnostics(ImmutableArray<FeatureModel> models)
+    {
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        foreach (var model in models)
+        {
+            foreach (var unsupported in model.GetUnsupportedValidationAttributes())
+            {
+                diagnostics.Add(EquatableDiagnostic.Create(
+                    SliceDiagnostics.UnsupportedValidationForAspNet,
+                    unsupported.GetDiagnosticLocationModel(),
+                    unsupported.FeatureName,
+                    unsupported.AttributeName));
+            }
+        }
+
+        return diagnostics.ToImmutable();
     }
 
     private static ImmutableArray<EquatableDiagnostic> FindFilterOrderDiagnostics(ImmutableArray<FeatureModel> models)
@@ -1328,6 +1646,30 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
 
             seen.Add(validator.RequestType, validator.ValidatorType);
+        }
+
+        return diagnostics.ToImmutable();
+    }
+
+    private static ImmutableArray<EquatableDiagnostic> FindLambdaArtifactIdDiagnostics(ImmutableArray<FeatureModel> models)
+    {
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        foreach (var model in models)
+        {
+            var artifactId = SourceGenerationHelpers.ToLambdaArtifactId(model.EndpointName);
+            if (seen.TryGetValue(artifactId, out var existing))
+            {
+                diagnostics.Add(EquatableDiagnostic.Create(
+                    SliceDiagnostics.DuplicateLambdaFunctionPerFeatureArtifactId,
+                    model.GetDiagnosticLocationModel(),
+                    artifactId,
+                    existing,
+                    model.FullyQualifiedTypeName));
+                continue;
+            }
+
+            seen.Add(artifactId, model.FullyQualifiedTypeName);
         }
 
         return diagnostics.ToImmutable();

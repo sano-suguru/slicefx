@@ -13,10 +13,6 @@ internal static class RouteCatalog
     internal const string LambdaEligible = "eligible";
     internal const string LambdaIneligible = "ineligible";
     internal const string LambdaUnknown = "unknown";
-    internal const string LambdaArtifactIdShared = "shared";
-    internal const string LambdaArtifactLayoutShared = "shared";
-    internal const string LambdaArtifactCodeUriShared = "publish";
-    internal const string LambdaBootstrapModeGeneratedHandler = "generated-handler";
 
     private static readonly HashSet<string> s_simpleTypes = new(StringComparer.Ordinal)
     {
@@ -465,7 +461,8 @@ internal sealed record SliceRouteInfo(
     string? WasiDispatchStatus = null,
     string? WasiDispatchReason = null,
     bool HasGeneratedMetadata = false,
-    string? SourceAssemblyName = null)
+    string? SourceAssemblyName = null,
+    string[]? ValidatorTypes = null)
 {
     internal string FeatureType => $"{Namespace}.{FeatureName}";
 

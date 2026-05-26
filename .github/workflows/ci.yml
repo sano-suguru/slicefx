@@ -32,6 +32,9 @@ jobs:
       - name: Test
         run: dotnet test SliceFx.slnx --configuration Release --no-build --no-restore
 
+      - name: Verify Lambda NativeAOT per-feature packaging
+        run: dotnet run --project tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build -- package aws-lambda --project tests/SliceFx.Lambda.NativeAotFixture/SliceFx.Lambda.NativeAotFixture.csproj --mode function-per-feature --rid linux-x64 --output artifacts/lambda-nativeaot --force
+
       - name: Pack
         run: |
           dotnet pack src/SliceFx.Core/SliceFx.Core.csproj --configuration Release --no-build

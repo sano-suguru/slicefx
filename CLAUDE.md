@@ -67,10 +67,10 @@ public static class CreateUser
 Framework-enforced conventions (not just style):
 
 - `Handle` **must be `public static`** — the source generator emits SLICE001/SLICE002/SLICE005 diagnostics (errors) if absent, non-public, non-static, or ambiguous. Dependencies arrive as parameters; Minimal API binds them from DI, route, query, or body automatically.
-- Request records **must live in a user namespace** — `DataAnnotationsValidationFilter` skips types whose namespace starts with `System` or `Microsoft`, so a request typed as a BCL type will not be validated.
+- Request records **must live in a user namespace** — generated validation skips framework types whose namespace starts with `System` or `Microsoft`, so a request typed as a BCL type will not be validated.
 - DataAnnotations on **record positional parameters** are honored (the validator reads attrs from both properties and matching primary-ctor parameters). Validation failures return Problem Details automatically.
 - OpenAPI tag is inferred from the namespace segment after `.Features.` (`SliceFx.Sample.Features.Users` → tag `Users`); endpoint name is `{Tag}.{TypeName}`. Override via `[Feature(..., Tag = "...")]`.
-- Filters are plain `IEndpointFilter` classes under `Filters/`. `AddSlice()` discovers every `[Filter<T>]` reference and registers `T` as **scoped** in DI. `DataAnnotationsValidationFilter` is always attached before any `[Filter<T>]`.
+- Filters are plain `IEndpointFilter` classes under `Filters/`. `AddSlice()` discovers every `[Filter<T>]` reference and registers `T` as **scoped** in DI. Generated DataAnnotations validation is always attached before any `[Filter<T>]`.
 
 ## Satellite libraries
 
@@ -79,7 +79,7 @@ Framework-enforced conventions (not just style):
 `ISliceValidator<T>` and `SliceValidationResult` are defined in the `SliceFx.Core` package
 (no extra NuGet dependency). Use when DataAnnotations alone isn't expressive enough (cross-field rules,
 async checks, etc.). Implement one closed validator for a discovered Slice request parameter.
-`DataAnnotationsValidationFilter` is attached first; `ISliceValidator<T>` then runs before
+Generated DataAnnotations validation is attached first; `ISliceValidator<T>` then runs before
 user-declared `[Filter<T>]` endpoint filters. Unmatched validators are build errors.
 
 ```csharp
@@ -108,7 +108,7 @@ ASP.NET-independent WASI satellite (experimental). Bypasses Kestrel entirely; th
 
 **WASI publish:** `samples/SliceFx.WasiSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release`. The component exports `wasi:http/incoming-handler@0.2.0` — the standard WASI HTTP interface. With the current NativeAOT-LLVM preview packages, native publish is supported from Linux x64 or Windows x64 hosts; macOS should publish through a Linux x64 Docker container such as `docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work mcr.microsoft.com/dotnet/sdk:10.0 dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release`. The CopyWasiWasmComponent target copies the generated component to `samples/SliceFx.WasiSample/dist/slice-wasi-sample.wasm`. For Cloudflare Workers: `samples/SliceFx.WasiSample/dist` uses `@bytecodealliance/jco` to transpile the component and `shim.mjs` to bridge Cloudflare's `fetch(Request)` to the wasi:http handler (`npm ci` in the checked-in sample, then `npm run transpile`; scaffolds without a lockfile use `npm install` first). For Fermyon Cloud / Spin: deploy `spin.toml` + `dist/slice-wasi-sample.wasm` directly — Spin natively understands `wasi:http/incoming-handler`. Treat SliceFx.Wasi APIs as experimental and the build/transpile/deploy toolchain as unstable upstream preview tooling.
 
-Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE008 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE009. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, and `MinLength` rules; routes that need reflection-based validation are excluded with SLICE011. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
+Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE008 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE009. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, `MinLength`, `MaxLength`, numeric `Range`, `EmailAddress`, `Url`, and `RegularExpression` rules; routes that need reflection-bound validation are excluded with SLICE011. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
 
 ```csharp
 var builder = WasiHost.CreateBuilder();
@@ -168,7 +168,7 @@ Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and ex
 
 `src/SliceFx.SourceGenerator/Emit/RegistrationEmitter.cs` emits the registration code. Read it before changing registration behavior.
 
-`AddSlice()` / `MapSlices()` are generated extension methods emitted into the `SliceFx` namespace for host projects. Feature assemblies also emit public non-extension module helpers and assembly markers so host generators can explicitly aggregate referenced feature assemblies without runtime scanning and validate endpoint-name uniqueness across aggregated modules. Aggregation is local-only by default; `SliceReferencedAssemblies` allow-lists referenced assembly simple names, and `SliceAggregateReferences=true` opts into aggregating all directly referenced Slice modules. `AddSlice()` registers every filter referenced by `[Filter<T>]` as a scoped service. `MapSlices()` maps each `[Feature]` class: calls `endpoints.MapMethods(pattern, [method], delegate)`, attaches `DataAnnotationsValidationFilter`, then each `[Filter<T>]` in declaration order, then sets tag/summary/name.
+`AddSlice()` / `MapSlices()` are generated extension methods emitted into the `SliceFx` namespace for host projects. Feature assemblies also emit public non-extension module helpers and assembly markers so host generators can explicitly aggregate referenced feature assemblies without runtime scanning and validate endpoint-name uniqueness across aggregated modules. Aggregation is local-only by default; `SliceReferencedAssemblies` allow-lists referenced assembly simple names, and `SliceAggregateReferences=true` opts into aggregating all directly referenced Slice modules. `AddSlice()` registers every filter referenced by `[Filter<T>]` as a scoped service. `MapSlices()` maps each `[Feature]` class: calls `endpoints.MapMethods(pattern, [method], delegate)`, attaches generated DataAnnotations validation when needed, then each `[Filter<T>]` in declaration order, then sets tag/summary/name.
 
 The source generator emits up to three files per assembly: `{AsmName}_SliceRegistrations.g.cs` (ASP.NET registrations, when `Microsoft.AspNetCore.Http.IResult` is referenced), `{AsmName}_SliceWasiRegistrations.g.cs` (WASI registrations, only when `SliceFx.Wasi.Routing.WasiRouteTable` is referenced), and `{AsmName}_SliceRouteManifest.g.cs` — a `SliceRouteDescriptor` record plus `GetSliceRoutesGenerated()` consumed by tooling. The manifest includes the shared portability vocabulary (`portable`, `partial`, `aspnet-only`) and is emitted regardless of which hosting path is referenced. Emitter source: `src/SliceFx.SourceGenerator/Emit/`.
 
@@ -181,7 +181,7 @@ Directory.Build.props     # net10.0 TFM, LangVersion=latest, TreatWarningsAsErro
 Directory.Build.targets   # ValidateSliceCorePackageReferences guard (zero-dep enforcement)
 .editorconfig             # file-scoped namespaces; CI enforces via dotnet format
 src/SliceFx.Core/           # the framework: FeatureAttribute, FilterAttribute,
-                          # DataAnnotationsValidationFilter, ISliceValidator<T>
+                          # ISliceValidator<T>, SliceValidationResult
 src/SliceFx.SourceGenerator/# Roslyn generator emitting AddSlice/MapSlices into namespace SliceFx
 src/SliceFx.Lambda/         # AWS Lambda hosting adapter over Amazon.Lambda.AspNetCoreServer.Hosting
 src/SliceFx.TestHost/       # in-process test host wrapper over Microsoft.AspNetCore.Mvc.Testing

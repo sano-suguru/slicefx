@@ -19,8 +19,8 @@ slicefx client typescript --output slice-api-client.ts
 slicefx openapi --output openapi.json
 
 slicefx manifest aws-lambda --output template.yaml
-slicefx manifest aws-lambda --mode function-per-feature --artifact-layout shared --output template.yaml
-slicefx package aws-lambda --mode function-per-feature --artifact-layout shared --output artifacts/aws-lambda
+slicefx manifest aws-lambda --mode function-per-feature --output template.yaml
+slicefx package aws-lambda --mode function-per-feature --rid linux-x64 --output artifacts/aws-lambda
 ```
 
 Pass `--project` when running outside the project directory. Use `--force` for commands that write files and should overwrite existing output.
@@ -99,8 +99,18 @@ By default, `slicefx openapi` includes `portable` and `partial` routes. `aspnet-
 
 By default (`--mode hosted`), it emits one `AWS::Serverless::Function` for the ASP.NET-hosted SliceFx app and one API Gateway `HttpApi` event per `[Feature]`. All features are included because `SliceFx.Lambda` runs through ASP.NET Core hosting.
 
-`--mode function-per-feature --artifact-layout shared` emits one `AWS::Serverless::Function` per eligible generated `SliceFx.Lambda.FunctionPerFeature` handler and excludes unsupported routes with reasons. The shared artifact layout means those functions point at one publish output and select the generated method through `Handler`; it does not provide per-function binary-size or cold-start isolation. ASP.NET route constraints such as `{id:guid}` are converted to API Gateway syntax such as `{id}`.
+`--mode function-per-feature` emits one `AWS::Serverless::Function` per eligible generated `SliceFx.Lambda.FunctionPerFeature` handler and excludes unsupported routes with reasons. Each function points at its own NativeAOT custom-runtime artifact. ASP.NET route constraints such as `{id:guid}` are converted to API Gateway syntax such as `{id}`.
 
 The default runtime is `provided.al2023`. Use `--runtime dotnet8` or `--runtime dotnet9` for managed runtimes.
 
-`slicefx package aws-lambda --mode function-per-feature --artifact-layout shared` creates a publish output and `slicefx-lambda-package.json` describing generated handlers. The manifest records `artifactLayout: "shared"` plus an `artifacts` collection; today the single `shared` artifact has `codeUri: "publish"` and every function references it by `artifactId`. Separate NativeAOT binaries per feature remain a future `--artifact-layout per-feature` optimization.
+NativeAOT binary-per-feature packaging is available with:
+
+```bash
+slicefx package aws-lambda --mode function-per-feature --rid linux-x64 --output artifacts/aws-lambda
+```
+
+This generates one temporary entry project per eligible Lambda function-per-feature route under the package `obj` directory, publishes each route to a distinct artifact directory, and writes one package manifest artifact per feature. It may be slow because it runs one NativeAOT publish per eligible feature. Generated wrappers use size-oriented NativeAOT settings, route-local JSON source-generation metadata, supported DataAnnotations validation without runtime reflection, and NativeAOT mstat/map output.
+
+The command writes `slicefx-lambda-package-report.json` containing per-artifact size, top files, binlog path, structured warning details, mstat/map paths, and closure inspection results. Without `--warning-baseline`, a real publish must produce zero warnings. Pass `--warning-baseline <path>` to allow known warnings; stale baseline entries fail. Closure inspection fails if an artifact roots sibling feature entrypoints, sibling feature-owned DTOs, sibling validators, generated app-wide registration surfaces, the ASP.NET hosted bootstrap path, hosted Lambda adapter types, or unrelated SliceFx satellite types.
+
+PR CI gates the NativeAOT fixture package on `linux-x64`. The `linux-arm64` package gate is scheduled/manual because runner availability varies; it uses a Linux ARM64 runner when one is available. Each artifact runs as an independent Lambda process and owns independent DI singleton state. WASI per-feature packaging is not implemented.

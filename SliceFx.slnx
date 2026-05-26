@@ -22,6 +22,7 @@
     <Project Path="tests/SliceFx.Core.Tests/SliceFx.Core.Tests.csproj" />
     <Project Path="tests/SliceFx.Cli.Tests/SliceFx.Cli.Tests.csproj" />
     <Project Path="tests/SliceFx.Lambda.FunctionPerFeature.Tests/SliceFx.Lambda.FunctionPerFeature.Tests.csproj" />
+    <Project Path="tests/SliceFx.Lambda.NativeAotFixture/SliceFx.Lambda.NativeAotFixture.csproj" />
     <Project Path="tests/SliceFx.Lambda.Tests/SliceFx.Lambda.Tests.csproj" />
     <Project Path="tests/SliceFx.SourceGenerator.Tests/SliceFx.SourceGenerator.Tests.csproj" />
     <Project Path="tests/SliceFx.TestHost.Tests/SliceFx.TestHost.Tests.csproj" />

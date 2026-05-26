@@ -13,7 +13,7 @@ public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
             "/users",
             new[] { "POST" },
             new Func<CreateUser.Request, IUserStore, CancellationToken, Task<CreateUser.Response>>(CreateUser.Handle))
-        .AddEndpointFilterFactory(DataAnnotationsValidationFilter.CreateFilterFactory)
+        .AddEndpointFilterFactory(__CreateDataAnnotationsValidationFactory_CreateUser)
         .WithTags("Users")
         .WithName("Users.CreateUser");
 
@@ -21,7 +21,7 @@ public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
 }
 ```
 
-That keeps startup registration reflection-free and trimming-friendly.
+Generated validation is emitted only when supported DataAnnotations rules are present (`Required`, length/range rules, `EmailAddress`, `Url`, and `RegularExpression`). Unsupported reflection-based validation such as custom `ValidationAttribute`, type-level validation, `IValidatableObject`, or resource-based messages is reported with `SLICE026` for ASP.NET registrations so default registrations stay reflection-free and trimming-friendly; move those rules to `ISliceValidator<TRequest>`.
 
 ## Multi-assembly apps
 

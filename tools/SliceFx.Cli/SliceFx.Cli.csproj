@@ -14,12 +14,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <PackageReference Include="MSBuild.StructuredLogger" Version="2.3.204" />
     <PackageReference Include="System.CommandLine" Version="2.0.8" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\Shared\SliceRouteManifestSchema.cs"
-             Link="Shared\SliceRouteManifestSchema.cs" />
+    <Compile Include="..\..\src\Shared\SliceRouteManifestSchema.cs" Link="Shared\SliceRouteManifestSchema.cs" />
   </ItemGroup>
 
 </Project>

@@ -292,12 +292,12 @@ internal static class RouteManifestEmitter
             SourceGenerationHelpers.ManifestEligible,
             null,
             assemblyName,
-            $"SliceFx.{GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaFunctionPerFeatureHandlers")}",
-            SanitizeIdentifier(feature.EndpointName),
-            SourceGenerationHelpers.LambdaArtifactIdShared,
-            SourceGenerationHelpers.LambdaArtifactLayoutShared,
-            SourceGenerationHelpers.LambdaArtifactCodeUriShared,
-            SourceGenerationHelpers.LambdaBootstrapModeGeneratedHandler,
+            $"SliceFx.{LambdaFunctionPerFeatureEmitter.HandlerTypeName(GeneratedIdentifier.FromAssemblyName(assemblyName, "_SliceLambdaFunctionPerFeatureHandlers"), feature)}",
+            LambdaFunctionPerFeatureEmitter.HandlerMethodName(feature),
+            SourceGenerationHelpers.ToLambdaArtifactId(feature.EndpointName),
+            "per-feature",
+            "artifacts/" + SourceGenerationHelpers.ToLambdaArtifactId(feature.EndpointName),
+            "native-aot-bootstrap",
             null);
     }
 
@@ -328,24 +328,16 @@ internal static class RouteManifestEmitter
         return parameters.IsEmpty
             ? null
             : string.Join("\n", parameters.Select(static p =>
-                $"{SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn)}|{p.Name}|{(p.IsNullable ? "N" : "-")}|{p.BindingSource ?? ""}|{p.BindingName ?? ""}"));
+                $"{EncodeManifestField(SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn))}|{EncodeManifestField(p.Name)}|{(p.IsNullable ? "N" : "-")}|{EncodeManifestField(p.BindingSource ?? "")}|{EncodeManifestField(p.BindingName ?? "")}"));
     }
+
+    private static string EncodeManifestField(string value)
+        => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
 
     private static string BoolLiteral(bool value) => value ? "true" : "false";
 
     private static string CSharpNullableStringLiteral(string? value)
         => value is null ? "null" : CSharpLiteral.String(value);
-
-    private static string SanitizeIdentifier(string value)
-    {
-        var sb = new StringBuilder(value.Length);
-        foreach (var ch in value)
-        {
-            sb.Append(char.IsLetterOrDigit(ch) ? ch : '_');
-        }
-
-        return sb.Length == 0 ? "_" : sb.ToString();
-    }
 }
 
 internal readonly record struct RouteManifestEntry(

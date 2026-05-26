@@ -7,10 +7,6 @@ internal static class SourceGenerationHelpers
     public const string ManifestSchemaVersion = SliceRouteManifestSchema.CurrentVersion;
     public const string ManifestEligible = "eligible";
     public const string ManifestIneligible = "ineligible";
-    public const string LambdaArtifactIdShared = "shared";
-    public const string LambdaArtifactLayoutShared = "shared";
-    public const string LambdaArtifactCodeUriShared = "publish";
-    public const string LambdaBootstrapModeGeneratedHandler = "generated-handler";
     public const string PortabilityPortable = "portable";
     public const string PortabilityPartial = "partial";
     public const string PortabilityAspNetOnly = "aspnet-only";
@@ -30,6 +26,28 @@ internal static class SourceGenerationHelpers
 
     public static string TrimGlobalAlias(string value)
         => value.Replace("global::", "");
+
+    public static string ToLambdaArtifactId(string endpointName)
+    {
+        var chars = new List<char>(endpointName.Length);
+        var lastWasDash = false;
+        foreach (var ch in endpointName)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                chars.Add(char.ToLowerInvariant(ch));
+                lastWasDash = false;
+            }
+            else if (!lastWasDash)
+            {
+                chars.Add('-');
+                lastWasDash = true;
+            }
+        }
+
+        var value = new string([.. chars]).Trim('-');
+        return value.Length == 0 ? "function" : value;
+    }
 
     public static bool IsNonGenericAwaitable(string returnTypeFqn)
         => returnTypeFqn is "global::System.Threading.Tasks.Task"

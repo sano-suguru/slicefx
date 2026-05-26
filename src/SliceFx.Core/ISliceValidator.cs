@@ -2,15 +2,15 @@ namespace SliceFx;
 
 /// <summary>
 /// Validates a value of type <typeparamref name="T"/>.
-/// Implement this interface for request-level validation that goes beyond DataAnnotations
-/// (cross-field rules, database lookups, etc.).
+/// Implement this interface for request-level validation that goes beyond generated
+/// DataAnnotations checks (cross-field rules, database lookups, etc.).
 /// </summary>
 /// <remarks>
 /// Implement a closed <c>ISliceValidator&lt;Request&gt;</c> type to attach request-level
 /// validation to a Slice feature. The source generator registers validators as scoped services
 /// and runs them automatically for matching request parameters.
-/// <see cref="DataAnnotationsValidationFilter"/> runs first, then <c>ISliceValidator&lt;T&gt;</c>,
-/// then user-declared <c>[Filter&lt;T&gt;]</c> filters. Returning
+/// Generated DataAnnotations checks run first, then <c>ISliceValidator&lt;T&gt;</c>, then
+/// user-declared <c>[Filter&lt;T&gt;]</c> filters. Returning
 /// <see cref="SliceValidationResult.Success"/> passes control to the next step; returning
 /// <c>SliceValidationResult.Failure(...)</c> short-circuits with a 400 Problem Details response.
 /// </remarks>

@@ -1,0 +1,32 @@
+name: Lambda NativeAOT arm64
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  package-arm64:
+    name: Package linux-arm64 fixture
+    runs-on: [self-hosted, Linux, ARM64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SliceFx.slnx
+
+      - name: Build
+        run: dotnet build SliceFx.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Verify Lambda NativeAOT per-feature packaging
+        run: dotnet run --project tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build -- package aws-lambda --project tests/SliceFx.Lambda.NativeAotFixture/SliceFx.Lambda.NativeAotFixture.csproj --mode function-per-feature --rid linux-arm64 --output artifacts/lambda-nativeaot-arm64 --force

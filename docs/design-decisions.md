@@ -10,7 +10,7 @@ SliceFx deliberately avoids introducing a mediator stack on top of ASP.NET Core.
 - A mediator hides the per-feature dispatch path behind reflection or container resolution. SliceFx's source generator emits the dispatch path directly (`endpoints.MapMethods(pattern, [method], delegate)`), so it stays AOT-friendly and stack traces stay short.
 - Per the adoption matrix in [`production-readiness.md`](production-readiness.md), teams already invested in MediatR / `IPipelineBehavior` are explicitly **not** the target audience. SliceFx optimizes for projects that want to keep Minimal API close.
 
-If you want filter-style behavior, attach `[Filter<T>]`. If you want validation, attach `DataAnnotationsValidationFilter` (automatic) or implement `ISliceValidator<T>`. No mediator is needed for either.
+If you want filter-style behavior, attach `[Filter<T>]`. If you want validation, use supported DataAnnotations attributes or implement `ISliceValidator<T>`. No mediator is needed for either.
 
 ## Why `WebApplication.CreateSlimBuilder` instead of `CreateBuilder`?
 
@@ -31,8 +31,8 @@ Satellite packages (`SliceFx.SourceGenerator`, `SliceFx.Lambda`, `SliceFx.TestHo
 
 Three reasons, in order of importance:
 
-1. **Generated route discovery and dispatch avoid reflection.** Anything that runs at request time must avoid reflection; the source generator emits the route registration and dispatch code, so `AddSlice()` and `MapSlices()` contain direct method calls instead of assembly scanning. DataAnnotations validation still builds its ASP.NET validation plan at endpoint-build time. The generated path stays AOT-friendly and avoids route-discovery startup cost that scales with assembly count.
-2. **Convention violations surface at compile time.** The generator emits 18 categories of diagnostics (SLICE001–006 and SLICE008–019) — missing `Handle` method, ambiguous overloads, non-public handler, invalid filter type, unsupported WASI body binding, missing JsonContext metadata for AOT, duplicate endpoint names across aggregated modules, and so on. A reflection-based scanner would either silently skip these cases or throw at startup.
+1. **Generated route discovery, dispatch, and validation avoid reflection.** Anything that runs at request time must avoid reflection; the source generator emits the route registration, generated DataAnnotations checks, and dispatch code, so `AddSlice()` and `MapSlices()` contain direct method calls instead of assembly scanning.
+2. **Convention violations surface at compile time.** The generator emits SLICE diagnostics for missing `Handle` methods, ambiguous overloads, non-public handlers, invalid filter type, unsupported WASI body binding, missing JsonContext metadata for AOT, duplicate endpoint names across aggregated modules, unsupported reflection-based validation, and so on. A reflection-based scanner would either silently skip these cases or throw at startup.
 3. **Tooling reuse.** The same generator emits a route manifest (`{Asm}_SliceRouteManifest.g.cs`) consumed by `slicefx routes` and `slicefx client csharp`. Reflection would require runtime introspection of a running app to produce the same output.
 
 Implementation lives in `src/SliceFx.SourceGenerator/`. The pipeline is incremental — see "Why incremental?" below.
@@ -49,9 +49,9 @@ The full perf baseline (M1, 200 features, 6.7 ms cold-run) is in [`production-re
 
 ## Why DataAnnotations *and* `ISliceValidator<T>`?
 
-Most validation rules (`Required`, `MinLength`, `EmailAddress`) are declarative and read well on a record's primary constructor — DataAnnotations is the right tool. `DataAnnotationsValidationFilter` is attached automatically and runs first.
+Most validation rules (`Required`, `MinLength`, `EmailAddress`) are declarative and read well on a record's primary constructor — supported DataAnnotations attributes are generated into endpoint validation and run first.
 
-Cross-field rules, async checks (e.g., uniqueness against a store), or anything that needs DI don't fit attributes cleanly. For those, implement one closed `ISliceValidator<TRequest>` where `TRequest` is a discovered Slice request parameter. The generator registers it and runs it automatically after DataAnnotations and before user-declared `[Filter<T>]` filters; unmatched validators are reported as build errors.
+Cross-field rules, async checks (e.g., uniqueness against a store), custom validation attributes, or anything that needs DI don't fit generated attributes cleanly. For those, implement one closed `ISliceValidator<TRequest>` where `TRequest` is a discovered Slice request parameter. The generator registers it and runs it automatically after generated DataAnnotations checks and before user-declared `[Filter<T>]` filters; unmatched validators are reported as build errors.
 
 Both APIs live in `SliceFx.Core` and require zero extra NuGet packages.
 
@@ -65,7 +65,7 @@ Instead, filters are scoped services. Configure them through constructor DI by b
 
 WASI exclusions and route-manifest portability use the same vocabulary, but they are checked at different layers:
 
-- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-based DataAnnotations validation (SLICE011) or endpoint filters prevent full WASI behavior.
+- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-bound DataAnnotations validation (SLICE011) or endpoint filters prevent full WASI behavior.
 - **WASI route table emission**: JSON body/response routes additionally need a source-generated `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]` for AOT-safe serialization. Without it, SLICE009 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
 
 The manifest classification is surfaced by `slicefx routes` and consumed by `slicefx client csharp`; the WASI source-generator path applies its own route-table eligibility checks using the same portability vocabulary where applicable.
