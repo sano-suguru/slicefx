@@ -19,7 +19,7 @@ var manifestCmd = new Command("manifest", "Generate deployment manifests from Sl
     ManifestAwsLambdaCommand.Build()
 };
 
-var packageCmd = new Command("package", "Publish/package SliceFx deployment artifacts.")
+var packageCmd = new Command("package", "Publish/package SliceFx deployment artifacts (AWS Lambda function-per-feature today).")
 {
     PackageAwsLambdaCommand.Build()
 };

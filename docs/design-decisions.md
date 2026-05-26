@@ -87,3 +87,17 @@ The benchmark suite separates `CompilationEditOnly`, `WarmRun_NoOpEdit`, and `Wa
 ## Why publish a `slicefx` CLI as a .NET local tool?
 
 A local tool (declared in `dotnet-tools.json`) version-pins itself per repository, so `slicefx routes` produces the same output everywhere from a fresh `dotnet tool restore`. A global tool would drift across developer machines; a project executable would mix tool versions into the build output. Local tools are the right scope for "scaffolding + route inspection + client generation."
+
+## Why does each function-per-feature artifact get its own process and DI container?
+
+Three mutually reinforcing reasons:
+
+**Blast-radius isolation.** A bug, memory leak, or misconfigured singleton in `CreateOrder` cannot affect `GetOrder` — they are separate Lambda processes. Shared-state bugs that manifest under concurrent load (cached stale data, leaked connections) are scoped to the feature that caused them.
+
+**NativeAOT trimming correctness.** The NativeAOT trimmer analyzes reachable code statically. If all features shared a single entrypoint, the trimmer would have to keep every feature's types and every feature's DI registrations reachable from the single root. Per-feature wrapper projects give the trimmer a minimal, feature-scoped root — only the types that the specific feature actually uses survive trimming. This is why closure inspection (run by `slicefx package`) fails if a feature artifact roots sibling feature entrypoints, sibling-owned DTOs, or app-wide registration surfaces: those roots defeat the trimming guarantee.
+
+**Independent DI singleton state.** The `ILambdaFunctionPerFeatureStartup.ConfigureServices` callback is called once per process during cold-start. Each process owns its own singleton lifetime — in-memory caches, HTTP clients, and connection pools are sized for one feature's traffic pattern, not the aggregate. This matches how Lambda scales: each function concurrency slot is a separate process.
+
+The trade-off is that cross-feature coordination (e.g., a shared cache) must move to an external store. If features need to share state, the hosted Lambda mode (`SliceFx.Lambda`) keeps a single ASP.NET process with a shared DI container.
+
+See [docs/lambda.md](lambda.md#per-feature-isolation) for the user-facing contract and diagnostics.

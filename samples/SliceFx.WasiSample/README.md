@@ -13,6 +13,8 @@ This sample shows Slice `[Feature]` classes — unmodified from their ASP.NET co
 
 `SliceFx.Wasi` is experimental: its own 0.x APIs may change before a stable release. The upstream WASI build and deployment toolchain is also unstable: `componentize-dotnet`, NativeAOT-LLVM preview packages, WASI Preview 2, `jco`, `preview2-shim`, Wrangler, and host platform behavior can break independently of SliceFx runtime code. Spin deployment works from the standard `wasi:http/incoming-handler` component produced by this sample; Cloudflare Workers adds a JS transpilation and shim layer, so it has more moving parts.
 
+This sample publishes one WASM component containing the generated route table for all eligible WASI routes. WASI per-feature packaging, such as one component per feature, is not implemented.
+
 **Preview dependencies:**
 
 | Dependency | Version |
@@ -25,6 +27,8 @@ This sample shows Slice `[Feature]` classes — unmodified from their ASP.NET co
 | `wrangler` | `4.93.1` |
 
 ## Build the WASM component
+
+This publish produces one `wasi:http` component containing all generated WASI routes. It does not split routes into per-feature WASM components.
 
 On Linux x64 or Windows x64:
 

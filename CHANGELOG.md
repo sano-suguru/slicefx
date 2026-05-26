@@ -23,11 +23,12 @@ This project follows semantic versioning once stable packages are published. Bef
 - Added CLI scaffolding, route inspection, compatibility reporting, and C# typed client generation.
 - Added AWS Lambda, TestHost, and WASI experimental adapters.
 - Added DataAnnotations validation and `ISliceValidator<T>` custom validation support.
+- Added function-per-feature Lambda sample (`samples/SliceFx.LambdaFunctionPerFeatureSample/`) and restructured `docs/lambda.md` with a mode-selection guide, pipeline diagram, per-feature isolation section, and diagnostics reference table.
 - Added OSS release documents: license, contribution guide, security policy, code of conduct, and changelog.
 - Added GitHub Pages landing page under `docs/`.
 - Added NuGet package metadata for the framework, source generator, adapters, and CLI.
 - Added CI test and package verification gates for preview readiness.
-- Documented the WASI host support matrix, unstable upstream toolchain boundary, and reproducible Cloudflare Workers dependency pins.
+- Documented the WASI host support matrix, single-component deployment boundary, lack of per-feature packaging, unstable upstream toolchain boundary, and reproducible Cloudflare Workers dependency pins.
 
 ### Fixed before first publish
 

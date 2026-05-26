@@ -152,7 +152,7 @@ The MVP excludes features that return `IResult`, depend on endpoint filters, req
 
 Cloudflare WASI function-per-feature deployment (one WASM component per feature) requires per-feature NativeAOT compilation and is blocked on `componentize-dotnet` multi-component build support. The current `SliceFx.Wasi` model (one WASM component, all routes dispatched in-process) is the practical deployment target until that tooling matures.
 
-Even when the build tooling matures, the benefit of per-feature WASI deployment is less clear than for function hosts with per-function scaling and billing knobs. The main remaining benefit would be independent deployment per feature (deploying one route without affecting others). That benefit alone may not justify the build complexity unless `componentize-dotnet` makes per-feature compilation straightforward.
+Even when the build tooling matures, the benefit of per-feature WASI deployment is less clear than for function hosts with per-function scaling and billing knobs. The main remaining benefit would be independent deployment per feature (deploying one route without affecting others). That benefit alone may not justify the build complexity unless `componentize-dotnet` makes per-feature compilation straightforward. Until a deliberate design changes this, docs and CLI help should describe WASI deployment as single-component dispatch and should not advertise WASI per-feature packaging.
 
 ## Directional focus
 

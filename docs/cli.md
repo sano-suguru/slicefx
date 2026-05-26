@@ -45,6 +45,8 @@ Generated feature templates return a nested `Response` record by default. `POST`
 
 The scaffold pins the Cloudflare JS tool versions and declares Node.js 22+ because the pinned Wrangler release requires it. It does not emit a lockfile, so run `npm install` the first time, review and commit the generated `package-lock.json`, then use `npm ci` for subsequent installs. The checked-in `samples/SliceFx.WasiSample/dist` directory already includes `package-lock.json` and uses `npm ci` for reproducible sample installs. The upstream WASI build/transpile toolchain remains preview/unstable even though the `SliceFx.Wasi` package API is tracked as experimental 0.x surface.
 
+This command scaffolds single-component WASI deployment glue. It does not create per-feature WASM artifacts, and there is no `slicefx package wasi` command today.
+
 ## Route inspection
 
 `slicefx routes` reads source-generated route metadata from the built project output when available. For referenced Slice feature assemblies, it includes only assemblies the host explicitly aggregates through generated metadata (`SliceFxReferencedAssemblies` or `SliceFxAggregateReferences=true`) and prints a stderr notice naming those assemblies. If the project has not been built yet, it falls back to scanning local `Features/**/*.cs`.
@@ -109,8 +111,16 @@ NativeAOT binary-per-feature packaging is available with:
 slicefx package aws-lambda --mode function-per-feature --rid linux-x64 --output artifacts/aws-lambda
 ```
 
+Use `--skip-publish` to emit per-feature wrapper projects and validate eligibility without running `dotnet publish`. This is useful for eligibility checks and CI environments that do not have the NativeAOT toolchain installed:
+
+```bash
+slicefx package aws-lambda --mode function-per-feature --skip-publish --output artifacts/aws-lambda
+```
+
 This generates one temporary entry project per eligible Lambda function-per-feature route under the package `obj` directory, publishes each route to a distinct artifact directory, and writes one package manifest artifact per feature. It may be slow because it runs one NativeAOT publish per eligible feature. Generated wrappers use size-oriented NativeAOT settings, route-local JSON source-generation metadata, supported DataAnnotations validation without runtime reflection, and NativeAOT mstat/map output.
 
 The command writes `slicefx-lambda-package-report.json` containing per-artifact size, top files, binlog path, structured warning details, mstat/map paths, and closure inspection results. Without `--warning-baseline`, a real publish must produce zero warnings. Pass `--warning-baseline <path>` to allow known warnings; stale baseline entries fail. Closure inspection fails if an artifact roots sibling feature entrypoints, sibling feature-owned DTOs, sibling validators, generated app-wide registration surfaces, the ASP.NET hosted bootstrap path, hosted Lambda adapter types, or unrelated SliceFx satellite types.
 
 PR CI gates the NativeAOT fixture package on `linux-x64`. The `linux-arm64` package gate is scheduled/manual because runner availability varies; it uses a Linux ARM64 runner when one is available. Each artifact runs as an independent Lambda process and owns independent DI singleton state. WASI per-feature packaging is not implemented.
+
+The `slicefx package` surface currently exists for AWS Lambda function-per-feature artifacts only. WASI deployment remains a `dotnet publish -r wasi-wasm` flow that produces one `wasi:http` component containing the generated route table.

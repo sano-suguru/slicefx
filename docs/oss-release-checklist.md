@@ -55,6 +55,7 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
   - `CHANGELOG.md` release notes for the chosen preview version.
   - Sample ports, commands, and expected outputs.
   - WASI docs distinguish experimental `SliceFx.Wasi` package APIs from the unstable upstream WASI build/transpile toolchain.
+  - WASI docs and CLI help do not imply per-feature packaging support; current WASI deployment is one `wasi:http` component with generated in-process route dispatch.
 - [ ] Keep public release messaging honest until NuGet publish is verified.
   - Do not claim that `dotnet add package SliceFx.Core` works before the package page exists.
   - Keep the website and README explicit that `0.1.0-preview.1` is unreleased.

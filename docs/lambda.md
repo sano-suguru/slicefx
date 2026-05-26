@@ -2,16 +2,29 @@
 
 SliceFx has two Lambda paths:
 
-- `SliceFx.Lambda` hosts the ASP.NET Core app in Lambda.
-- `SliceFx.Lambda.FunctionPerFeature` emits generated HTTP API v2 handlers for eligible features.
+- `SliceFx.Lambda` — hosts the full ASP.NET Core app in a single Lambda function.
+- `SliceFx.Lambda.FunctionPerFeature` — emits one NativeAOT HTTP API v2 handler per eligible feature; the `slicefx` CLI packages them as independent binaries.
 
-Use hosted Lambda when you want one ASP.NET-hosted Lambda artifact. Use function-per-feature Lambda when you explicitly want one NativeAOT custom-runtime artifact per eligible feature.
+See [product-direction.md](product-direction.md) for the strategic context behind function-per-feature as a Lambda deployment model.
+
+## Choosing a mode: Hosted vs Function-per-feature
+
+| | Hosted Lambda | Function-per-feature Lambda |
+| --- | --- | --- |
+| Deploy artifact | One binary | One NativeAOT binary per eligible feature |
+| Cold start | Higher (full ASP.NET host) | Lower (minimal custom-runtime binary) |
+| DI scope | Shared app-wide container | Independent container per feature |
+| Singleton state | Shared across all features | Isolated — no state bleeds between features |
+| Endpoint filters (`[Filter<T>]`) | Supported | Not supported (excluded, SLICE013) |
+| AOT | Optional | Required (per-feature wrapper) |
+| When to reach for it | Single deployment unit, shared state, quick migration from Minimal API | Per-feature scale, cold-start sensitivity, blast-radius isolation |
 
 ## Hosted Lambda
 
 `SliceFx.Lambda` is a thin adapter over `Amazon.Lambda.AspNetCoreServer.Hosting`.
 
 ```csharp
+using SliceFx;
 using SliceFx.Lambda;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -26,75 +39,121 @@ app.MapSlices();
 await app.RunOnLambdaAsync();
 ```
 
-`UseSliceLambda()` delegates to `AddAWSLambdaHosting()`. Locally, the same binary runs on Kestrel; in Lambda, the hosting package detects the runtime environment.
+`UseSliceLambda()` delegates to `AddAWSLambdaHosting()`. Locally, the same binary runs on Kestrel; in Lambda, the hosting package detects the runtime environment via `LAMBDA_TASK_ROOT`.
 
-Deploy the sample with the Lambda .NET tooling (`dotnet lambda package`) for the target runtime identifier, such as `linux-x64` or `linux-arm64`.
+Deploy with the Lambda .NET tooling (`dotnet lambda package`) for the target runtime identifier, such as `linux-x64` or `linux-arm64`. See [samples/SliceFx.LambdaSample/](../samples/SliceFx.LambdaSample/) for a working example.
+
+The default event source is `LambdaEventSource.HttpApi` (API Gateway HTTP API v2). Pass `LambdaEventSource.RestApi` or `LambdaEventSource.ApplicationLoadBalancer` to override.
 
 ## Function-per-feature Lambda
 
-`SliceFx.Lambda.FunctionPerFeature` emits HTTP API v2 handlers for eligible features and the CLI packages them as one NativeAOT Lambda custom-runtime artifact per feature. Opt in at the assembly level:
+`SliceFx.Lambda.FunctionPerFeature` emits generated HTTP API v2 handlers for eligible features. Each feature becomes an independent NativeAOT Lambda custom-runtime artifact.
+
+### Pipeline
+
+```
+[*.cs features with [assembly: LambdaFunctionPerFeature]]
+    │
+    ▼ SourceGenerator
+    {Asm}.SliceLambdaFunctionPerFeatureHandlers.g.cs   ← generated handlers + route metadata
+    │
+    ▼ slicefx manifest aws-lambda --mode function-per-feature
+    template.yaml                                       ← SAM template, one Function per feature
+    │
+    ▼ slicefx package aws-lambda --mode function-per-feature --rid linux-x64
+    obj/slicefx/aws-lambda/per-feature/<route>/        ← per-feature wrapper project
+        bootstrap.csproj  (PublishAot=true, route-local JsonSerializerContext)
+    │
+    ▼ dotnet publish ×N (one per eligible feature)
+    artifacts/aws-lambda/<feature>/bootstrap.zip            ← Lambda custom-runtime artifact
+    artifacts/aws-lambda/slicefx-lambda-package.json        ← artifact index
+    artifacts/aws-lambda/slicefx-lambda-package-report.json ← sizes, closure inspection, warnings
+```
+
+### Try it
+
+See [samples/SliceFx.LambdaFunctionPerFeatureSample/](../samples/SliceFx.LambdaFunctionPerFeatureSample/README.md) for a complete working example with two features, DataAnnotations + `ISliceValidator<T>` validation, and per-feature startup.
+
+### Programming model
+
+Opt in at the assembly level (typically in a dedicated file such as `LambdaSetup.cs`):
 
 ```csharp
 [assembly: LambdaFunctionPerFeature]
 ```
 
-For DI setup, annotate each feature with a feature-scoped startup type:
+For features that need DI setup, annotate each with a feature-scoped startup type:
 
 ```csharp
-[LambdaFunctionStartup(typeof(MyFeatureStartup))]
-public static class CreateOrder
+[Feature("POST /orders")]
+[LambdaFunctionStartup(typeof(OrderFeatureStartup))]
+public static class CreateOrder { ... }
+```
+
+The startup type must implement `ILambdaFunctionPerFeatureStartup` and have a public parameterless constructor:
+
+```csharp
+public sealed class OrderFeatureStartup : ILambdaFunctionPerFeatureStartup
 {
+    public void ConfigureServices(IServiceCollection services)
+        => services.AddSingleton<IOrderStore, InMemoryOrderStore>();
 }
 ```
 
-JSON body and response routes do not need a user-authored Lambda `SliceJsonContext`. During packaging, the CLI generates one route-local `JsonSerializerContext` inside each wrapper project with only the API Gateway envelope types and that route's body/response roots. This keeps JSON metadata AOT-safe without globally rooting sibling feature DTOs in every artifact.
+The source generator discovers startup types and calls `ConfigureServices` once at cold-start for each artifact.
 
-Supported handler inputs:
+#### Supported handler inputs
 
-- Route parameters
-- Query parameters
-- Header parameters
+- Route parameters (`{id:int}`, `{name}`)
+- Query parameters (`[FromQuery(Name = "...")]`)
+- Header parameters (`[FromHeader(Name = "...")]`)
 - Nested JSON `Request` bodies
 - Explicit `[FromBody]` JSON bodies
-- DI services
+- DI services (`[FromServices]` or inferred from DI)
 - `CancellationToken`
 
-Generated function-per-feature handlers honor common Minimal API binding attributes:
-`[FromRoute(Name = "...")]`, `[FromQuery(Name = "...")]`,
-`[FromHeader(Name = "...")]`, `[FromBody]`, and `[FromServices]`.
-Route, query, and header values use the same required/optional contract as
-the WASI path: missing nullable parameters bind `null`, missing non-nullable
-parameters return `400 Bad Request`, and present-but-invalid values always
-return `400 Bad Request`. Present empty strings bind as `""`; present empty
-nullable scalars bind `null`.
+Missing nullable parameters bind `null`; missing non-nullable parameters return `400 Bad Request`. Present empty strings bind as `""`.
 
-Supported return shapes:
+#### Supported return shapes
 
-- POCOs
+- POCO records / classes
 - `Task<T>`
 - `ValueTask<T>`
 - `APIGatewayHttpApiV2ProxyResponse`
 - `Task<APIGatewayHttpApiV2ProxyResponse>`
 - `ValueTask<APIGatewayHttpApiV2ProxyResponse>`
 
-If a typed return value is `null`, the generated handler returns
-`200 application/json` with a JSON `null` body. Return
-`APIGatewayHttpApiV2ProxyResponse` when `null` should instead mean 404, 204,
-or another non-JSON response.
+If a typed return value is `null`, the generated handler returns `200 application/json` with a JSON `null` body. Use `APIGatewayHttpApiV2ProxyResponse` when `null` should instead mean 404, 204, or another non-JSON response.
 
-Unsupported routes are excluded with generator diagnostics and CLI reasons. Common exclusions include:
+#### JSON body and response serialization
 
-- `IResult` return types
-- Endpoint filters
-- Reflection-only validation
-- Unsupported route parameter types
-- JSON body or response roots that cannot be emitted into the route-local wrapper context
+The CLI generates one route-local `JsonSerializerContext` per wrapper project containing only the API Gateway envelope types and that route's body/response roots. This keeps JSON metadata AOT-safe without globally rooting sibling feature DTOs in every artifact. No user-authored `SliceJsonContext` is required for the Lambda function-per-feature path.
 
-The generator reports `SLICE012`-`SLICE017` for function-per-feature Lambda eligibility issues. The WASI path still uses explicit `[SliceJsonContext(SliceJsonTarget.Wasi)]` metadata.
+### Per-feature isolation
+
+Each function-per-feature artifact is an independent Lambda process with:
+
+- **Independent DI container** — `ILambdaFunctionPerFeatureStartup.ConfigureServices` is called once per process; singletons are scoped to that feature's lifetime.
+- **No shared singleton state** — a singleton registered in one startup type is never visible to another feature's process.
+- **Closure inspection** — the `slicefx package` command verifies that each artifact's binary does not root sibling feature entrypoints, sibling feature-owned DTOs, sibling validators, app-wide registration surfaces, the ASP.NET hosted bootstrap, hosted Lambda adapter types, or unrelated SliceFx satellite types. A violation fails the package.
+
+This isolation limits the blast radius to the feature being invoked. See [docs/design-decisions.md](design-decisions.md#why-does-each-function-per-feature-artifact-get-its-own-process-and-di-container) for the full rationale.
+
+### Diagnostics reference
+
+| ID | Severity | Cause |
+| --- | --- | --- |
+| SLICE012 | Info | Return type not supported (`IResult`, `Task<IResult>`); feature excluded from function-per-feature |
+| SLICE013 | Info | Feature has `[Filter<T>]`; endpoint filters are not supported in the function-per-feature path |
+| SLICE014 | Warning | Lambda JSON serialization metadata cannot be generated for the body or response type |
+| SLICE015 | Warning | A parameter type is not supported in the function-per-feature path |
+| SLICE016 | Warning | A DataAnnotations attribute requires runtime reflection; validation excluded for this parameter |
+| SLICE017 | Error | `[LambdaFunctionStartup]` targets a type that does not implement `ILambdaFunctionPerFeatureStartup` or lacks a public parameterless constructor |
+| SLICE027 | Error | Two features produce the same artifact ID; rename one route to resolve |
 
 ## CLI integration
 
-Generate a hosted SAM template:
+Generate a SAM template for hosted Lambda:
 
 ```bash
 slicefx manifest aws-lambda --output template.yaml
@@ -112,16 +171,20 @@ Package function-per-feature NativeAOT artifacts:
 slicefx package aws-lambda --mode function-per-feature --rid linux-x64 --output artifacts/aws-lambda
 ```
 
-## NativeAOT binary-per-feature packaging
-
-The generated function-per-feature handler path is designed to stay AOT-compatible: JSON body and response handling uses source-generated `JsonSerializerContext` metadata, supported DataAnnotations rules are generated without runtime reflection, and unsupported ASP.NET-specific or reflection-bound shapes are excluded before packaging.
+Use `--skip-publish` to emit wrapper projects and validate eligibility without running `dotnet publish`:
 
 ```bash
-slicefx package aws-lambda --mode function-per-feature --rid linux-x64 --output artifacts/aws-lambda
+slicefx package aws-lambda --mode function-per-feature --skip-publish --output artifacts/aws-lambda
 ```
 
-The CLI generates one temporary entry project per eligible function-per-feature route under the package `obj` directory, publishes each entry project as an independent NativeAOT Lambda custom-runtime artifact, and writes `slicefx-lambda-package.json` with one artifact per feature. Unsupported routes stay excluded with Lambda function-per-feature eligibility reasons.
+For the full list of available flags (`--artifact-layout`, `--configuration`, `--runtime`, `--memory`, `--timeout`, `--warning-baseline`), see [docs/cli.md](cli.md#aws-lambda-artifacts).
 
-Expect this mode to be slow because it runs one NativeAOT publish per eligible feature. The generated wrapper projects use full trimming, size-focused ILC optimization, NativeAOT map/mstat output, and route-local JSON metadata. The package command writes `slicefx-lambda-package-report.json` with a schema version, per-artifact size, top files, binlog path, structured warning summary, mstat/map paths, and closure inspection results. Without `--warning-baseline`, any publish warning fails the package; with `--warning-baseline <path>`, unbaselined current warnings and stale baseline entries both fail. Closure inspection fails if a per-feature artifact roots sibling feature entrypoints, sibling feature-owned DTOs, sibling validators, generated app-wide registration surfaces, ASP.NET hosted bootstrap, hosted Lambda adapter types, or unrelated SliceFx satellite types. Each artifact is a separate Lambda process with its own dependency injection container and independent singleton state. WASI per-feature packaging is not implemented.
+## NativeAOT packaging notes
 
-CI keeps the PR package gate on `linux-x64`. The `linux-arm64` NativeAOT package gate runs from the scheduled/manual `Lambda NativeAOT arm64` workflow and expects an available Linux ARM64 runner, such as a self-hosted runner.
+The function-per-feature path stays AOT-compatible by design: JSON serialization uses source-generated `JsonSerializerContext` metadata scoped to each wrapper project, supported DataAnnotations rules are generated without runtime reflection, and unsupported shapes are excluded before packaging.
+
+The `slicefx package` command writes `slicefx-lambda-package-report.json` with per-artifact size, top files, binlog path, structured warning summary, mstat/map paths, and closure inspection results. Without `--warning-baseline`, any publish warning fails the package; with `--warning-baseline <path>`, unbaselined warnings and stale baseline entries both fail.
+
+CI gates the PR package on `linux-x64`. The `linux-arm64` NativeAOT gate runs from the scheduled/manual `Lambda NativeAOT arm64` workflow.
+
+WASI per-feature packaging is not implemented.

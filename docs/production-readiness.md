@@ -104,4 +104,5 @@ These recommendations apply to experiments, pilots, and preview evaluation. Prod
 
 - Supported DataAnnotations attributes are source-generated across the ASP.NET, Lambda function-per-feature, and WASI paths. Reflection-bound validation such as custom `ValidationAttribute`, type-level validation, `IValidatableObject`, and resource-based messages is reported at build time for generated ASP.NET registrations and excluded from portable WASI/Lambda function-per-feature dispatch.
 - WASI deployment depends on preview upstream build/transpile tools. Spin consumes the generated `wasi:http` component directly; Cloudflare Workers adds `jco`, `preview2-shim`, Wrangler, and a compatibility-date-sensitive JS shim.
+- WASI per-feature packaging is not implemented. The supported WASI deployment shape is one component containing the generated route table and dispatching eligible routes in-process.
 - `[Filter<T>]` takes a type parameter only (configuration arrives through constructor DI). This is an intentional constraint that protects strength-preservation principle #1. See `docs/patterns/filter-configuration.md`.

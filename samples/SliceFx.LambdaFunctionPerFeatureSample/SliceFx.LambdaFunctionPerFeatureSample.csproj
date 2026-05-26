@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.LambdaFunctionPerFeatureSample</RootNamespace>
+    <!-- PublishAot is intentionally absent from this host project.
+         The slicefx CLI generates one NativeAOT wrapper project per eligible feature and sets
+         AOT properties there. Setting it here would AOT-compile the entire app on dotnet build,
+         which is not the intended workflow for function-per-feature packaging. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SliceFx.Core\SliceFx.Core.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.Lambda\SliceFx.Lambda.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.Lambda.FunctionPerFeature\SliceFx.Lambda.FunctionPerFeature.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.SourceGenerator\SliceFx.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

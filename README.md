@@ -151,7 +151,7 @@ Read more:
 | ASP.NET-hosted Lambda adapter | Experimental |
 | Function-per-feature Lambda handlers | Experimental HTTP API v2 NativeAOT binary-per-feature packaging |
 | TestHost helper | Experimental |
-| WASI adapter | Experimental in-process wasi:http dispatch |
+| WASI adapter | Experimental single-component in-process wasi:http dispatch; per-feature WASM packaging is not implemented |
 
 ## Adoption evidence
 
@@ -178,7 +178,7 @@ You do not need WASI or edge hosting to use Slice. The default path is still a n
 
 **Edge** usually means running code closer to users on platforms such as Cloudflare Workers or Fermyon Spin instead of only in one central server region. **WASI** is a standards-based way to package server-side code as a WebAssembly component that those hosts can run. In SliceFx, WASI support proves the portability story: if a feature returns plain request/response records and avoids ASP.NET-only response helpers, the same feature shape can be dispatched outside ASP.NET through a generated route table and `SliceFx.Wasi`.
 
-That path is intentionally experimental. `SliceFx.Wasi` depends on preview tooling, has stricter JSON and validation rules, and does not run arbitrary ASP.NET endpoint filters. The practical benefit today is visibility: `slicefx routes` tells you which endpoints are portable, which are partially portable, and which intentionally stay ASP.NET-only.
+That path is intentionally experimental. `SliceFx.Wasi` depends on preview tooling, has stricter JSON and validation rules, and does not run arbitrary ASP.NET endpoint filters. The practical deployment target today is one `wasi:http` component with generated in-process route dispatch, not one WASM component per feature. The practical benefit today is visibility: `slicefx routes` tells you which endpoints are portable, which are partially portable, and which intentionally stay ASP.NET-only.
 
 ## OpenAPI
 
@@ -207,6 +207,7 @@ The Slice route manifest is a separate build-time artifact for portability class
 | CLI commands | [docs/cli.md](docs/cli.md) |
 | OpenAPI integration | [docs/guides/openapi.md](docs/guides/openapi.md) |
 | Lambda hosting and function-per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
+| Lambda function-per-feature sample | [samples/SliceFx.LambdaFunctionPerFeatureSample/](samples/SliceFx.LambdaFunctionPerFeatureSample/README.md) |
 | WASI deploy path | [samples/SliceFx.WasiSample/README.md](samples/SliceFx.WasiSample/README.md) |
 | Migration guides | [Minimal API](docs/migrations/from-minimal-api.md), [controllers](docs/migrations/from-controllers.md) |
 | Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |
