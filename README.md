@@ -45,6 +45,8 @@ SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions un
 
 **Release status:** `0.1.0-preview.1` is still unreleased and is not available on NuGet yet. Until the release checklist, local verification, smoke tests, and final NuGet publish are complete, use the repository samples or local project references from a checkout instead of `dotnet add package`.
 
+**SDK and analyzer policy:** the repository targets .NET 10 with SDK `10.0.300` pinned in `global.json` and `rollForward: latestFeature`. Warnings and code-analysis diagnostics are treated as errors, but the analyzer recommendation set is pinned to `10.0-recommended` so normal PR/main builds do not unexpectedly break when a newer SDK promotes analyzer rules. A separate analyzer canary workflow checks the latest .NET 10 analyzer behavior and reports drift for dedicated maintenance PRs.
+
 WASI support (`SliceFx.Wasi`) is experimental and depends on an unstable upstream toolchain: [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet), NativeAOT-LLVM preview packages, WASI Preview 2 / `wasi:http@0.2`, and Cloudflare's JS transpile/shim path when targeting Workers. Native WASI publish requires Linux x64 or Windows x64; macOS requires a Linux x64 Docker cross-build. "Experimental" means SliceFx.Wasi's own 0.x API may change; "unstable upstream toolchain" means those external build and deployment tools may break independently of SliceFx runtime code.
 
 | Package | Purpose |

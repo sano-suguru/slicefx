@@ -22,6 +22,14 @@ A change is done when:
 6. Samples and README/docs are updated when public behavior changes.
 7. Any breaking change is documented in the PR description.
 
+## SDK and analyzer policy
+
+SliceFx keeps warnings and code-analysis diagnostics as errors. To avoid surprise failures from newly promoted SDK analyzer rules, the normal build pins the analyzer recommendation set in `Directory.Build.props` instead of using `latest-recommended`.
+
+The analyzer baseline should be bumped in a dedicated maintenance PR, not bundled with feature work. Review it quarterly by default, before public previews/releases, or when the analyzer canary reports diagnostics that are valuable for correctness, security, or maintainability. The canary is non-blocking and reports latest .NET 10 analyzer drift through the workflow summary and issue updates; it does not change the pinned baseline automatically.
+
+`global.json` currently keeps `rollForward: latestFeature` so contributors can use newer .NET 10 feature bands. Analyzer churn is controlled by the pinned `AnalysisLevel`; revisit SDK roll-forward strictness only if feature-band drift becomes a recurring problem.
+
 ## Invariants to protect
 
 - `SliceFx.Core` stays dependency-free except for `Microsoft.AspNetCore.App`.

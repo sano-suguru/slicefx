@@ -1,0 +1,92 @@
+name: Analyzer Canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Monthly check for analyzer drift outside the required PR/main CI path.
+    - cron: '17 4 1 * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  latest-analyzers:
+    name: Latest .NET 10 analyzers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup latest .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore SliceFx.slnx
+
+      - name: Build with latest recommended analyzers
+        id: canary
+        shell: bash
+        run: |
+          set +e
+          dotnet build SliceFx.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true -p:AnalysisLevel=latest-recommended --nologo 2>&1 | tee analyzer-canary.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Summarize canary result
+        shell: bash
+        run: |
+          if [ "${{ steps.canary.outputs.status }}" = "0" ]; then
+            {
+              echo "## Analyzer canary passed"
+              echo
+              echo "The repository builds with the latest .NET 10 SDK and \`AnalysisLevel=latest-recommended\`."
+              echo "No analyzer-baseline PR was created automatically; review baseline bumps in dedicated maintenance PRs."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Analyzer canary reported diagnostics"
+              echo
+              echo "The required PR/main CI remains pinned to the repository baseline. Review this output before deciding whether to bump \`AnalysisLevel\`."
+              echo
+              echo '```text'
+              tail -n 200 analyzer-canary.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report analyzer drift
+        if: steps.canary.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          title="Analyzer canary reported diagnostics"
+          issue_number="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          {
+            echo "The analyzer canary reported diagnostics with the latest .NET 10 SDK and \`AnalysisLevel=latest-recommended\`."
+            echo
+            echo "Required PR/main CI remains on the pinned analyzer baseline. Review this as a maintenance signal; do not bump the baseline automatically."
+            echo
+            echo "Workflow run: $RUN_URL"
+            echo
+            echo "<details><summary>Last 200 lines</summary>"
+            echo
+            echo '```text'
+            tail -n 200 analyzer-canary.log
+            echo '```'
+            echo
+            echo "</details>"
+          } > analyzer-canary-issue.md
+
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --body-file analyzer-canary-issue.md
+          else
+            gh issue create --title "$title" --body-file analyzer-canary-issue.md
+          fi
