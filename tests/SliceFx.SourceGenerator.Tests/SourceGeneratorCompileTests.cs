@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Text.Json;
+using Amazon.Lambda.APIGatewayEvents;
+using Amazon.Lambda.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -466,6 +468,127 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public async Task Generated_wasi_routes_dispatch_requests_through_wasi_app()
+    {
+        var source = """
+            using System;
+            using System.Collections.Generic;
+            using System.ComponentModel.DataAnnotations;
+            using System.Text;
+            using System.Text.Json.Serialization;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiRuntimeApp
+            {
+                public sealed class OrderStore
+                {
+                    public string Source => "store";
+                }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(global::WasiRuntimeApp.Features.Orders.CreateOrder.Request))]
+                [JsonSerializable(typeof(global::WasiRuntimeApp.Features.Orders.CreateOrder.Response))]
+                [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+                public partial class WasiJsonContext : JsonSerializerContext;
+
+                public static class RuntimeHarness
+                {
+                    public static async Task<string> DispatchAsync(string sku)
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.Services.AddSingleton<OrderStore>();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var body = Encoding.UTF8.GetBytes("{\"sku\":\"" + sku + "\",\"quantity\":4}");
+
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "POST",
+                            "/tenants/acme/orders",
+                            new Dictionary<string, string>(),
+                            "?priority=5",
+                            body));
+
+                        return Format(response);
+                    }
+
+                    public static async Task<string> DispatchMissingAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "GET",
+                            "/missing",
+                            new Dictionary<string, string>(),
+                            null,
+                            null));
+
+                        return Format(response);
+                    }
+
+                    private static string Format(WasiResponse response)
+                        => response.Status.ToString() + "|"
+                            + (response.Headers.TryGetValue("Content-Type", out var contentType) ? contentType : "")
+                            + "|"
+                            + Encoding.UTF8.GetString(response.Body);
+                }
+            }
+
+            namespace WasiRuntimeApp.Features.Orders
+            {
+                [Feature("POST /tenants/{tenant}/orders")]
+                public static class CreateOrder
+                {
+                    public sealed record Request(
+                        [Required, MinLength(2)] string Sku,
+                        [Range(1, 100)] int Quantity);
+
+                    public sealed record Response(string Tenant, string Sku, int Quantity, int Priority, string Source);
+
+                    public static Response Handle(
+                        string tenant,
+                        Request request,
+                        int priority,
+                        global::WasiRuntimeApp.OrderStore store,
+                        CancellationToken ct)
+                        => new(tenant, request.Sku, request.Quantity, priority, store.Source);
+                }
+
+                public sealed class CreateOrderValidator : ISliceValidator<CreateOrder.Request>
+                {
+                    public ValueTask<SliceValidationResult> ValidateAsync(CreateOrder.Request value, CancellationToken ct)
+                        => string.Equals(value.Sku, "blocked", StringComparison.Ordinal)
+                            ? ValueTask.FromResult(SliceValidationResult.Failure(nameof(value.Sku), "SKU is blocked."))
+                            : ValueTask.FromResult(SliceValidationResult.Success);
+                }
+            }
+            """;
+
+        using var assemblyStream = CompileGeneratedAssembly(CreateHostCompilation("WasiRuntimeApp", source, includeWasiReference: true));
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harnessType = assembly.GetType("WasiRuntimeApp.RuntimeHarness", throwOnError: true)!;
+        var dispatchAsync = harnessType.GetMethod("DispatchAsync", BindingFlags.Public | BindingFlags.Static)!;
+        var dispatchMissingAsync = harnessType.GetMethod("DispatchMissingAsync", BindingFlags.Public | BindingFlags.Static)!;
+
+        var success = await (Task<string>)dispatchAsync.Invoke(null, ["abc"])!;
+        var validationFailure = await (Task<string>)dispatchAsync.Invoke(null, ["blocked"])!;
+        var missing = await (Task<string>)dispatchMissingAsync.Invoke(null, null)!;
+
+        Assert.StartsWith("200|application/json|", success, StringComparison.Ordinal);
+        Assert.Contains("\"tenant\":\"acme\"", success, StringComparison.Ordinal);
+        Assert.Contains("\"sku\":\"abc\"", success, StringComparison.Ordinal);
+        Assert.Contains("\"priority\":5", success, StringComparison.Ordinal);
+        Assert.StartsWith("400|application/json|", validationFailure, StringComparison.Ordinal);
+        Assert.Contains("\"Sku\":[\"SKU is blocked.\"]", validationFailure, StringComparison.Ordinal);
+        Assert.StartsWith("404|application/json|", missing, StringComparison.Ordinal);
+        Assert.Contains("No route matched GET /missing", missing, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_escapes_control_characters_in_wasi_string_literals()
     {
         var source = """
@@ -780,6 +903,120 @@ public class SourceGeneratorCompileTests
         Assert.Contains("\"LambdaApp\"", manifestSource, StringComparison.Ordinal);
         Assert.Contains("\"SliceFx.LambdaApp_SliceLambdaFunctionPerFeatureHandlers_Users_GetUser_", manifestSource, StringComparison.Ordinal);
         Assert.Contains("\"Users_GetUser_", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generated_lambda_handler_processes_api_gateway_requests()
+    {
+        var source = """
+            using System;
+            using System.ComponentModel.DataAnnotations;
+            using System.Text.Json.Serialization;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            namespace LambdaRuntimeApp
+            {
+                public sealed class OrderStore
+                {
+                    public string Source => "store";
+                }
+
+                public sealed class LambdaStartup : ILambdaFunctionPerFeatureStartup
+                {
+                    public void ConfigureServices(IServiceCollection services)
+                        => services.AddSingleton<OrderStore>();
+                }
+
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
+                [JsonSerializable(typeof(global::LambdaRuntimeApp.Features.Orders.CreateOrder.Request))]
+                [JsonSerializable(typeof(global::LambdaRuntimeApp.Features.Orders.CreateOrder.Response))]
+                [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+                public partial class LambdaJsonContext : JsonSerializerContext;
+            }
+
+            namespace LambdaRuntimeApp.Features.Orders
+            {
+                [Feature("POST /tenants/{tenant}/orders")]
+                [LambdaFunctionStartup(typeof(global::LambdaRuntimeApp.LambdaStartup))]
+                public static class CreateOrder
+                {
+                    public sealed record Request(
+                        [Required, MinLength(2)] string Sku,
+                        [Range(1, 100)] int Quantity);
+
+                    public sealed record Response(string Tenant, string Sku, int Quantity, int Priority, string Source);
+
+                    public static Response Handle(
+                        string tenant,
+                        Request request,
+                        int priority,
+                        global::LambdaRuntimeApp.OrderStore store,
+                        CancellationToken ct)
+                        => new(tenant, request.Sku, request.Quantity, priority, store.Source);
+                }
+
+                public sealed class CreateOrderValidator : ISliceValidator<CreateOrder.Request>
+                {
+                    public ValueTask<SliceValidationResult> ValidateAsync(CreateOrder.Request value, CancellationToken ct)
+                        => string.Equals(value.Sku, "blocked", StringComparison.Ordinal)
+                            ? ValueTask.FromResult(SliceValidationResult.Failure(nameof(value.Sku), "SKU is blocked."))
+                            : ValueTask.FromResult(SliceValidationResult.Success);
+                }
+            }
+            """;
+
+        using var assemblyStream = CompileGeneratedAssembly(CreateHostCompilation("LambdaRuntimeApp", source, includeLambdaReference: true));
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var handlers = assembly.GetTypes()
+            .SelectMany(static type => type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            .Where(static method =>
+            {
+                var parameters = method.GetParameters();
+                return parameters.Length == 2
+                    && parameters[0].ParameterType == typeof(APIGatewayHttpApiV2ProxyRequest)
+                    && parameters[1].ParameterType == typeof(ILambdaContext);
+            })
+            .ToArray();
+        var handler = Assert.Single(handlers);
+        var jsonContext = assembly.GetType("LambdaRuntimeApp.LambdaJsonContext", throwOnError: true)!
+            .GetProperty("Default", BindingFlags.Public | BindingFlags.Static)!
+            .GetValue(null)!;
+        var getTypeInfo = jsonContext.GetType().GetMethod("GetTypeInfo", [typeof(Type)])!;
+        handler.DeclaringType!
+            .GetProperty("JsonTypeInfoProvider", BindingFlags.Public | BindingFlags.Static)!
+            .SetValue(null, (Func<Type, System.Text.Json.Serialization.Metadata.JsonTypeInfo?>)(type =>
+                (System.Text.Json.Serialization.Metadata.JsonTypeInfo?)getTypeInfo.Invoke(jsonContext, [type])));
+
+        var success = await InvokeLambdaHandlerAsync(
+            handler,
+            new APIGatewayHttpApiV2ProxyRequest
+            {
+                PathParameters = new Dictionary<string, string> { ["tenant"] = "acme" },
+                QueryStringParameters = new Dictionary<string, string> { ["priority"] = "5" },
+                Body = /*lang=json,strict*/ """{"sku":"abc","quantity":4}""",
+            });
+        var validationFailure = await InvokeLambdaHandlerAsync(
+            handler,
+            new APIGatewayHttpApiV2ProxyRequest
+            {
+                PathParameters = new Dictionary<string, string> { ["tenant"] = "acme" },
+                QueryStringParameters = new Dictionary<string, string> { ["priority"] = "5" },
+                Body = /*lang=json,strict*/ """{"sku":"blocked","quantity":4}""",
+            });
+
+        Assert.Equal(200, success.StatusCode);
+        Assert.Equal("application/json", success.Headers["Content-Type"]);
+        Assert.Contains("\"tenant\":\"acme\"", success.Body, StringComparison.Ordinal);
+        Assert.Contains("\"sku\":\"abc\"", success.Body, StringComparison.Ordinal);
+        Assert.Contains("\"priority\":5", success.Body, StringComparison.Ordinal);
+        Assert.Equal(400, validationFailure.StatusCode);
+        Assert.Contains("\"Sku\":[\"SKU is blocked.\"]", validationFailure.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2688,6 +2925,13 @@ public class SourceGeneratorCompileTests
             d.Id == "SLICE005" && d.Severity == DiagnosticSeverity.Error);
     }
 
+    private static async Task<APIGatewayHttpApiV2ProxyResponse> InvokeLambdaHandlerAsync(
+        MethodInfo handler,
+        APIGatewayHttpApiV2ProxyRequest request)
+        => await (Task<APIGatewayHttpApiV2ProxyResponse>)handler.Invoke(
+            null,
+            [request, new SourceGeneratorTestLambdaContext()])!;
+
     private static MethodInfo GetGeneratedValidationMethod(
         Assembly assembly,
         string typeName,
@@ -2898,5 +3142,41 @@ public class SourceGeneratorCompileTests
 
         public override bool TryGetValue(string key, out string value)
             => _values.TryGetValue(key, out value!);
+    }
+
+    private sealed class SourceGeneratorTestLambdaContext : ILambdaContext
+    {
+        public string AwsRequestId => "request-id";
+
+        public IClientContext ClientContext => null!;
+
+        public string FunctionName => "function";
+
+        public string FunctionVersion => "$LATEST";
+
+        public ICognitoIdentity Identity => null!;
+
+        public string InvokedFunctionArn => "arn:aws:lambda:local:000000000000:function:function";
+
+        public ILambdaLogger Logger { get; } = new SourceGeneratorTestLambdaLogger();
+
+        public string LogGroupName => "log-group";
+
+        public string LogStreamName => "log-stream";
+
+        public int MemoryLimitInMB => 128;
+
+        public TimeSpan RemainingTime => TimeSpan.FromSeconds(10);
+    }
+
+    private sealed class SourceGeneratorTestLambdaLogger : ILambdaLogger
+    {
+        public void Log(string message)
+        {
+        }
+
+        public void LogLine(string message)
+        {
+        }
     }
 }

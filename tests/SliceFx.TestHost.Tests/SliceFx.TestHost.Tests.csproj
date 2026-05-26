@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Remove="TestApp\**\*.cs" />
+    <Compile Remove="SliceApp\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +28,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SliceFx.TestHost\SliceFx.TestHost.csproj" />
+    <ProjectReference Include="SliceApp\SliceFx.TestHost.SliceApp.csproj"
+                      Aliases="SliceApp" />
     <ProjectReference Include="TestApp\SliceFx.TestHost.TestApp.csproj" />
   </ItemGroup>
 
