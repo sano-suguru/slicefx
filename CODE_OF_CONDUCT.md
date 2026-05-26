@@ -1,6 +1,6 @@
 # Code of Conduct
 
-Slice aims to be a small, welcoming technical project.
+SliceFx aims to be a small, welcoming technical project.
 
 ## Expected behavior
 

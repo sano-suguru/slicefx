@@ -4,7 +4,7 @@ Slice asks each feature file to declare its own filters: `[Filter<RequestLogging
 
 This document explains whether that is a flaw or a feature, and shows **standard-feature workarounds** for the cases where it genuinely hurts.
 
-## What Slice deliberately does not do
+## What SliceFx deliberately does not do
 
 SliceFx has **no mechanism to inject filters that are not declared in source**. That is one of the strength-preservation principles ("no implicit magic").
 
@@ -74,7 +74,7 @@ When the duplication is real but the concern is genuinely feature-scoped (e.g., 
 - Repeated endpoint-filter variants with identical filter logic → use [closed generic policy filters](../patterns/filter-configuration.md#repeated-endpoint-filter-variants-closed-generic-policy-filters) such as `[Filter<AuditFilter<AdminAuditPolicy>>]`.
 - Remaining cases → the copy-paste maintenance cost is lower than the risk of surprise behavior from implicit injection.
 
-"No implicit magic" is a Slice **strength**, not a missing feature. Filter classes are infrastructure types, not feature files, so a small number of shared filters or typed policy markers does not violate the "one endpoint = one feature file" model. Group-scoped filter injection was considered for the framework and intentionally dropped.
+"No implicit magic" is a SliceFx **strength**, not a missing feature. Filter classes are infrastructure types, not feature files, so a small number of shared filters or typed policy markers does not violate the "one endpoint = one feature file" model. Group-scoped filter injection was considered for the framework and intentionally dropped.
 
 ## Related patterns
 

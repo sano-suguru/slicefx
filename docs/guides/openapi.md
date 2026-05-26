@@ -4,7 +4,7 @@ SliceFx has two OpenAPI paths with different fidelity and runtime assumptions.
 
 ## ASP.NET Core runtime document
 
-For hosted ASP.NET Core apps, use Microsoft's OpenAPI integration as the authoritative document. Slice emits standard Minimal API registrations with endpoint names, tags, summaries, typed delegates, and filters, so the runtime OpenAPI generator can inspect the actual endpoint metadata.
+For hosted ASP.NET Core apps, use Microsoft's OpenAPI integration as the authoritative document. SliceFx emits standard Minimal API registrations with endpoint names, tags, summaries, typed delegates, and filters, so the runtime OpenAPI generator can inspect the actual endpoint metadata.
 
 ```xml
 <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />

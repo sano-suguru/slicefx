@@ -1,6 +1,6 @@
 # Security Policy
 
-Slice is experimental and has not had a formal security review.
+SliceFx is experimental and has not had a formal security review.
 
 ## Supported versions
 

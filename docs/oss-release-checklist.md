@@ -21,7 +21,7 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
   - `Slice` already exists on NuGet and is associated with an older unrelated package.
   - NuGet exact lookup showed `SliceFx`, `SliceFx.Core`, `SliceFx.SourceGenerator`, `SliceFx.Lambda`, `SliceFx.Lambda.FunctionPerFeature`, `SliceFx.TestHost`, `SliceFx.Wasi`, and `SliceFx.Cli` are unused before the first preview publish.
   - NuGet search noise check: `SliceFx.Core` returned 30 packages, `AspNetSlice` returned 17 packages, `dotnet-slice` returned 114 packages, and `SliceFx` returned 0 packages.
-  - Use `SliceFx.Core` for the core runtime package instead of `SliceFx.Core`.
+  - Use `SliceFx.Core` for the core runtime package instead of `Slice.Core`.
   - Keep satellite package IDs under the same prefix: `SliceFx.SourceGenerator`, `SliceFx.Lambda`, `SliceFx.Lambda.FunctionPerFeature`, `SliceFx.TestHost`, `SliceFx.Wasi`, and `SliceFx.Cli`.
   - Public API namespace is `SliceFx` and the CLI command is `slicefx`.
   - Repository/docs identity is `sano-suguru/slicefx` and `https://sano-suguru.github.io/slicefx/`.
@@ -29,10 +29,10 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
   - Scorecard:
     | Option | Exact package availability | Search noise | Positioning fit | Decision |
     | --- | --- | --- | --- | --- |
-    | `SliceFx.Core` | Available, but `Slice` is taken | High | Clear to existing vertical-slice users, weak for search | Replace before preview |
+    | `Slice.Core` | Available, but `Slice` is taken | High | Clear to existing vertical-slice users, weak for search | Replace before preview |
     | `SliceFx.Core` | Available | Lowest observed (`SliceFx` returned 0 packages) | Brandable; needs subtitle for meaning | Adopt |
-    | `AspNetSliceFx.Core` | Available | Medium; nearby ASP.NET vertical-slice packages exist | Clear for ASP.NET, too narrow for WASI/Lambda portability | Reject |
-    | `DotNetSliceFx.Core` / `dotnet-slice` | Available | High | Repo/tool-like, less natural as package prefix | Reject |
+    | `AspNetSlice.Core` | Available | Medium; nearby ASP.NET vertical-slice packages exist | Clear for ASP.NET, too narrow for WASI/Lambda portability | Reject |
+    | `DotNetSlice.Core` / `dotnet-slice` | Available | High | Repo/tool-like, less natural as package prefix | Reject |
 - [ ] Freeze the preview version and scope.
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
@@ -61,7 +61,7 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
   - Keep the website and README explicit that `0.1.0-preview.1` is unreleased.
   - Do not claim production adoption before public evidence exists.
 - [ ] Publish at least one dogfooding note before claiming real-world usage.
-  - Record project shape, routes implemented with Slice, friction points, and fixes made from dogfooding.
+  - Record project shape, routes implemented with SliceFx, friction points, and fixes made from dogfooding.
   - Until then, public adoption counts remain: Production adoption 0, published personal dogfooding logs 0.
 
 ## Local verification
@@ -81,6 +81,7 @@ dotnet format SliceFx.slnx --verify-no-changes --no-restore --severity info --ex
 dotnet pack src\SliceFx.Core\SliceFx.Core.csproj --configuration Release --no-build
 dotnet pack src\SliceFx.SourceGenerator\SliceFx.SourceGenerator.csproj --configuration Release --no-build
 dotnet pack src\SliceFx.Lambda\SliceFx.Lambda.csproj --configuration Release --no-build
+dotnet pack src\SliceFx.Lambda.FunctionPerFeature\SliceFx.Lambda.FunctionPerFeature.csproj --configuration Release --no-build
 dotnet pack src\SliceFx.TestHost\SliceFx.TestHost.csproj --configuration Release --no-build
 dotnet pack src\SliceFx.Wasi\SliceFx.Wasi.csproj --configuration Release --no-build
 dotnet pack tools\SliceFx.Cli\SliceFx.Cli.csproj --configuration Release --no-build

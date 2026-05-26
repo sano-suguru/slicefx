@@ -174,7 +174,7 @@ Mixing all three classes in the same project is the expected pattern. `aspnet-on
 
 ### WASI and edge are optional
 
-You do not need WASI or edge hosting to use Slice. The default path is still a normal ASP.NET Core app.
+You do not need WASI or edge hosting to use SliceFx. The default path is still a normal ASP.NET Core app.
 
 **Edge** usually means running code closer to users on platforms such as Cloudflare Workers or Fermyon Spin instead of only in one central server region. **WASI** is a standards-based way to package server-side code as a WebAssembly component that those hosts can run. In SliceFx, WASI support proves the portability story: if a feature returns plain request/response records and avoids ASP.NET-only response helpers, the same feature shape can be dispatched outside ASP.NET through a generated route table and `SliceFx.Wasi`.
 

@@ -151,7 +151,7 @@ var resp = await host.Client.PostAsJsonAsync("/users", new { name = "Alice", ema
 ```
 
 `IServiceCollection.Replace<TService, TImpl>(lifetime)` and `Replace<TService>(instance)` are
-provided by `Slice.Testing.ServiceCollectionExtensions`. See
+provided by `SliceFx.Testing.ServiceCollectionExtensions`. See
 `samples/SliceFx.TestHostSample/` for a runnable demo.
 
 ### SliceFx.Cli (`tools/SliceFx.Cli/`)

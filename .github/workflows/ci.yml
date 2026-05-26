@@ -40,6 +40,7 @@ jobs:
           dotnet pack src/SliceFx.Core/SliceFx.Core.csproj --configuration Release --no-build
           dotnet pack src/SliceFx.SourceGenerator/SliceFx.SourceGenerator.csproj --configuration Release --no-build
           dotnet pack src/SliceFx.Lambda/SliceFx.Lambda.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.Lambda.FunctionPerFeature/SliceFx.Lambda.FunctionPerFeature.csproj --configuration Release --no-build
           dotnet pack src/SliceFx.TestHost/SliceFx.TestHost.csproj --configuration Release --no-build
           dotnet pack src/SliceFx.Wasi/SliceFx.Wasi.csproj --configuration Release --no-build
           dotnet pack tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build

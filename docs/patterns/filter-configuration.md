@@ -2,7 +2,7 @@
 
 `[Filter<T>]` in Slice accepts **only a type parameter**. You can compose multiple filters with multiple attributes, but you cannot pass per-feature values through the attribute itself.
 
-**Why**: parameterizing the attribute would push Slice toward a custom filter-factory mechanism, which would erode the differentiator "100% pure ASP.NET Core Minimal API expansion". Standard ASP.NET Core features already cover the use case without adding Slice-specific runtime state.
+**Why**: parameterizing the attribute would push SliceFx toward a custom filter-factory mechanism, which would erode the differentiator "100% pure ASP.NET Core Minimal API expansion". Standard ASP.NET Core features already cover the use case without adding SliceFx-specific runtime state.
 
 ## Recommended pattern: constructor DI
 

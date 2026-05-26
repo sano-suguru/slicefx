@@ -150,9 +150,9 @@ public sealed class ReportCache(IMemoryCache memory) : IReportCache
 
 Then inject `IReportCache` into each feature that needs it. The "one endpoint = one feature file" rule is about keeping the HTTP contract and handler together; shared infrastructure can still live behind DI when it is genuinely shared.
 
-## Why this is *not* a Slice framework feature
+## Why this is *not* a SliceFx framework feature
 
-The Slice philosophy is to **expand to 100% pure ASP.NET Core Minimal API**. `AddScoped<T>()` is a standard DI feature; nothing magical is added on Slice's side. That keeps three properties intact:
+The SliceFx philosophy is to **expand to 100% pure ASP.NET Core Minimal API**. `AddScoped<T>()` is a standard DI feature; nothing magical is added on SliceFx's side. That keeps three properties intact:
 
 1. **No implicit magic** — read the code and you can see exactly what is registered.
 2. **Native AOT friendliness** — the source generator emits no new behavior.
