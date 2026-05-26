@@ -478,6 +478,7 @@ public class SourceGeneratorCompileTests
             using System.Text.Json.Serialization;
             using System.Threading;
             using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Mvc;
             using Microsoft.Extensions.DependencyInjection;
             using SliceFx;
             using SliceFx.Wasi;
@@ -553,6 +554,7 @@ public class SourceGeneratorCompileTests
                         string tenant,
                         Request request,
                         int priority,
+                        [FromServices]
                         global::WasiRuntimeApp.OrderStore store,
                         CancellationToken ct)
                         => new(tenant, request.Sku, request.Quantity, priority, store.Source);
@@ -721,6 +723,7 @@ public class SourceGeneratorCompileTests
                         [FromQuery(Name = "p")] int page,
                         [FromHeader(Name = "x-trace")] string trace,
                         [FromBody] Payload payload,
+                        [FromServices]
                         WasiBindingApp.Clock clock)
                         => SliceResult.NoContent();
                 }
@@ -740,6 +743,392 @@ public class SourceGeneratorCompileTests
         Assert.Contains(".BindFromHeader<string>(ctx, \"x-trace\")", wasiSource, StringComparison.Ordinal);
         Assert.Contains(".ReadAsync<global::WasiBindingApp.Features.Items.UpdateItem.Payload>", wasiSource, StringComparison.Ordinal);
         Assert.Contains("GetRequiredService(typeof(global::WasiBindingApp.Clock))", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_infers_shared_wasi_body_contracts()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiSharedBodyApp
+            {
+                public sealed record CreateItemRequest(string Name);
+                public sealed record CreateItemResponse(string Name);
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+
+                    private WasiJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace WasiSharedBodyApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public static WasiSharedBodyApp.CreateItemResponse Handle(WasiSharedBodyApp.CreateItemRequest request)
+                        => new(request.Name);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiSharedBodyApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+        var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(".ReadAsync<global::WasiSharedBodyApp.CreateItemRequest>", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("\"WasiSharedBodyApp.CreateItemRequest\"", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_keyed_service_lookup_in_wasi_and_lambda()
+    {
+        var wasiSource = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace KeyedServiceApp
+            {
+                public sealed record CreateOrder(string Sku);
+                public sealed record OrderResult(string Sku);
+
+                public interface IOrderAuditor { void Audit(string sku); }
+                public sealed class ConsoleAuditor : IOrderAuditor { public void Audit(string sku) { } }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace KeyedServiceApp.Features.Orders
+            {
+                [Feature("POST /orders")]
+                public static class PlaceOrder
+                {
+                    public static KeyedServiceApp.OrderResult Handle(
+                        KeyedServiceApp.CreateOrder req,
+                        [FromKeyedServices("primary")] KeyedServiceApp.IOrderAuditor auditor)
+                    {
+                        auditor.Audit(req.Sku);
+                        return new(req.Sku);
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("KeyedServiceApp", wasiSource, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var generatedWasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("GetRequiredKeyedService(ctx.Services, typeof(global::KeyedServiceApp.IOrderAuditor), \"primary\")", generatedWasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetRequiredService(typeof(global::KeyedServiceApp.IOrderAuditor))", generatedWasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_keyed_service_lookup_in_lambda_function_per_feature()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            namespace KeyedLambdaApp
+            {
+                public sealed record CreateOrder(string Sku);
+                public sealed record OrderResult(string Sku);
+
+                public interface IOrderAuditor { void Audit(string sku); }
+
+                public sealed class Startup : ILambdaFunctionPerFeatureStartup
+                {
+                    public void ConfigureServices(IServiceCollection services) { }
+                }
+
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
+                public sealed class LambdaJsonContext : JsonSerializerContext
+                {
+                    public static LambdaJsonContext Default { get; } = new();
+                    private LambdaJsonContext() : base(null) { }
+                    protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(System.Type type) => null;
+                }
+            }
+
+            namespace KeyedLambdaApp.Features.Orders
+            {
+                [Feature("POST /orders")]
+                [LambdaFunctionStartup(typeof(KeyedLambdaApp.Startup))]
+                public static class PlaceOrder
+                {
+                    public static System.Threading.Tasks.Task<KeyedLambdaApp.OrderResult> Handle(
+                        KeyedLambdaApp.CreateOrder req,
+                        [FromKeyedServices("primary")] KeyedLambdaApp.IOrderAuditor auditor,
+                        System.Threading.CancellationToken ct)
+                        => System.Threading.Tasks.Task.FromResult(new KeyedLambdaApp.OrderResult(req.Sku));
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("KeyedLambdaApp", source, includeLambdaReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("GetRequiredKeyedService<global::KeyedLambdaApp.IOrderAuditor>(\"primary\")", lambdaSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(".GetRequiredService<global::KeyedLambdaApp.IOrderAuditor>()", lambdaSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_keyed_service_lookup_with_typeof_key_in_wasi()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace TypeofKeyApp
+            {
+                public sealed record Req(string Val);
+                public sealed record Resp(string Val);
+
+                public interface ISvc { }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace TypeofKeyApp.Features
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public static TypeofKeyApp.Resp Handle(
+                        TypeofKeyApp.Req req,
+                        [FromKeyedServices(typeof(TypeofKeyApp.ISvc))] TypeofKeyApp.ISvc svc)
+                        => new(req.Val);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("TypeofKeyApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("GetRequiredKeyedService(ctx.Services, typeof(global::TypeofKeyApp.ISvc), typeof(global::TypeofKeyApp.ISvc))", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_SLICE037_and_falls_back_to_unkeyed_for_unsupported_key_constant()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace UnsupportedKeyApp
+            {
+                public sealed record Req(string Val);
+                public sealed record Resp(string Val);
+
+                public interface ISvc { }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace UnsupportedKeyApp.Features
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public static UnsupportedKeyApp.Resp Handle(
+                        UnsupportedKeyApp.Req req,
+                        [FromKeyedServices(new[] { "a", "b" })] UnsupportedKeyApp.ISvc svc)
+                        => new(req.Val);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("UnsupportedKeyApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE037");
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain("GetRequiredKeyedService", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("GetRequiredService(typeof(global::UnsupportedKeyApp.ISvc))", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_skips_wasi_route_with_AsParameters_binding()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace AsParamsApp
+            {
+                public struct QueryArgs { public string Filter { get; set; } }
+                public sealed record Resp(string Filter);
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace AsParamsApp.Features
+            {
+                [Feature("GET /items")]
+                public static class ListItems
+                {
+                    public static AsParamsApp.Resp Handle([AsParameters] AsParamsApp.QueryArgs args)
+                        => new(args.Filter);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("AsParamsApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain("\"GET\"", wasiSource, StringComparison.Ordinal);
+        Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE023");
+    }
+
+    [Fact]
+    public void Generator_emits_keyed_service_lookup_with_control_char_key_in_wasi()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace CtrlCharKeyApp
+            {
+                public sealed record Req(string Val);
+                public sealed record Resp(string Val);
+
+                public interface ISvc { }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace CtrlCharKeyApp.Features
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public static CtrlCharKeyApp.Resp Handle(
+                        CtrlCharKeyApp.Req req,
+                        [FromKeyedServices("a\nb")] CtrlCharKeyApp.ISvc svc)
+                        => new(req.Val);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("CtrlCharKeyApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("GetRequiredKeyedService(ctx.Services, typeof(global::CtrlCharKeyApp.ISvc), \"a\\nb\")", wasiSource, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -914,6 +1303,7 @@ public class SourceGeneratorCompileTests
             using System.Text.Json.Serialization;
             using System.Threading;
             using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Mvc;
             using Microsoft.Extensions.DependencyInjection;
             using SliceFx;
             using SliceFx.Lambda.FunctionPerFeature;
@@ -956,6 +1346,7 @@ public class SourceGeneratorCompileTests
                         string tenant,
                         Request request,
                         int priority,
+                        [FromServices]
                         global::LambdaRuntimeApp.OrderStore store,
                         CancellationToken ct)
                         => new(tenant, request.Sku, request.Quantity, priority, store.Source);
@@ -2953,6 +3344,7 @@ public class SourceGeneratorCompileTests
             new DiagnosticCatalogEntry("SLICE034", "UnsupportedValidationForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE035", "InvalidLambdaFunctionPerFeatureStartupType", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE036", "DuplicateLambdaFunctionPerFeatureArtifactId", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE037", "UnsupportedKeyedServiceKey", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE040", "DuplicateJsonContextOverride", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE041", "InvalidJsonContextOverride", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE050", "UnconfiguredReferencedSliceModules", "Slice", DiagnosticSeverity.Warning),

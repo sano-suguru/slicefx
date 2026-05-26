@@ -10,12 +10,14 @@ internal static partial class ClientGenerationHelpers
         "int", "long", "short", "uint", "ulong", "ushort",
         "bool", "double", "float", "decimal", "byte",
         "DateTime", "DateTimeOffset", "DateOnly", "TimeOnly", "TimeSpan",
+        "char", "Uri",
         "System.Guid", "System.String",
         "System.Int32", "System.Int64", "System.Int16",
         "System.UInt32", "System.UInt64", "System.UInt16",
         "System.Boolean", "System.Double", "System.Single", "System.Decimal",
         "System.Byte", "System.DateTime", "System.DateTimeOffset",
         "System.DateOnly", "System.TimeOnly", "System.TimeSpan",
+        "System.Char", "System.Uri",
     ];
 
     internal static string UnwrapReturnType(string returnType)
@@ -50,12 +52,9 @@ internal static partial class ClientGenerationHelpers
             return explicitBody;
         }
 
-        if (route.RequestType is null)
-        {
-            return null;
-        }
-
-        return route.Parameters.FirstOrDefault(parameter => parameter.Type == route.RequestType);
+        return route.RequestType is null
+            ? null
+            : route.Parameters.FirstOrDefault(parameter => parameter.Type == route.RequestType);
     }
 
     internal static SliceRouteParameter[] FindRouteParameters(SliceRouteInfo route)

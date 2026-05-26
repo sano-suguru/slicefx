@@ -224,16 +224,10 @@ internal static class RouteManifestEmitter
 
     private static string? FindRequestType(FeatureModel feature)
     {
-        var nestedRequestType = feature.FullyQualifiedTypeName + ".Request";
-        foreach (var parameter in feature.GetParams())
-        {
-            if (parameter.TypeFqn == nestedRequestType)
-            {
-                return SourceGenerationHelpers.TrimGlobalAlias(parameter.TypeFqn);
-            }
-        }
-
-        return null;
+        var bodyParameter = SourceGenerationHelpers.FindSingleBodyParameter(feature);
+        return bodyParameter is null
+            ? null
+            : SourceGenerationHelpers.TrimGlobalAlias(bodyParameter.TypeFqn);
     }
 
     private static (string Status, string? Reason) ClassifyPortability(FeatureModel feature)
@@ -328,7 +322,7 @@ internal static class RouteManifestEmitter
         return parameters.IsEmpty
             ? null
             : string.Join("\n", parameters.Select(static p =>
-                $"{EncodeManifestField(SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn))}|{EncodeManifestField(p.Name)}|{(p.IsNullable ? "N" : "-")}|{EncodeManifestField(p.BindingSource ?? "")}|{EncodeManifestField(p.BindingName ?? "")}"));
+                $"{EncodeManifestField(SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn))}|{EncodeManifestField(p.Name)}|{(p.IsNullable ? "N" : "-")}|{EncodeManifestField(p.BindingSource ?? "")}|{EncodeManifestField(p.BindingName ?? "")}|{EncodeManifestField(p.BindingKeyLiteral ?? "")}"));
     }
 
     private static string EncodeManifestField(string value)

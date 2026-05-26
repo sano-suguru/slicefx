@@ -758,6 +758,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         // K = 'I' (interface/abstract) or 'C' (concrete), and N marks nullable.
         // V marks value types so emitters can avoid null checks that produce nullable warnings.
         var paramParts = new string[handle.Parameters.Length];
+        string? keyWarningParamName = null;
         for (var i = 0; i < handle.Parameters.Length; i++)
         {
             var p = handle.Parameters[i];
@@ -765,14 +766,25 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                         || (p.Type is INamedTypeSymbol nt && nt.IsAbstract)) ? "I" : "C";
             var nullable = IsNullableParameter(p) ? "N" : "-";
             var valueType = p.Type.IsValueType ? "V" : "R";
-            var (bindingSource, bindingName) = GetBindingMetadata(p);
+            var (bindingSource, bindingName, bindingKeyLiteral) = GetBindingMetadata(p);
+            if (bindingSource == "keyedServices" && bindingKeyLiteral is null
+                && p.GetAttributes().Any(a =>
+                    a.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                        == "global::Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute"
+                    && a.ConstructorArguments.Length > 0
+                    && !a.ConstructorArguments[0].IsNull))
+            {
+                keyWarningParamName ??= p.Name;
+            }
+
             paramParts[i] = Encode(p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) + "|" +
                 Encode(p.Name) + "|" +
                 kind + "|" +
                 nullable + "|" +
                 Encode(bindingSource) + "|" +
                 Encode(bindingName) + "|" +
-                valueType;
+                valueType + "|" +
+                Encode(bindingKeyLiteral ?? "");
         }
         var serializedParams = string.Join(";", paramParts);
 
@@ -849,6 +861,15 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             featureLocation.EndLine,
             featureLocation.EndCharacter);
 
+        if (keyWarningParamName is not null)
+        {
+            return new FeatureResult(model, EquatableDiagnostic.Create(
+                SliceDiagnostics.UnsupportedKeyedServiceKey,
+                CreateDiagnosticLocation(featureType.Locations.Length > 0 ? featureType.Locations[0] : null),
+                featureType.Name,
+                keyWarningParamName));
+        }
+
         return tagInferred && tag == "Default"
             ? new FeatureResult(model, EquatableDiagnostic.Create(
                 SliceDiagnostics.TagInferenceFallback,
@@ -901,7 +922,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         => parameter.NullableAnnotation == NullableAnnotation.Annotated ||
            parameter.Type.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Nullable<T>";
 
-    private static (string Source, string Name) GetBindingMetadata(IParameterSymbol parameter)
+    private static (string Source, string Name, string? KeyLiteral) GetBindingMetadata(IParameterSymbol parameter)
     {
         foreach (var attribute in parameter.GetAttributes())
         {
@@ -918,6 +939,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 "global::Microsoft.AspNetCore.Mvc.FromHeaderAttribute" => "header",
                 "global::Microsoft.AspNetCore.Mvc.FromBodyAttribute" => "body",
                 "global::Microsoft.AspNetCore.Mvc.FromServicesAttribute" => "services",
+                "global::Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute" => "keyedServices",
+                "global::Microsoft.AspNetCore.Http.AsParametersAttribute" => "parameters",
                 _ => null,
             };
             if (source is null)
@@ -926,6 +949,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             }
 
             var name = "";
+            string? keyLiteral = null;
+
             foreach (var arg in attribute.NamedArguments)
             {
                 if (arg.Key == "Name" && arg.Value.Value is string value)
@@ -935,10 +960,45 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 }
             }
 
-            return (source, name);
+            if (source == "keyedServices" && attribute.ConstructorArguments.Length > 0)
+            {
+                keyLiteral = TypedConstantToCSharpLiteral(attribute.ConstructorArguments[0]);
+            }
+
+            return (source, name, keyLiteral);
         }
 
-        return ("", "");
+        return ("", "", null);
+    }
+
+    private static string? TypedConstantToCSharpLiteral(TypedConstant constant)
+    {
+        if (constant.IsNull)
+        {
+            return "null";
+        }
+
+        switch (constant.Kind)
+        {
+            case TypedConstantKind.Primitive:
+                return constant.Value switch
+                {
+                    string s => CSharpLiteral.String(s),
+                    bool b => b ? "true" : "false",
+                    char c => CSharpLiteral.Char(c),
+                    _ => constant.Value?.ToString(),
+                };
+            case TypedConstantKind.Enum:
+                var enumType = constant.Type?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return enumType is null ? null : $"({enumType}){constant.Value}";
+            case TypedConstantKind.Type:
+                var typeFqn = (constant.Value as ITypeSymbol)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return typeFqn is null ? null : $"typeof({typeFqn})";
+            case TypedConstantKind.Array:
+            case TypedConstantKind.Error:
+            default:
+                return null;
+        }
     }
 
     private static (string SerializedRules, bool RequiresReflectionValidation, string SerializedUnsupportedValidationAttributes) CreateValidationRules(
@@ -1040,7 +1100,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
     {
         foreach (var attribute in parameter.GetAttributes())
         {
-            if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Microsoft.AspNetCore.Mvc.FromServicesAttribute")
+            var attributeName = attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (attributeName is "global::Microsoft.AspNetCore.Mvc.FromServicesAttribute"
+                or "global::Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute"
+                or "global::Microsoft.AspNetCore.Http.AsParametersAttribute")
             {
                 return true;
             }
@@ -1545,10 +1608,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         var builder = ImmutableArray.CreateBuilder<string>();
         foreach (var model in models)
         {
-            foreach (var parameter in model.GetParams())
+            foreach (var parameter in SourceGenerationHelpers.FindBodyParameters(model))
             {
-                if (SourceGenerationHelpers.IsRequestLikeParameter(parameter)
-                    && seen.Add(parameter.TypeFqn))
+                if (seen.Add(parameter.TypeFqn))
                 {
                     builder.Add(parameter.TypeFqn);
                 }

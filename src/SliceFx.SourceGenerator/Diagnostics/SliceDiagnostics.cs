@@ -250,6 +250,17 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Diagnostic reported when a [FromKeyedServices] key constant cannot be re-emitted as a C# literal.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedKeyedServiceKey = new(
+        "SLICE037",
+        "Unsupported keyed service key constant",
+        "Feature '{0}': parameter '{1}' has a [FromKeyedServices] key that cannot be represented as a C# literal in generated dispatch code; only string, numeric, bool, char, enum, and typeof keys are supported. The key will be dropped and unkeyed DI resolution will be used.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// Diagnostic reported when multiple explicit JSON context overrides target the same Slice adapter.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicateJsonContextOverride = new(

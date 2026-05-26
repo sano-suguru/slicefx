@@ -548,6 +548,88 @@ public class CliFixtureTests
     }
 
     [Fact]
+    public async Task Generated_metadata_clients_and_openapi_infer_shared_body_contracts()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "shared-body-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Shared.Body.Client.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Contracts.cs",
+            """
+            namespace Shared.Body.Client.App.Contracts;
+
+            public sealed record CreateItemRequest(string Name);
+
+            public sealed record CreateItemResponse(int Id, string Name);
+            """);
+        fixture.WriteFeature(
+            "Features/Items/CreateItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using Shared.Body.Client.App.Contracts;
+
+            namespace Shared.Body.Client.App.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public static Task<CreateItemResponse> Handle(CreateItemRequest request, CancellationToken ct)
+                    => Task.FromResult(new CreateItemResponse(1, request.Name));
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var route = Assert.Single(discovery.Routes);
+        Assert.Equal("Shared.Body.Client.App.Contracts.CreateItemRequest", route.RequestType);
+
+        var csharpOutput = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var csharpExitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", csharpOutput, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, csharpExitCode);
+        var csharpClient = await File.ReadAllTextAsync(csharpOutput);
+        Assert.Contains("Task<Shared.Body.Client.App.Contracts.CreateItemResponse> CreateItemAsync(Shared.Body.Client.App.Contracts.CreateItemRequest request", csharpClient);
+        Assert.Contains("JsonContent.Create(request)", csharpClient);
+        Assert.DoesNotContain("CreateItem.Request", csharpClient);
+
+        var typescriptOutput = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var typescriptExitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", typescriptOutput, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, typescriptExitCode);
+        var typescriptClient = await File.ReadAllTextAsync(typescriptOutput);
+        Assert.Contains("body: ContractsCreateItemRequest", typescriptClient);
+        Assert.Contains("JSON.stringify(body)", typescriptClient);
+
+        var openApiOutput = Path.Combine(fixture.Directory.FullName, "openapi.json");
+        var openApiExitCode = await GenerateOpenApiCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", openApiOutput])
+            .InvokeAsync();
+        Assert.Equal(0, openApiExitCode);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(openApiOutput));
+        Assert.True(document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/items")
+            .GetProperty("post")
+            .TryGetProperty("requestBody", out _));
+    }
+
+    [Fact]
     public async Task Csharp_client_emits_extensibility_hooks()
     {
         using var fixture = CliProjectFixture.Create(

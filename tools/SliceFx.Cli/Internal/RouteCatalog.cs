@@ -101,7 +101,7 @@ internal static class RouteCatalog
             var handleMethod = FindHandleMethod(classDeclaration);
             var returnType = handleMethod is null ? "" : NormalizeWhitespace(handleMethod.ReturnType.ToString());
             var parameters = handleMethod is null ? [] : ReadParameters(handleMethod.ParameterList);
-            var requestType = FindRequestType(parameters);
+            var requestType = FindRequestType(parts[0].ToUpperInvariant(), parameters);
             var filters = ReadFilters(classDeclaration.AttributeLists);
             var (portability, portabilityReason) = ClassifyPortability(returnType, filters);
             var featureName = classDeclaration.Identifier.ValueText;
@@ -270,6 +270,9 @@ internal static class RouteCatalog
                 "FromRoute" => "route",
                 "FromHeader" => "header",
                 "FromBody" => "body",
+                "FromServices" => "services",
+                "FromKeyedServices" => "keyedServices",
+                "AsParameters" => "parameters",
                 _ => null,
             };
 
@@ -284,17 +287,23 @@ internal static class RouteCatalog
         return (source, name);
     }
 
-    private static string? FindRequestType(SliceRouteParameter[] parameters)
+    private static string? FindRequestType(string method, SliceRouteParameter[] parameters)
     {
-        foreach (var parameter in parameters)
+        var explicitBody = parameters.FirstOrDefault(static parameter => parameter.BindingSource == "body");
+        if (explicitBody is not null)
         {
-            if (parameter.Type == "Request" || parameter.Type.EndsWith(".Request", StringComparison.Ordinal))
-            {
-                return parameter.Type;
-            }
+            return explicitBody.Type;
         }
 
-        return null;
+        if (method is not ("POST" or "PUT" or "PATCH"))
+        {
+            return null;
+        }
+
+        // syntactic fallback (no symbol info): accept only the conventional `.Request` shorthand;
+        // convention-based body inference belongs to the source generator which can see interface/abstract markers.
+        return parameters.FirstOrDefault(static p =>
+            p.Type == "Request" || p.Type.EndsWith(".Request", StringComparison.Ordinal))?.Type;
     }
 
     private static string InferTag(string @namespace)
@@ -479,7 +488,8 @@ internal sealed record SliceRouteParameter(
     string Name,
     bool IsNullable = false,
     string? BindingSource = null,
-    string? BindingName = null)
+    string? BindingName = null,
+    string? BindingKey = null)
 {
     internal string WireName => string.IsNullOrWhiteSpace(BindingName) ? Name : BindingName;
 }

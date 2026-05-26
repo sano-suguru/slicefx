@@ -153,6 +153,8 @@ Read more:
 | TestHost helper | Experimental |
 | WASI adapter | Experimental single-component in-process wasi:http dispatch; per-feature WASM packaging is not implemented |
 
+The C# typed client reuses C# request/response types rather than generating DTO copies. Use nested feature DTOs when the client can reference the feature assembly; use non-nested DTOs in a shared contracts project when Blazor or another .NET client should reference contracts without referencing server features. The TypeScript client emits interfaces from built metadata.
+
 ## Adoption evidence
 
 | Evidence type | Current public count | Notes |

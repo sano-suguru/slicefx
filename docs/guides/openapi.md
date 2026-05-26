@@ -49,7 +49,7 @@ DTO schemas are read from build output metadata without loading user assemblies.
 - `JsonStringEnumConverter` on an enum or enum property emits string enum schemas.
 - Binary DTO members such as `byte[]`, `Memory<byte>`, and `ReadOnlyMemory<byte>` emit `type: string` with `format: byte`.
 
-Handler parameter metadata includes nullable annotations and common Minimal API binding attributes such as `[FromQuery(Name = "...")]`, `[FromRoute(Name = "...")]`, `[FromHeader(Name = "...")]`, and `[FromBody]`.
+Handler parameter metadata includes nullable annotations and common Minimal API binding attributes such as `[FromQuery(Name = "...")]`, `[FromRoute(Name = "...")]`, `[FromHeader(Name = "...")]`, and `[FromBody]`. The manifest records the inferred JSON body contract type, whether it is a nested feature `Request` or a non-nested shared DTO. Use explicit binding attributes when a handler has multiple complex parameters or a concrete DI service parameter.
 
 By default, `slicefx openapi` includes `portable` and `partial` routes. `aspnet-only` routes are omitted because the manifest cannot reliably describe `IResult` response shapes. Omitted routes are listed in `x-slicefx-omitted` and written as warnings. Use `--include-aspnet-only` only when you want those operations included with explicit portability metadata and incomplete schemas.
 

@@ -179,7 +179,10 @@ internal static class WasiRegistrationEmitter
                 continue;
             }
 
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(
+                p,
+                feature.HttpMethod,
+                feature.Pattern);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 bodyCount++;
@@ -222,7 +225,7 @@ internal static class WasiRegistrationEmitter
     {
         var @params = f.GetParams();
 
-        var bodyParam = FindBodyParam(f, @params);
+        var bodyParam = FindBodyParam(f);
         var bodyValidation = bodyParam is null ? null : FindValidationParameter(f, @params.IndexOf(bodyParam));
 
         sb.AppendLine($"        table.Add(");
@@ -284,7 +287,10 @@ internal static class WasiRegistrationEmitter
                 continue;
             }
 
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, f.Pattern, f.FullyQualifiedTypeName);
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(
+                p,
+                f.HttpMethod,
+                f.Pattern);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"                    if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");
@@ -319,7 +325,11 @@ internal static class WasiRegistrationEmitter
                 }
                 sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
             }
-            else // DI
+            else if (binding.Source == HandlerParameterBindingSource.KeyedServices && binding.KeyLiteral is not null)
+            {
+                sb.AppendLine($"                    var {p.Name} = ({p.TypeFqn})global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(ctx.Services, typeof({p.TypeFqn}), {binding.KeyLiteral});");
+            }
+            else // DI (includes KeyedServices fallback when key literal could not be re-emitted)
             {
                 sb.AppendLine($"                    var {p.Name} = ({p.TypeFqn})ctx.Services.GetRequiredService(typeof({p.TypeFqn}));");
             }
@@ -484,23 +494,8 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine($"        => (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>){wasiJsonContextFqn}.Default.GetTypeInfo(typeof(T))!;");
     }
 
-    private static HandleParamModel? FindBodyParam(FeatureModel feature, ImmutableArray<HandleParamModel> @params)
-    {
-        foreach (var p in @params)
-        {
-            if (p.TypeFqn == "global::System.Threading.CancellationToken")
-            {
-                continue;
-            }
-
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                return p;
-            }
-        }
-        return null;
-    }
+    private static HandleParamModel? FindBodyParam(FeatureModel feature)
+        => SourceGenerationHelpers.FindSingleBodyParameter(feature);
 
     private static ValidationParameterModel? FindValidationParameter(FeatureModel feature, int parameterIndex)
     {

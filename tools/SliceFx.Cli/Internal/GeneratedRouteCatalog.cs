@@ -468,7 +468,7 @@ internal static class GeneratedRouteCatalog
         foreach (var line in SplitLines(value))
         {
             var parts = line.Split('|');
-            if (parts.Length != 5 || parts[0].Length == 0 || parts[1].Length == 0)
+            if (parts.Length < 5 || parts[0].Length == 0 || parts[1].Length == 0)
             {
                 continue;
             }
@@ -478,7 +478,8 @@ internal static class GeneratedRouteCatalog
                 DecodeManifestField(parts[1]),
                 IsNullable: parts[2] == "N",
                 BindingSource: parts[3].Length > 0 ? DecodeManifestField(parts[3]) : null,
-                BindingName: parts[4].Length > 0 ? DecodeManifestField(parts[4]) : null));
+                BindingName: parts[4].Length > 0 ? DecodeManifestField(parts[4]) : null,
+                BindingKey: parts.Length > 5 && parts[5].Length > 0 ? DecodeManifestField(parts[5]) : null));
         }
 
         return [.. parameters];

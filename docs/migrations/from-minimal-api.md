@@ -156,6 +156,8 @@ slicefx client csharp --output SliceApiClient.g.cs
 slicefx client typescript --output slice-api-client.ts
 ```
 
+The C# client reuses C# contract types from handler signatures. Nested feature DTOs keep endpoint code local, while non-nested DTOs in a shared contracts project are the better fit when Blazor or another .NET client should consume generated clients without referencing server feature assemblies.
+
 For hosted ASP.NET Core OpenAPI, keep using Microsoft's runtime OpenAPI support. The CLI OpenAPI output is a manifest projection for portable tooling, not a replacement for the hosted document. See [OpenAPI guidance](../guides/openapi.md).
 
 Compare the hosted OpenAPI document before and after each migrated endpoint when clients depend on operation ids, status codes, request content types, response schemas, auth metadata, cache/rate-limit metadata, or examples. `FeatureAttribute.Name` helps preserve operation ids, but response metadata still follows the handler return type and ASP.NET Core metadata.

@@ -24,6 +24,7 @@ SLICE033 | Slice | Warning | UnsupportedParameterForLambdaFunctionPerFeature
 SLICE034 | Slice | Warning | UnsupportedValidationForLambdaFunctionPerFeature
 SLICE035 | Slice | Error | InvalidLambdaFunctionPerFeatureStartupType
 SLICE036 | Slice | Error | DuplicateLambdaFunctionPerFeatureArtifactId
+SLICE037 | Slice | Warning | UnsupportedKeyedServiceKey
 SLICE040 | Slice | Error | DuplicateJsonContextOverride
 SLICE041 | Slice | Error | InvalidJsonContextOverride
 SLICE050 | Slice | Warning | UnconfiguredReferencedSliceModules

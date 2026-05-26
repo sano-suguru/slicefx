@@ -513,7 +513,7 @@ internal static class PackageAwsLambdaCommand
     private static string[] GetLambdaJsonRootTypes(SliceRouteInfo route)
     {
         var roots = new HashSet<string>(StringComparer.Ordinal);
-        var body = FindLambdaBodyParameter(route);
+        var body = ClientGenerationHelpers.FindBodyParameter(route);
         if (body is not null)
         {
             roots.Add(body.Type);
@@ -528,25 +528,6 @@ internal static class PackageAwsLambdaCommand
         }
 
         return [.. roots.OrderBy(static root => root, StringComparer.Ordinal)];
-    }
-
-    private static SliceRouteParameter? FindLambdaBodyParameter(SliceRouteInfo route)
-    {
-        foreach (var parameter in route.Parameters)
-        {
-            if (string.Equals(parameter.BindingSource, "body", StringComparison.Ordinal))
-            {
-                return parameter;
-            }
-        }
-
-        if (route.RequestType is null)
-        {
-            return null;
-        }
-
-        return route.Parameters.FirstOrDefault(parameter =>
-            string.Equals(parameter.Type, route.RequestType, StringComparison.Ordinal));
     }
 
     private static string? GetAwaitedReturnType(string returnType)

@@ -80,7 +80,7 @@ slicefx openapi --output openapi.json
 - `partial` means the route shape is portable, but some attached behavior such as endpoint filters is ASP.NET-only today.
 - `aspnet-only` means the route intentionally depends on ASP.NET concepts such as `IResult`.
 
-`slicefx client csharp` and `slicefx client typescript` generate typed clients for portable and partial routes: write the server feature once, then let tooling produce the client entrypoint instead of manually maintaining endpoint strings and DTO wiring.
+`slicefx client csharp` and `slicefx client typescript` generate typed clients for portable and partial routes: write the server feature once, then let tooling produce the client entrypoint instead of manually maintaining endpoint strings and DTO wiring. The C# client should reuse C# contract symbols from the handler signature; the TypeScript client should project schemas into interfaces because TypeScript cannot reference C# types directly.
 
 `slicefx openapi` projects the same manifest into OpenAPI JSON for portable tooling without starting an ASP.NET host. The ASP.NET Core `AddOpenApi` / `MapOpenApi` document remains the authoritative hosted-app document; the CLI output is stamped as a manifest projection and must not invent metadata beyond the manifest.
 

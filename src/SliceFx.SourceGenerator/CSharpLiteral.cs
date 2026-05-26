@@ -61,4 +61,23 @@ internal static class CSharpLiteral
         sb.Append('"');
         return sb.ToString();
     }
+
+    public static string Char(char value)
+    {
+        return value switch
+        {
+            '\\' => @"'\\'",
+            '\'' => @"'\''",
+            '\0' => @"'\0'",
+            '\a' => @"'\a'",
+            '\b' => @"'\b'",
+            '\f' => @"'\f'",
+            '\n' => @"'\n'",
+            '\r' => @"'\r'",
+            '\t' => @"'\t'",
+            '\v' => @"'\v'",
+            _ when char.IsControl(value) => $"'\\u{(int)value:x4}'",
+            _ => $"'{value}'",
+        };
+    }
 }

@@ -107,9 +107,9 @@ The source generator discovers startup types and calls `ConfigureServices` once 
 - Route parameters (`{id:int}`, `{name}`)
 - Query parameters (`[FromQuery(Name = "...")]`)
 - Header parameters (`[FromHeader(Name = "...")]`)
-- Nested JSON `Request` bodies
+- JSON body contract types, including nested `Request` records and non-nested shared DTOs
 - Explicit `[FromBody]` JSON bodies
-- DI services (`[FromServices]` or inferred from DI)
+- DI services (`[FromServices]` for concrete service types; interface and abstract dependencies are inferred from DI)
 - `CancellationToken`
 
 Missing nullable parameters bind `null`; missing non-nullable parameters return `400 Bad Request`. Present empty strings bind as `""`.

@@ -15,7 +15,7 @@ internal sealed record FeatureModel(
     string? Summary,
     string ReturnTypeFqn,
     bool ReturnsAspNetResult,
-    // Serialised as "b64(typeFqn)|b64(name)|kind|nullable|b64(bindingSource)|b64(bindingName)|valueKind" so the record uses primitive equality.
+    // Serialised as "b64(typeFqn)|b64(name)|kind|nullable|b64(bindingSource)|b64(bindingName)|valueKind[|b64(bindingKeyLiteral)]" so the record uses primitive equality.
     string SerializedParams,
     // Serialised as "fqn1;fqn2" — order is declaration order.
     string SerializedFilterFqns,
@@ -51,7 +51,7 @@ internal sealed record FeatureModel(
         foreach (var entry in entries)
         {
             var parts = entry.Split('|');
-            if (parts.Length != 7)
+            if (parts.Length < 7)
             {
                 continue;
             }
@@ -63,7 +63,8 @@ internal sealed record FeatureModel(
                 IsNullable: parts[3] == "N",
                 IsValueType: parts[6] == "V",
                 BindingSource: parts[4].Length > 0 ? Decode(parts[4]) : null,
-                BindingName: parts[5].Length > 0 ? Decode(parts[5]) : null));
+                BindingName: parts[5].Length > 0 ? Decode(parts[5]) : null,
+                BindingKeyLiteral: parts.Length > 7 && parts[7].Length > 0 ? Decode(parts[7]) : null));
         }
         return builder.ToImmutable();
     }
@@ -287,4 +288,5 @@ internal sealed record HandleParamModel(
     bool IsNullable,
     bool IsValueType,
     string? BindingSource,
-    string? BindingName);
+    string? BindingName,
+    string? BindingKeyLiteral = null);

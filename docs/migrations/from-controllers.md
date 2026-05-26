@@ -154,7 +154,7 @@ Before migrating an action whose clients depend on validation errors, contract-t
 After the first action passes behavior checks:
 
 1. Pick the next action in the same route group.
-2. Move action-local DTOs into the feature file when that improves reviewability.
+2. Move action-local DTOs into the feature file when that improves reviewability; keep DTOs in a shared contracts project when generated C# clients such as Blazor clients should reference contracts without referencing server feature assemblies.
 3. Keep shared domain services in DI; do not recreate controller base classes as feature base classes.
 4. Run the migration audit in `Throw` mode in CI or during the PoC if route/name collisions must fail fast.
 5. Run `slicefx routes` to inspect endpoint names, tags, and portability.

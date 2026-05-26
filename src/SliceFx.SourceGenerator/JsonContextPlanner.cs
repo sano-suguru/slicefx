@@ -238,18 +238,7 @@ internal static class JsonContextPlanner
     }
 
     private static HandleParamModel? FindBodyParam(FeatureModel feature)
-    {
-        foreach (var p in feature.GetParams())
-        {
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                return p;
-            }
-        }
-
-        return null;
-    }
+        => SourceGenerationHelpers.FindSingleBodyParameter(feature);
 
     private static string? GetParameterBindingSkipReason(FeatureModel feature)
     {
@@ -261,7 +250,10 @@ internal static class JsonContextPlanner
                 continue;
             }
 
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(
+                p,
+                feature.HttpMethod,
+                feature.Pattern);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 bodyCount++;

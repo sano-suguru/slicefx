@@ -99,7 +99,7 @@ internal static class LambdaFunctionPerFeatureEmitter
         }
 
         var @params = feature.GetParams();
-        var bodyParam = FindBodyParam(feature, @params);
+        var bodyParam = FindBodyParam(feature);
         var bodyValidation = bodyParam is null ? null : FindValidationParameter(feature, @params.IndexOf(bodyParam));
         var awaitedReturnType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
 
@@ -165,7 +165,10 @@ internal static class LambdaFunctionPerFeatureEmitter
                 continue;
             }
 
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(
+                p,
+                feature.HttpMethod,
+                feature.Pattern);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"        if (!global::SliceFx.Lambda.FunctionPerFeature.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
@@ -197,7 +200,11 @@ internal static class LambdaFunctionPerFeatureEmitter
                 }
                 sb.AppendLine($"        var {p.Name} = {bindingVariable}.Value!;");
             }
-            else
+            else if (binding.Source == HandlerParameterBindingSource.KeyedServices && binding.KeyLiteral is not null)
+            {
+                sb.AppendLine($"        var {p.Name} = __scope.ServiceProvider.GetRequiredKeyedService<{p.TypeFqn}>({binding.KeyLiteral});");
+            }
+            else // DI (includes KeyedServices fallback when key literal could not be re-emitted)
             {
                 sb.AppendLine($"        var {p.Name} = __scope.ServiceProvider.GetRequiredService<{p.TypeFqn}>();");
             }
@@ -271,7 +278,10 @@ internal static class LambdaFunctionPerFeatureEmitter
                 continue;
             }
 
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(
+                p,
+                feature.HttpMethod,
+                feature.Pattern);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 bodyCount++;
@@ -429,19 +439,8 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine($"            ?? throw new global::System.InvalidOperationException({Str($"Lambda function-per-feature JSON metadata provider did not contain required metadata for {feature.EndpointName}.")}));");
     }
 
-    private static HandleParamModel? FindBodyParam(FeatureModel feature, ImmutableArray<HandleParamModel> parameters)
-    {
-        foreach (var p in parameters)
-        {
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.Pattern, feature.FullyQualifiedTypeName);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                return p;
-            }
-        }
-
-        return null;
-    }
+    private static HandleParamModel? FindBodyParam(FeatureModel feature)
+        => SourceGenerationHelpers.FindSingleBodyParameter(feature);
 
     private static ValidationParameterModel? FindValidationParameter(FeatureModel feature, int parameterIndex)
     {

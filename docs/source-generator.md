@@ -99,6 +99,7 @@ Diagnostic IDs are grouped into reserved ranges so new rules can be added withou
 | `SLICE034` | Warning | Lambda function-per-feature | Lambda route would need reflection-bound DataAnnotations validation. | Use supported generated validation attributes or `ISliceValidator<T>`. |
 | `SLICE035` | Error | Lambda function-per-feature | `[LambdaFunctionStartup]` type is invalid. | Use a public parameterless type implementing `ILambdaFunctionPerFeatureStartup`. |
 | `SLICE036` | Error | Lambda function-per-feature | Two features produce the same Lambda artifact ID. | Change the feature name, endpoint name, or tag to make artifact IDs unique. |
+| `SLICE037` | Warning | Parameter binding | `[FromKeyedServices]` key constant cannot be re-emitted as a C# literal in generated WASI/Lambda dispatch. | Use a string, numeric, bool, char, enum, or `typeof` key; or use `[FromServices]` and register the keyed service under its type directly. |
 | `SLICE040` | Error | JSON context overrides | Multiple explicit JSON context overrides target the same Slice adapter. | Keep exactly one `[SliceJsonContext]` override per target. |
 | `SLICE041` | Error | JSON context overrides | Explicit JSON context override is not a `JsonSerializerContext`. | Point the override at a type deriving from `JsonSerializerContext`. |
 | `SLICE050` | Warning | Cross-assembly aggregation | Referenced Slice modules exist but aggregation is not explicitly configured. | Set `SliceFxReferencedAssemblies`, `SliceFxAggregateReferences=true`, or `SliceFxAggregateReferences=false`. |

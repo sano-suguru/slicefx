@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using SliceFx.Shared;
 
 namespace SliceFx.SourceGenerator;
@@ -90,10 +91,41 @@ internal static class SourceGenerationHelpers
     }
 
     public static bool IsRequestLikeParameter(HandleParamModel parameter)
-        => parameter.TypeFqn != "global::System.Threading.CancellationToken"
+        => parameter.BindingSource is not ("route" or "query" or "header" or "services" or "keyedServices" or "parameters")
+           && parameter.TypeFqn != "global::System.Threading.CancellationToken"
            && !parameter.IsInterfaceOrAbstract
            && !IsSimpleType(parameter.TypeFqn)
            && !IsFrameworkType(parameter.TypeFqn);
+
+    public static ImmutableArray<HandleParamModel> FindBodyParameters(FeatureModel feature)
+    {
+        var parameters = feature.GetParams();
+        if (parameters.IsEmpty)
+        {
+            return [];
+        }
+
+        var builder = ImmutableArray.CreateBuilder<HandleParamModel>();
+        foreach (var parameter in parameters)
+        {
+            var binding = ResolveParameterBinding(
+                parameter,
+                feature.HttpMethod,
+                feature.Pattern);
+            if (binding.Source == HandlerParameterBindingSource.Body)
+            {
+                builder.Add(parameter);
+            }
+        }
+
+        return builder.ToImmutable();
+    }
+
+    public static HandleParamModel? FindSingleBodyParameter(FeatureModel feature)
+    {
+        var bodyParameters = FindBodyParameters(feature);
+        return bodyParameters.Length == 1 ? bodyParameters[0] : null;
+    }
 
     public static bool IsRouteParam(string name, string pattern)
     {
@@ -130,8 +162,8 @@ internal static class SourceGenerationHelpers
 
     public static HandlerParameterBinding ResolveParameterBinding(
         HandleParamModel parameter,
-        string pattern,
-        string featureTypeFqn)
+        string httpMethod,
+        string pattern)
     {
         var wireName = string.IsNullOrWhiteSpace(parameter.BindingName) ? parameter.Name : parameter.BindingName!;
         return parameter.BindingSource switch
@@ -141,7 +173,9 @@ internal static class SourceGenerationHelpers
             "query" => ResolveExplicitScalar(parameter, pattern, wireName, HandlerParameterBindingSource.Query),
             "header" => ResolveExplicitScalar(parameter, pattern, wireName, HandlerParameterBindingSource.Header),
             "services" => new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null),
-            _ => ResolveConventionBinding(parameter, pattern, featureTypeFqn, wireName),
+            "keyedServices" => new HandlerParameterBinding(HandlerParameterBindingSource.KeyedServices, wireName, null, parameter.BindingKeyLiteral),
+            "parameters" => Unsupported(wireName, "[AsParameters] is not supported in generated WASI/Lambda dispatch; ASP.NET routes are unaffected"),
+            _ => ResolveConventionBinding(parameter, httpMethod, pattern, wireName),
         };
     }
 
@@ -173,7 +207,12 @@ internal static class SourceGenerationHelpers
             return "body";
         }
 
-        return source == HandlerParameterBindingSource.Services ? "services" : "parameter";
+        if (source == HandlerParameterBindingSource.Services)
+        {
+            return "services";
+        }
+
+        return source == HandlerParameterBindingSource.KeyedServices ? "keyedServices" : "parameter";
     }
 
     private static string GetSingleGenericArgument(string typeFqn, string prefix)
@@ -217,15 +256,10 @@ internal static class SourceGenerationHelpers
 
     private static HandlerParameterBinding ResolveConventionBinding(
         HandleParamModel parameter,
+        string httpMethod,
         string pattern,
-        string featureTypeFqn,
         string wireName)
     {
-        if (parameter.TypeFqn == featureTypeFqn + ".Request")
-        {
-            return new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null);
-        }
-
         if (parameter.TypeFqn == "global::System.Threading.CancellationToken")
         {
             return new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
@@ -233,7 +267,9 @@ internal static class SourceGenerationHelpers
 
         if (!IsSimpleType(parameter.TypeFqn))
         {
-            return new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
+            return IsInferredBodyMethod(httpMethod) && IsRequestLikeParameter(parameter)
+                ? new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null)
+                : new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
         }
 
         return IsRouteParam(wireName, pattern)
@@ -243,6 +279,9 @@ internal static class SourceGenerationHelpers
 
     private static HandlerParameterBinding Unsupported(string wireName, string reason)
         => new(HandlerParameterBindingSource.Unsupported, wireName, reason);
+
+    private static bool IsInferredBodyMethod(string httpMethod)
+        => httpMethod is "POST" or "PUT" or "PATCH";
 
     private static bool IsSimpleNullableType(string typeFqn)
     {
@@ -271,9 +310,11 @@ internal enum HandlerParameterBindingSource
     Query,
     Header,
     Services,
+    KeyedServices,
 }
 
 internal readonly record struct HandlerParameterBinding(
     HandlerParameterBindingSource Source,
     string WireName,
-    string? UnsupportedReason);
+    string? UnsupportedReason,
+    string? KeyLiteral = null);
