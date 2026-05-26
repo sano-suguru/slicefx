@@ -2,7 +2,7 @@ namespace SliceFx;
 
 /// <summary>
 /// Declares an ordering preference between this endpoint filter and another, so the Slice
-/// source generator can warn (SLICE010) when a feature's <c>[Filter&lt;T&gt;]</c> declarations
+/// source generator can warn (SLICE007) when a feature's <c>[Filter&lt;T&gt;]</c> declarations
 /// place filters in an order that contradicts the declared preference.
 /// </summary>
 /// <remarks>

@@ -128,7 +128,7 @@ public static class GetUser
 }
 ```
 
-For WASI-specific responses, use `SliceResult` or `WasiResponse`. The generator currently excludes ASP.NET-specific `IResult` features from WASI route tables with `SLICE008`.
+For WASI-specific responses, use `SliceResult` or `WasiResponse`. The generator currently excludes ASP.NET-specific `IResult` features from WASI route tables with `SLICE020`.
 
 ## WASI/fetch-style direction
 

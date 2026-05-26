@@ -119,11 +119,11 @@ internal static class WasiRegistrationEmitter
                         DiagnosticLocationModel.None,
                         f.TypeName,
                         f.ReturnTypeFqn));
-                    sb.AppendLine($"        // SLICE008: {ToSingleLineComment(f.EndpointName)} — return type '{f.ReturnTypeFqn}' not supported in WASI; skipped.");
+                    sb.AppendLine($"        // SLICE020: {ToSingleLineComment(f.EndpointName)} — return type '{f.ReturnTypeFqn}' not supported in WASI; skipped.");
                 }
                 else if (jsonExclusion is not null)
                 {
-                    sb.AppendLine($"        // SLICE009: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
+                    sb.AppendLine($"        // SLICE021: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
                 }
                 else if (skipReason?.DiagnosticId == "SLICE023")
                 {
@@ -141,7 +141,7 @@ internal static class WasiRegistrationEmitter
                         SliceDiagnostics.UnsupportedValidationForWasi,
                         f.GetDiagnosticLocationModel(),
                         f.TypeName));
-                    sb.AppendLine($"        // SLICE011: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
+                    sb.AppendLine($"        // SLICE022: {ToSingleLineComment(f.EndpointName)} — {skipMessage}; skipped.");
                 }
 
                 continue;
@@ -163,12 +163,12 @@ internal static class WasiRegistrationEmitter
     {
         if (feature.ReturnsAspNetResult)
         {
-            return new WasiSkipReason("SLICE008", "IResult is ASP.NET-specific");
+            return new WasiSkipReason("SLICE020", "IResult is ASP.NET-specific");
         }
 
         if (feature.RequiresReflectionValidation)
         {
-            return new WasiSkipReason("SLICE011", "DataAnnotations validation requires reflection");
+            return new WasiSkipReason("SLICE022", "DataAnnotations validation requires reflection");
         }
 
         var bodyCount = 0;

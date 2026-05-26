@@ -65,8 +65,8 @@ Instead, filters are scoped services. Configure them through constructor DI by b
 
 WASI exclusions and route-manifest portability use the same vocabulary, but they are checked at different layers:
 
-- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE008), and `partial` is used when reflection-bound DataAnnotations validation (SLICE011) or endpoint filters prevent full WASI behavior.
-- **WASI route table emission**: JSON body/response routes additionally need a source-generated `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]` for AOT-safe serialization. Without it, SLICE009 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
+- **Route manifest portability**: `aspnet-only` is used when a feature returns `IResult` / `Task<IResult>` (SLICE020), and `partial` is used when reflection-bound DataAnnotations validation (SLICE022) or endpoint filters prevent full WASI behavior.
+- **WASI route table emission**: JSON body/response routes additionally need a source-generated `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]` for AOT-safe serialization. Without it, SLICE021 is reported and the route is skipped from `WasiRouteTable`, even though the manifest portability classification is computed separately.
 
 The manifest classification is surfaced by `slicefx routes` and consumed by `slicefx client csharp`; the WASI source-generator path applies its own route-table eligibility checks using the same portability vocabulary where applicable.
 

@@ -71,7 +71,7 @@ See `samples/SliceFx.Sample/Features/Users/GetUser.cs`.
 
 | Concern | Direct response | `IResult` return |
 |---|---|---|
-| WASI portability | ✅ `portable` | ❌ `aspnet-only` (SLICE008 info) |
+| WASI portability | ✅ `portable` | ❌ `aspnet-only` (SLICE020 info) |
 | OpenAPI schema fidelity | ✅ Return type flows through | ⚠️ Use `TypedResults.Ok<T>()` to recover the schema |
 | Custom HTTP status | ❌ Always 200 / 204 | ✅ Anything |
 | Test ergonomics | ✅ Assert plain values | ⚠️ Need `IResult.ExecuteAsync` to read the response |
@@ -83,6 +83,6 @@ See `samples/SliceFx.Sample/Features/Users/GetUser.cs`.
 3. **Use adapter-specific response types for generated non-ASP.NET paths.** `WasiResponse` is passed through by WASI dispatch, and `APIGatewayHttpApiV2ProxyResponse` is passed through by function-per-feature Lambda handlers.
 4. **Use `TypedResults.Ok<Response>()` when you want both an HTTP-shaped return and OpenAPI types.** The current generator treats all `IResult` implementations, including `TypedResults`, as `aspnet-only`; `partial` is used for portable route shapes with ASP.NET-only attached behavior such as endpoint filters.
 
-## When SLICE008 appears
+## When SLICE020 appears
 
-Returning `IResult` is a deliberate trade-off; the SLICE008 info message is a reminder that "this endpoint is excluded from WASI routes". No fix is required. If you do want it on the WASI path, switch to a direct response.
+Returning `IResult` is a deliberate trade-off; the SLICE020 info message is a reminder that "this endpoint is excluded from WASI routes". No fix is required. If you do want it on the WASI path, switch to a direct response.

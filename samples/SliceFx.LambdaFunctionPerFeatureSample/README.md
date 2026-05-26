@@ -14,7 +14,7 @@ This sample runs locally on Kestrel for development, and can be packaged into pe
 | `Features/Orders/OrderFeatureStartup.cs` | `ILambdaFunctionPerFeatureStartup` — per-feature isolated DI container |
 | `Services/OrderStore.cs` | `IOrderStore` abstraction with in-memory implementation |
 
-Features return plain POCO records. Returning `IResult` or `Task<IResult>` would make a feature ineligible for the function-per-feature path (SLICE012).
+Features return plain POCO records. Returning `IResult` or `Task<IResult>` would make a feature ineligible for the function-per-feature path (SLICE030).
 
 ## Run locally
 

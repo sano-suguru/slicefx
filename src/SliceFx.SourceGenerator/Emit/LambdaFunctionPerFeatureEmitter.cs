@@ -86,7 +86,7 @@ internal static class LambdaFunctionPerFeatureEmitter
         if (jsonExclusion is not null)
         {
             sb.AppendLine();
-            sb.AppendLine($"// SLICE014: {ToSingleLineComment(feature.EndpointName)} — {jsonExclusion.Value.Reason}; skipped.");
+            sb.AppendLine($"// SLICE032: {ToSingleLineComment(feature.EndpointName)} — {jsonExclusion.Value.Reason}; skipped.");
             return;
         }
 
@@ -245,22 +245,22 @@ internal static class LambdaFunctionPerFeatureEmitter
     {
         if (feature.ReturnsAspNetResult)
         {
-            return new LambdaSkipReason("SLICE012", "returns ASP.NET IResult");
+            return new LambdaSkipReason("SLICE030", "returns ASP.NET IResult");
         }
 
         if (SourceGenerationHelpers.IsWasiResponseType(SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn)))
         {
-            return new LambdaSkipReason("SLICE012", "returns SliceFx.Wasi.WasiResponse");
+            return new LambdaSkipReason("SLICE030", "returns SliceFx.Wasi.WasiResponse");
         }
 
         if (!feature.GetFilterFqns().IsEmpty)
         {
-            return new LambdaSkipReason("SLICE013", "endpoint filters require the ASP.NET endpoint filter pipeline");
+            return new LambdaSkipReason("SLICE031", "endpoint filters require the ASP.NET endpoint filter pipeline");
         }
 
         if (feature.RequiresReflectionValidation)
         {
-            return new LambdaSkipReason("SLICE016", "DataAnnotations validation requires reflection in the Lambda function-per-feature path");
+            return new LambdaSkipReason("SLICE034", "DataAnnotations validation requires reflection in the Lambda function-per-feature path");
         }
 
         var bodyCount = 0;
@@ -278,7 +278,7 @@ internal static class LambdaFunctionPerFeatureEmitter
                 if (bodyCount > 1)
                 {
                     return new LambdaSkipReason(
-                        "SLICE015",
+                        "SLICE033",
                         "multiple body parameters are not supported",
                         p.Name,
                         SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
@@ -288,7 +288,7 @@ internal static class LambdaFunctionPerFeatureEmitter
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {
                 return new LambdaSkipReason(
-                    "SLICE015",
+                    "SLICE033",
                     binding.UnsupportedReason ?? "parameter binding is unsupported",
                     p.Name,
                     SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
@@ -305,17 +305,17 @@ internal static class LambdaFunctionPerFeatureEmitter
     {
         var descriptor = skip.DiagnosticId switch
         {
-            "SLICE012" => SliceDiagnostics.UnsupportedReturnTypeForLambdaFunctionPerFeature,
-            "SLICE013" => SliceDiagnostics.UnsupportedFilterForLambdaFunctionPerFeature,
-            "SLICE015" => SliceDiagnostics.UnsupportedParameterForLambdaFunctionPerFeature,
-            "SLICE016" => SliceDiagnostics.UnsupportedValidationForLambdaFunctionPerFeature,
+            "SLICE030" => SliceDiagnostics.UnsupportedReturnTypeForLambdaFunctionPerFeature,
+            "SLICE031" => SliceDiagnostics.UnsupportedFilterForLambdaFunctionPerFeature,
+            "SLICE033" => SliceDiagnostics.UnsupportedParameterForLambdaFunctionPerFeature,
+            "SLICE034" => SliceDiagnostics.UnsupportedValidationForLambdaFunctionPerFeature,
             _ => SliceDiagnostics.UnsupportedReturnTypeForLambdaFunctionPerFeature,
         };
 
         var diagnostic = skip.DiagnosticId switch
         {
-            "SLICE012" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, feature.ReturnTypeFqn),
-            "SLICE015" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, skip.ParameterName ?? "", skip.ParameterType ?? ""),
+            "SLICE030" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, feature.ReturnTypeFqn),
+            "SLICE033" => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName, skip.ParameterName ?? "", skip.ParameterType ?? ""),
             _ => EquatableDiagnostic.Create(descriptor, feature.GetDiagnosticLocationModel(), feature.TypeName),
         };
         diagnostics.Add(diagnostic);

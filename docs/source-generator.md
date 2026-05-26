@@ -21,7 +21,7 @@ public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
 }
 ```
 
-Generated validation is emitted only when supported DataAnnotations rules are present (`Required`, length/range rules, `EmailAddress`, `Url`, and `RegularExpression`). Unsupported reflection-based validation such as custom `ValidationAttribute`, type-level validation, `IValidatableObject`, or resource-based messages is reported with `SLICE026` for ASP.NET registrations so default registrations stay reflection-free and trimming-friendly; move those rules to `ISliceValidator<TRequest>`.
+Generated validation is emitted only when supported DataAnnotations rules are present (`Required`, length/range rules, `EmailAddress`, `Url`, and `RegularExpression`). Unsupported reflection-based validation such as custom `ValidationAttribute`, type-level validation, `IValidatableObject`, or resource-based messages is reported with `SLICE010` for ASP.NET registrations so default registrations stay reflection-free and trimming-friendly; move those rules to `ISliceValidator<TRequest>`.
 
 ## Multi-assembly apps
 
@@ -41,7 +41,7 @@ Hosts can control referenced module aggregation with MSBuild properties:
 </PropertyGroup>
 ```
 
-If a host references Slice feature assemblies but sets neither `SliceFxReferencedAssemblies` nor `SliceFxAggregateReferences`, the generator reports `SLICE024` and keeps the host local-only. Set `SliceFxAggregateReferences=false` to make that local-only choice explicit and suppress the diagnostic.
+If a host references Slice feature assemblies but sets neither `SliceFxReferencedAssemblies` nor `SliceFxAggregateReferences`, the generator reports `SLICE050` and keeps the host local-only. Set `SliceFxAggregateReferences=false` to make that local-only choice explicit and suppress the diagnostic.
 
 The generator validates endpoint-name uniqueness across local features and aggregated referenced modules before emitting host registrations.
 
@@ -60,4 +60,49 @@ The manifest is string-based so tools can consume route shape without adding dep
 
 ## Diagnostics
 
-Invalid feature shapes are reported at compile time with `SLICE###` diagnostics. The prefix is intentionally kept as the domain term for feature slices, while the framework/package identity is `SliceFx`. Common checks include missing `Handle` methods, non-public or non-static handlers, ambiguous handler overloads, unsupported WASI routes, filter order hints, and Lambda function-per-feature eligibility.
+Invalid feature shapes are reported at compile time with `SLICE###` diagnostics. The prefix is intentionally kept as the domain term for feature slices, while the framework/package identity is `SliceFx`.
+
+Diagnostic IDs are grouped into reserved ranges so new rules can be added without renumbering existing IDs:
+
+| Range | Area |
+| --- | --- |
+| `SLICE001`-`SLICE009` | Core feature shape, routing, endpoint metadata, and filters |
+| `SLICE010`-`SLICE019` | Validation |
+| `SLICE020`-`SLICE029` | WASI portability |
+| `SLICE030`-`SLICE039` | Lambda function-per-feature |
+| `SLICE040`-`SLICE049` | JSON context overrides |
+| `SLICE050`-`SLICE059` | Cross-assembly aggregation |
+| `SLICE060`-`SLICE069` | Minimal API migration overlap |
+
+<!-- diagnostics-reference:start -->
+| ID | Severity | Area | Meaning | Suggested fix |
+| --- | --- | --- | --- | --- |
+| `SLICE001` | Error | Core feature shape | Feature type has no `Handle` method. | Add exactly one `public static Handle(...)` method. |
+| `SLICE002` | Error | Core feature shape | `Handle` exists but is not public and static. | Make the handler `public static`. |
+| `SLICE003` | Error | Core feature shape | Multiple `Handle` methods make the feature ambiguous. | Keep one handler method per feature type. |
+| `SLICE004` | Error | Routing | Route is not in `METHOD /path` form. | Use a supported HTTP method followed by an absolute route path. |
+| `SLICE005` | Error | Endpoint metadata | Two features produce the same endpoint name. | Rename one feature or set `FeatureAttribute.Name` / `FeatureAttribute.Tag`. |
+| `SLICE006` | Info | Endpoint metadata | Tag inference could not find a `.Features.` namespace segment. | Move the feature under a `.Features.<Tag>` namespace or set `FeatureAttribute.Tag`. |
+| `SLICE007` | Warning | Filters | `[FilterOrderHint]` conflicts with the declared `[Filter<T>]` order. | Reorder filter attributes so hinted dependencies run first. |
+| `SLICE010` | Error | Validation | ASP.NET generated registrations would need reflection-bound DataAnnotations validation. | Use supported generated validation attributes or move the rule to `ISliceValidator<T>`. |
+| `SLICE011` | Error | Validation | `ISliceValidator<T>` implementation cannot be generated safely. | Make the validator a closed, constructible implementation for a concrete request type. |
+| `SLICE012` | Error | Validation | More than one `ISliceValidator<T>` targets the same request. | Combine the rules into one validator for that request type. |
+| `SLICE013` | Error | Validation | Validator target type does not match a discovered Slice request parameter. | Remove the validator or target a request type used by a feature handler. |
+| `SLICE020` | Info | WASI portability | Return type is ASP.NET-specific and excluded from the WASI route table. | Return a POCO, `SliceResult`, `WasiResponse`, `Task<T>`, or `ValueTask<T>`. |
+| `SLICE021` | Warning | WASI portability | WASI JSON serialization metadata cannot be generated safely. | Provide an appropriate `JsonSerializerContext` for the WASI target. |
+| `SLICE022` | Warning | WASI portability | WASI route would need reflection-bound DataAnnotations validation. | Use supported generated validation attributes or `ISliceValidator<T>`. |
+| `SLICE023` | Warning | WASI portability | Parameter cannot be bound by the WASI route table. | Use supported route/query/header/body shapes or move the feature to ASP.NET-only. |
+| `SLICE030` | Info | Lambda function-per-feature | Return type is not supported by generated per-feature Lambda handlers. | Return a POCO, `Task<T>`, `ValueTask<T>`, or `APIGatewayHttpApiV2ProxyResponse`. |
+| `SLICE031` | Info | Lambda function-per-feature | Feature uses endpoint filters, which are not available in the per-feature Lambda path. | Remove the filter for that path or keep the feature on hosted ASP.NET/Lambda. |
+| `SLICE032` | Warning | Lambda function-per-feature | Lambda JSON serialization metadata cannot be generated safely. | Use Lambda-supported body/response types and generated JSON metadata. |
+| `SLICE033` | Warning | Lambda function-per-feature | Parameter cannot be bound by the per-feature Lambda handler. | Use supported route/query/header/body parameter shapes. |
+| `SLICE034` | Warning | Lambda function-per-feature | Lambda route would need reflection-bound DataAnnotations validation. | Use supported generated validation attributes or `ISliceValidator<T>`. |
+| `SLICE035` | Error | Lambda function-per-feature | `[LambdaFunctionStartup]` type is invalid. | Use a public parameterless type implementing `ILambdaFunctionPerFeatureStartup`. |
+| `SLICE036` | Error | Lambda function-per-feature | Two features produce the same Lambda artifact ID. | Change the feature name, endpoint name, or tag to make artifact IDs unique. |
+| `SLICE040` | Error | JSON context overrides | Multiple explicit JSON context overrides target the same Slice adapter. | Keep exactly one `[SliceJsonContext]` override per target. |
+| `SLICE041` | Error | JSON context overrides | Explicit JSON context override is not a `JsonSerializerContext`. | Point the override at a type deriving from `JsonSerializerContext`. |
+| `SLICE050` | Warning | Cross-assembly aggregation | Referenced Slice modules exist but aggregation is not explicitly configured. | Set `SliceFxReferencedAssemblies`, `SliceFxAggregateReferences=true`, or `SliceFxAggregateReferences=false`. |
+| `SLICE051` | Error | Cross-assembly aggregation | `SliceFxAggregateReferences` has an unsupported value. | Use `true`/`false`, `1`/`0`, or `yes`/`no`. |
+| `SLICE060` | Warning | Minimal API migration overlap | Raw Minimal API route literal overlaps a generated Slice route. | Remove one mapping or make the overlap an intentional migration choice. |
+| `SLICE061` | Warning | Minimal API migration overlap | Raw Minimal API endpoint name overlaps a generated Slice endpoint name. | Change one endpoint name or set `FeatureAttribute.Name`. |
+<!-- diagnostics-reference:end -->

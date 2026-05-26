@@ -15,7 +15,7 @@ See [product-direction.md](product-direction.md) for the strategic context behin
 | Cold start | Higher (full ASP.NET host) | Lower (minimal custom-runtime binary) |
 | DI scope | Shared app-wide container | Independent container per feature |
 | Singleton state | Shared across all features | Isolated — no state bleeds between features |
-| Endpoint filters (`[Filter<T>]`) | Supported | Not supported (excluded, SLICE013) |
+| Endpoint filters (`[Filter<T>]`) | Supported | Not supported (excluded, SLICE031) |
 | AOT | Optional | Required (per-feature wrapper) |
 | When to reach for it | Single deployment unit, shared state, quick migration from Minimal API | Per-feature scale, cold-start sensitivity, blast-radius isolation |
 
@@ -141,15 +141,7 @@ This isolation limits the blast radius to the feature being invoked. See [docs/d
 
 ### Diagnostics reference
 
-| ID | Severity | Cause |
-| --- | --- | --- |
-| SLICE012 | Info | Return type not supported (`IResult`, `Task<IResult>`); feature excluded from function-per-feature |
-| SLICE013 | Info | Feature has `[Filter<T>]`; endpoint filters are not supported in the function-per-feature path |
-| SLICE014 | Warning | Lambda JSON serialization metadata cannot be generated for the body or response type |
-| SLICE015 | Warning | A parameter type is not supported in the function-per-feature path |
-| SLICE016 | Warning | A DataAnnotations attribute requires runtime reflection; validation excluded for this parameter |
-| SLICE017 | Error | `[LambdaFunctionStartup]` targets a type that does not implement `ILambdaFunctionPerFeatureStartup` or lacks a public parameterless constructor |
-| SLICE027 | Error | Two features produce the same artifact ID; rename one route to resolve |
+See the Lambda function-per-feature entries in the central [source generator diagnostics reference](source-generator.md#diagnostics). The relevant range is `SLICE030`-`SLICE039`.
 
 ## CLI integration
 

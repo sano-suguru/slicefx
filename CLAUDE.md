@@ -66,7 +66,7 @@ public static class CreateUser
 
 Framework-enforced conventions (not just style):
 
-- `Handle` **must be `public static`** — the source generator emits SLICE001/SLICE002/SLICE005 diagnostics (errors) if absent, non-public, non-static, or ambiguous. Dependencies arrive as parameters; Minimal API binds them from DI, route, query, or body automatically.
+- `Handle` **must be `public static`** — the source generator emits SLICE001/SLICE002/SLICE003 diagnostics (errors) if absent, non-public, non-static, or ambiguous. Dependencies arrive as parameters; Minimal API binds them from DI, route, query, or body automatically.
 - Request records **must live in a user namespace** — generated validation skips framework types whose namespace starts with `System` or `Microsoft`, so a request typed as a BCL type will not be validated.
 - DataAnnotations on **record positional parameters** are honored (the validator reads attrs from both properties and matching primary-ctor parameters). Validation failures return Problem Details automatically.
 - OpenAPI tag is inferred from the namespace segment after `.Features.` (`SliceFx.Sample.Features.Users` → tag `Users`); endpoint name is `{Tag}.{TypeName}`. Override via `[Feature(..., Tag = "...")]`.
@@ -108,7 +108,7 @@ ASP.NET-independent WASI satellite (experimental). Bypasses Kestrel entirely; th
 
 **WASI publish:** `samples/SliceFx.WasiSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release`. The component exports `wasi:http/incoming-handler@0.2.0` — the standard WASI HTTP interface. With the current NativeAOT-LLVM preview packages, native publish is supported from Linux x64 or Windows x64 hosts; macOS should publish through a Linux x64 Docker container such as `docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work mcr.microsoft.com/dotnet/sdk:10.0 dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release`. The CopyWasiWasmComponent target copies the generated component to `samples/SliceFx.WasiSample/dist/slice-wasi-sample.wasm`. For Cloudflare Workers: `samples/SliceFx.WasiSample/dist` uses `@bytecodealliance/jco` to transpile the component and `shim.mjs` to bridge Cloudflare's `fetch(Request)` to the wasi:http handler (`npm ci` in the checked-in sample, then `npm run transpile`; scaffolds without a lockfile use `npm install` first). For Fermyon Cloud / Spin: deploy `spin.toml` + `dist/slice-wasi-sample.wasm` directly — Spin natively understands `wasi:http/incoming-handler`. Treat SliceFx.Wasi APIs as experimental and the build/transpile/deploy toolchain as unstable upstream preview tooling.
 
-Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE008 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE009. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, `MinLength`, `MaxLength`, numeric `Range`, `EmailAddress`, `Url`, and `RegularExpression` rules; routes that need reflection-bound validation are excluded with SLICE011. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
+Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE020 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE021. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, `MinLength`, `MaxLength`, numeric `Range`, `EmailAddress`, `Url`, and `RegularExpression` rules; routes that need reflection-bound validation are excluded with SLICE022. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
 
 ```csharp
 var builder = WasiHost.CreateBuilder();
@@ -162,7 +162,7 @@ Local .NET tool (`dotnet-tools.json` at the repo root) exposing the `slicefx` co
 - `slicefx routes [--format table|json]` — lists every feature in the project plus its **portability classification** (`portable` / `partial` / `aspnet-only`). Reads feature source files directly.
 - `slicefx client csharp --output <path>` — generates a typed C# client from the same manifest.
 
-Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and excluded from WASI routes (matches diagnostic SLICE008).
+Features returning `IResult`/`Task<IResult>` are classified `aspnet-only` and excluded from WASI routes (matches diagnostic SLICE020).
 
 ## Startup pipeline
 

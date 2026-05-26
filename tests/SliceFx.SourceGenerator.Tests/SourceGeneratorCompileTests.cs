@@ -180,13 +180,13 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE021");
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE020");
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE022");
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE012");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE013");
     }
 
     [Fact]
-    public void Generator_reports_SLICE022_for_unmatched_slice_validators()
+    public void Generator_reports_SLICE013_for_unmatched_slice_validators()
     {
         var source = """
             using System.Threading;
@@ -217,7 +217,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE022"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE013"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("OtherRequestValidator", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -289,7 +289,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_reports_SLICE020_for_open_generic_slice_validators()
+    public void Generator_reports_SLICE011_for_open_generic_slice_validators()
     {
         var source = """
             using System.Threading;
@@ -311,13 +311,13 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE020"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE011"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("open generic", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Generator_reports_SLICE020_for_invalid_slice_validator_request_type()
+    public void Generator_reports_SLICE011_for_invalid_slice_validator_request_type()
     {
         var source = """
             using System.Threading;
@@ -338,13 +338,13 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE020"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE011"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("not a supported Slice request type", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Generator_reports_SLICE021_for_duplicate_slice_validators_in_one_assembly()
+    public void Generator_reports_SLICE012_for_duplicate_slice_validators_in_one_assembly()
     {
         var source = """
             using System.Threading;
@@ -379,7 +379,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE021"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE012"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("CreateUser.Request", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -802,7 +802,7 @@ public class SourceGeneratorCompileTests
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE022");
         Assert.Contains("Name is required.", wasiSource, StringComparison.Ordinal);
         Assert.Contains("Name length is invalid.", wasiSource, StringComparison.Ordinal);
         Assert.Contains("At least two items are required.", wasiSource, StringComparison.Ordinal);
@@ -1052,7 +1052,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_reports_SLICE027_for_duplicate_lambda_artifact_ids()
+    public void Generator_reports_SLICE036_for_duplicate_lambda_artifact_ids()
     {
         var source = """
             using SliceFx;
@@ -1084,7 +1084,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE027"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE036"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("a-b-getthing", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -1281,7 +1281,7 @@ public class SourceGeneratorCompileTests
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE014");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE032");
         Assert.Contains("JsonTypeInfoProvider", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("\"eligible\"", manifestSource, StringComparison.Ordinal);
         Assert.Contains("SliceFx.MissingJsonLambdaApp_SliceLambdaFunctionPerFeatureHandlers", manifestSource, StringComparison.Ordinal);
@@ -1339,7 +1339,7 @@ public class SourceGeneratorCompileTests
 
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic =>
-            diagnostic.Id == "SLICE018" && diagnostic.Severity == DiagnosticSeverity.Error);
+            diagnostic.Id == "SLICE040" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
@@ -1363,7 +1363,7 @@ public class SourceGeneratorCompileTests
 
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic =>
-            diagnostic.Id == "SLICE019" && diagnostic.Severity == DiagnosticSeverity.Error);
+            diagnostic.Id == "SLICE041" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
@@ -1493,7 +1493,7 @@ public class SourceGeneratorCompileTests
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
         Assert.Contains(generatorDiagnostics, static diagnostic =>
-            diagnostic.Id == "SLICE017" && diagnostic.Severity == DiagnosticSeverity.Error);
+            diagnostic.Id == "SLICE035" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
@@ -1523,7 +1523,7 @@ public class SourceGeneratorCompileTests
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE009" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE021" && diagnostic.Severity == DiagnosticSeverity.Warning);
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/items\"", wasiSource, StringComparison.Ordinal);
     }
@@ -1624,9 +1624,9 @@ public class SourceGeneratorCompileTests
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
-        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE026" && diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE010" && diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE022");
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/items\"", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("WasiValidationRunner.Validate", wasiSource, StringComparison.Ordinal);
@@ -1695,7 +1695,7 @@ public class SourceGeneratorCompileTests
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Equal(4, generatorDiagnostics.Count(static diagnostic => diagnostic.Id == "SLICE008"));
+        Assert.Equal(4, generatorDiagnostics.Count(static diagnostic => diagnostic.Id == "SLICE020"));
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/ok\"", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/union\"", wasiSource, StringComparison.Ordinal);
@@ -1748,7 +1748,7 @@ public class SourceGeneratorCompileTests
         driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
         var runResult = driver.GetRunResult();
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE024"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE050"));
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.Contains("FeatureLib", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -1803,7 +1803,7 @@ public class SourceGeneratorCompileTests
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE024");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE050");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("global::SliceFx.FeatureLib_SliceRegistrations.AddSliceServices(services);", generatedSource, StringComparison.Ordinal);
         Assert.Contains("global::SliceFx.FeatureLib_SliceRegistrations.MapSliceRoutes(app);", generatedSource, StringComparison.Ordinal);
@@ -1864,7 +1864,7 @@ public class SourceGeneratorCompileTests
         driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
 
         Assert.Contains(generatorDiagnostics, static diagnostic =>
-            diagnostic.Id == "SLICE004"
+            diagnostic.Id == "SLICE005"
             && diagnostic.Severity == DiagnosticSeverity.Error
             && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture)
                 .Contains("FeatureLib", StringComparison.Ordinal));
@@ -1931,7 +1931,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE021"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE012"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("CreateProduct.Request", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -1981,7 +1981,7 @@ public class SourceGeneratorCompileTests
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE024");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE050");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("FeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
     }
@@ -2029,7 +2029,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE025"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE051"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("sure", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
@@ -2095,7 +2095,7 @@ public class SourceGeneratorCompileTests
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE024");
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE050");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("global::SliceFx.FirstFeatureLib_SliceRegistrations.AddSliceServices(services);", generatedSource, StringComparison.Ordinal);
         Assert.Contains("[assembly: global::SliceFx.SliceAggregatedFeatureAssemblyAttribute(\"FirstFeatureLib\")]", generatedSource, StringComparison.Ordinal);
@@ -2177,7 +2177,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_reports_SLICE028_and_SLICE029_for_literal_raw_minimal_api_overlaps()
+    public void Generator_reports_SLICE060_and_SLICE061_for_literal_raw_minimal_api_overlaps()
     {
         var source = """
             using Microsoft.AspNetCore.Builder;
@@ -2208,9 +2208,9 @@ public class SourceGeneratorCompileTests
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
         Assert.Contains(generatorDiagnostics, static d =>
-            d.Id == "SLICE028" && d.Severity == DiagnosticSeverity.Warning);
+            d.Id == "SLICE060" && d.Severity == DiagnosticSeverity.Warning);
         Assert.Contains(generatorDiagnostics, static d =>
-            d.Id == "SLICE029" && d.Severity == DiagnosticSeverity.Warning);
+            d.Id == "SLICE061" && d.Severity == DiagnosticSeverity.Warning);
     }
 
     [Fact]
@@ -2246,11 +2246,11 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id is "SLICE028" or "SLICE029");
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id is "SLICE060" or "SLICE061");
     }
 
     [Fact]
-    public void Generator_reports_SLICE028_for_literal_map_methods_overlap()
+    public void Generator_reports_SLICE060_for_literal_map_methods_overlap()
     {
         var source = """
             using Microsoft.AspNetCore.Builder;
@@ -2281,11 +2281,11 @@ public class SourceGeneratorCompileTests
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
         Assert.Contains(generatorDiagnostics, static d =>
-            d.Id == "SLICE028" && d.Severity == DiagnosticSeverity.Warning);
+            d.Id == "SLICE060" && d.Severity == DiagnosticSeverity.Warning);
     }
 
     [Fact]
-    public void Generator_reports_SLICE028_for_nested_literal_map_group_overlap()
+    public void Generator_reports_SLICE060_for_nested_literal_map_group_overlap()
     {
         var source = """
             using Microsoft.AspNetCore.Builder;
@@ -2316,11 +2316,11 @@ public class SourceGeneratorCompileTests
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
         Assert.Contains(generatorDiagnostics, static d =>
-            d.Id == "SLICE028" && d.Severity == DiagnosticSeverity.Warning);
+            d.Id == "SLICE060" && d.Severity == DiagnosticSeverity.Warning);
     }
 
     [Fact]
-    public void Generator_reports_SLICE010_when_filter_order_violates_FilterOrderHint()
+    public void Generator_reports_SLICE007_when_filter_order_violates_FilterOrderHint()
     {
         var source = """
             using Microsoft.AspNetCore.Http;
@@ -2356,7 +2356,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE010"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE007"));
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.NotEqual(Location.None, diagnostic.Location);
         Assert.Contains("AuthFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -2364,7 +2364,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_does_not_report_SLICE010_when_filter_order_matches_FilterOrderHint()
+    public void Generator_does_not_report_SLICE007_when_filter_order_matches_FilterOrderHint()
     {
         var source = """
             using Microsoft.AspNetCore.Http;
@@ -2400,7 +2400,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE010");
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE007");
     }
 
     [Fact]
@@ -2461,7 +2461,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_reports_SLICE010_when_FilterOrderHint_targets_closed_generic_filter()
+    public void Generator_reports_SLICE007_when_FilterOrderHint_targets_closed_generic_filter()
     {
         var source = """
             using Microsoft.AspNetCore.Http;
@@ -2499,7 +2499,7 @@ public class SourceGeneratorCompileTests
 
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
-        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE010"));
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE007"));
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.Contains("RequireApiKeyFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
         Assert.Contains("AdminPolicy", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -2901,7 +2901,7 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_reports_SLICE005_for_feature_with_multiple_handle_methods()
+    public void Generator_reports_SLICE003_for_feature_with_multiple_handle_methods()
     {
         var source = """
             using SliceFx;
@@ -2922,7 +2922,68 @@ public class SourceGeneratorCompileTests
         driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
 
         Assert.Contains(generatorDiagnostics, static d =>
-            d.Id == "SLICE005" && d.Severity == DiagnosticSeverity.Error);
+            d.Id == "SLICE003" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Diagnostic_catalog_matches_release_metadata_and_docs()
+    {
+        var descriptors = GetDiagnosticCatalog();
+        var expected = new[]
+        {
+            new DiagnosticCatalogEntry("SLICE001", "MissingHandleMethod", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE002", "HandleNotPublicStatic", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE003", "AmbiguousHandleMethod", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE004", "InvalidRouteFormat", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE005", "DuplicateEndpointName", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE006", "TagInferenceFallback", "Slice", DiagnosticSeverity.Info),
+            new DiagnosticCatalogEntry("SLICE007", "FilterOrderViolation", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE010", "UnsupportedValidationForAspNet", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE011", "InvalidSliceValidator", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE012", "DuplicateSliceValidator", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE013", "UnmatchedSliceValidator", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE020", "UnsupportedReturnTypeForWasi", "Slice", DiagnosticSeverity.Info),
+            new DiagnosticCatalogEntry("SLICE021", "MissingWasiJsonContext", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE022", "UnsupportedValidationForWasi", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE023", "UnsupportedParameterForWasi", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE030", "UnsupportedReturnTypeForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Info),
+            new DiagnosticCatalogEntry("SLICE031", "UnsupportedFilterForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Info),
+            new DiagnosticCatalogEntry("SLICE032", "MissingLambdaJsonContext", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE033", "UnsupportedParameterForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE034", "UnsupportedValidationForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE035", "InvalidLambdaFunctionPerFeatureStartupType", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE036", "DuplicateLambdaFunctionPerFeatureArtifactId", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE040", "DuplicateJsonContextOverride", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE041", "InvalidJsonContextOverride", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE050", "UnconfiguredReferencedSliceModules", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE051", "InvalidSliceFxAggregateReferences", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE060", "RawMinimalApiRouteOverlap", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE061", "RawMinimalApiEndpointNameOverlap", "Slice", DiagnosticSeverity.Warning),
+        };
+
+        Assert.Equal(expected, descriptors);
+
+        var repositoryRoot = FindRepositoryRoot();
+        var releaseCatalog = ReadAnalyzerReleaseCatalog(repositoryRoot).ToArray();
+        var expectedIds = expected.Select(static entry => entry.Id).ToArray();
+        Assert.DoesNotContain(releaseCatalog, entry => Array.IndexOf(expectedIds, entry.Id) < 0);
+        Assert.Equal(expected, releaseCatalog.OrderBy(entry => Array.IndexOf(expectedIds, entry.Id)));
+
+        var docsBlock = ReadMarkedBlock(
+            Path.Combine(repositoryRoot, "docs", "source-generator.md"),
+            "<!-- diagnostics-reference:start -->",
+            "<!-- diagnostics-reference:end -->");
+        var documentedIds = docsBlock.Split('\n')
+            .Select(static line => line.Trim())
+            .Where(static line => line.StartsWith("| `SLICE", StringComparison.Ordinal))
+            .Select(static line => line.Split('|')[1].Trim().Trim('`'))
+            .ToArray();
+        Assert.Equal(expectedIds, documentedIds);
+
+        foreach (var entry in expected)
+        {
+            Assert.Contains($"| `{entry.Id}` | {entry.Severity} |", docsBlock, StringComparison.Ordinal);
+        }
     }
 
     private static async Task<APIGatewayHttpApiV2ProxyResponse> InvokeLambdaHandlerAsync(
@@ -3118,6 +3179,75 @@ public class SourceGeneratorCompileTests
             .Single(tree => tree.FilePath.EndsWith(hintNameSuffix, StringComparison.Ordinal))
             .GetText()
             .ToString();
+
+    private static DiagnosticCatalogEntry[] GetDiagnosticCatalog()
+    {
+        var diagnosticsType = typeof(SliceFeatureGenerator).Assembly.GetType("SliceFx.SourceGenerator.SliceDiagnostics", throwOnError: true)!;
+        return [.. diagnosticsType
+            .GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(static field => field.FieldType == typeof(DiagnosticDescriptor))
+            .OrderBy(static field => field.MetadataToken)
+            .Select(static field =>
+            {
+                var descriptor = (DiagnosticDescriptor)field.GetValue(null)!;
+                return new DiagnosticCatalogEntry(descriptor.Id, field.Name, descriptor.Category, descriptor.DefaultSeverity);
+            })];
+    }
+
+    private static IEnumerable<DiagnosticCatalogEntry> ReadAnalyzerReleaseCatalog(string repositoryRoot)
+    {
+        foreach (var fileName in new[] { "AnalyzerReleases.Shipped.md", "AnalyzerReleases.Unshipped.md" })
+        {
+            var path = Path.Combine(repositoryRoot, "src", "SliceFx.SourceGenerator", fileName);
+            foreach (var line in File.ReadLines(path))
+            {
+                if (!line.StartsWith("SLICE", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var parts = line.Split('|').Select(static part => part.Trim()).ToArray();
+                Assert.Equal(4, parts.Length);
+                yield return new DiagnosticCatalogEntry(
+                    parts[0],
+                    parts[3],
+                    parts[1],
+                    Enum.Parse<DiagnosticSeverity>(parts[2]));
+            }
+        }
+    }
+
+    private static string ReadMarkedBlock(string path, string startMarker, string endMarker)
+    {
+        var content = File.ReadAllText(path);
+        var start = content.IndexOf(startMarker, StringComparison.Ordinal);
+        var end = content.IndexOf(endMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Could not find marker '{startMarker}' in '{path}'.");
+        Assert.True(end > start, $"Could not find marker '{endMarker}' after '{startMarker}' in '{path}'.");
+        return content.Substring(start + startMarker.Length, end - start - startMarker.Length);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "SliceFx.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    private readonly record struct DiagnosticCatalogEntry(
+        string Id,
+        string Name,
+        string Category,
+        DiagnosticSeverity Severity);
 
     private sealed class TestAnalyzerConfigOptionsProvider(
         params (string Name, string Value)[] properties) : AnalyzerConfigOptionsProvider

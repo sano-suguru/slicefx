@@ -110,16 +110,16 @@ Use the failing command and log prefix to decide where to investigate:
 - `dotnet publish` restore/build failures mentioning `BytecodeAlliance.Componentize.DotNet.Wasm.SDK`, NativeAOT, ILC, `runtime.<host>.microsoft.dotnet.ilcompiler.llvm`, WIT generation, or the unsupported-host MSBuild error are usually in the componentize-dotnet / NativeAOT-LLVM layer or host support matrix.
 - `npm run transpile` failures mentioning `jco transpile`, `preview2-shim`, `wasm-opt`, Binaryen, or socket stub imports are in the Cloudflare JS transpilation/shim layer.
 - `npm run deploy` / `wrangler deploy` failures, account-plan limits, and behavior tied to `compatibility_date = "2024-09-23"` are Cloudflare deployment/runtime concerns.
-- `SLICE008`, `SLICE009`, `SLICE011`, route binding behavior, and WASI validation results are SliceFx source-generator or `SliceFx.Wasi` concerns.
+- `SLICE020`, `SLICE021`, `SLICE022`, route binding behavior, and WASI validation results are SliceFx source-generator or `SliceFx.Wasi` concerns.
 
 When reporting issues, include the command that failed, the pinned dependency versions above, the host OS/architecture, and whether the failure happens before or after `dist/slice-wasi-sample.wasm` is produced.
 
 ## Known limitations
 
-- Features returning `IResult` / `Task<IResult>` are excluded from WASI routes (SLICE008 diagnostic).
-- JSON body/response routes must have source-generated JSON metadata from a `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]`; routes without it are excluded from WASI routes (SLICE009 diagnostic).
+- Features returning `IResult` / `Task<IResult>` are excluded from WASI routes (SLICE020 diagnostic).
+- JSON body/response routes must have source-generated JSON metadata from a `JsonSerializerContext` marked with `[SliceJsonContext(SliceJsonTarget.Wasi)]`; routes without it are excluded from WASI routes (SLICE021 diagnostic).
 - `[Filter<T>]` endpoint filters do not run in the WASI path — they require ASP.NET's `IEndpointFilter` pipeline. Matching `ISliceValidator<T>` implementations are discovered and run by the generated WASI route table.
-- WASI DataAnnotations validation is source-generated for `RequiredAttribute`, `StringLengthAttribute`, `MinLengthAttribute` on strings, arrays, and types with a public `Count` property. Other validation rules cause the route to be excluded (SLICE011 diagnostic).
+- WASI DataAnnotations validation is source-generated for `RequiredAttribute`, `StringLengthAttribute`, `MinLengthAttribute`, `MaxLengthAttribute`, numeric `RangeAttribute`, `EmailAddressAttribute`, `UrlAttribute`, and `RegularExpressionAttribute`. Other validation rules cause the route to be excluded (SLICE022 diagnostic).
 - .NET NativeAOT imports `wasi:sockets/tcp` and `wasi:sockets/udp` at the WASM ABI level even when unused. The Cloudflare transpile pipeline stubs these with `stubs/tcp.js` and `stubs/udp.js`; Spin ignores unused socket imports natively.
 - All upstream WASI build/transpile dependencies are pre-release or tightly version-pinned for reproducibility. The NuGet experimental feed is configured via `RestoreAdditionalProjectSources` inside the csproj.
 

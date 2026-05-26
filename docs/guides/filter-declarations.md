@@ -80,4 +80,4 @@ When the duplication is real but the concern is genuinely feature-scoped (e.g., 
 
 - [Filter configuration](../patterns/filter-configuration.md) — closed generic policy filters, `IOptions<T>` configuration recipes.
 - [Handler dependency and state patterns](../patterns/handler-dependencies.md) — grouping dependencies and putting feature state behind DI.
-- Filter order validation (SLICE010): apply `[FilterOrderHint(After = typeof(...))]` to a filter to surface declaration-order mistakes as a warning.
+- Filter order validation (SLICE007): apply `[FilterOrderHint(After = typeof(...))]` to a filter to surface declaration-order mistakes as a warning.
