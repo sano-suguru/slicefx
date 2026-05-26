@@ -195,6 +195,8 @@ internal static class RegistrationEmitter
             }
         }
 
+        sb.AppendLine("        global::SliceFx.SliceMigrationAuditEndpointRouteBuilderExtensions.RunSliceMigrationAudit(app);");
+        sb.AppendLine();
         sb.AppendLine("        return app;");
         sb.AppendLine("    }");
     }

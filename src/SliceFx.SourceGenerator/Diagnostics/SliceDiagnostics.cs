@@ -45,7 +45,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor DuplicateEndpointName = new(
         "SLICE004",
         "Duplicate endpoint name",
-        "Endpoint name '{0}' is used by both '{1}' and '{2}'. Use distinct feature class names or set FeatureAttribute.Tag to disambiguate.",
+        "Endpoint name '{0}' is used by both '{1}' and '{2}'. Use distinct feature class names or set FeatureAttribute.Name or FeatureAttribute.Tag to disambiguate.",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -167,7 +167,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor DuplicateLambdaFunctionPerFeatureArtifactId = new(
         "SLICE027",
         "Duplicate Lambda artifact ID",
-        "Lambda function-per-feature artifact ID '{0}' would be generated for both '{1}' and '{2}'. Use distinct feature names or FeatureAttribute.Tag values.",
+        "Lambda function-per-feature artifact ID '{0}' would be generated for both '{1}' and '{2}'. Use distinct FeatureAttribute.Name, feature names, or FeatureAttribute.Tag values.",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -291,6 +291,28 @@ internal static class SliceDiagnostics
         "Slice validator '{0}' targets '{1}', but no discovered Slice feature uses that type as a request parameter",
         Category,
         DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a raw Minimal API route literal overlaps a generated Slice route.
+    /// </summary>
+    public static readonly DiagnosticDescriptor RawMinimalApiRouteOverlap = new(
+        "SLICE028",
+        "Raw Minimal API route overlaps Slice route",
+        "Raw Minimal API route '{0} {1}' overlaps Slice feature '{2}'. Remove one mapping or make the overlap intentional and rely on the runtime migration audit.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a raw Minimal API endpoint name literal overlaps a generated Slice endpoint name.
+    /// </summary>
+    public static readonly DiagnosticDescriptor RawMinimalApiEndpointNameOverlap = new(
+        "SLICE029",
+        "Raw Minimal API endpoint name overlaps Slice endpoint name",
+        "Raw Minimal API endpoint name '{0}' overlaps Slice feature '{1}'. Use FeatureAttribute.Name or change one endpoint name.",
+        Category,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
 }

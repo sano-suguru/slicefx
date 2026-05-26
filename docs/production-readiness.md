@@ -95,7 +95,8 @@ These recommendations apply to experiments, pilots, and preview evaluation. Prod
 |---|---|
 | Serverless / WASI microservices | **Preview candidate** — evaluate portability rules and unstable upstream WASI tooling first |
 | Full-stack C# (Blazor / .NET client) with typed-client needs | **Preview candidate** — evaluate generated clients against the actual route set |
-| Small-to-medium web API (< 50 endpoints) | **Acceptable for experiments** |
+| New or already feature-shaped small-to-medium web API (< 50 endpoints) | **Acceptable for experiments** |
+| Existing ASP.NET Core Minimal API or MVC API considering SliceFx | **Migration PoC recommended** — migrate one low-risk endpoint first, run the migration audit, and compare API contracts; see [Minimal API migration](migrations/from-minimal-api.md) and [controller migration](migrations/from-controllers.md) |
 | Large internal monolith (> 200 endpoints, complex domain) | **PoC required** — decide after measuring with phase 0 benchmarks |
 | Existing MediatR / IPipelineBehavior-driven projects | **Not a fit** — incompatible philosophies |
 

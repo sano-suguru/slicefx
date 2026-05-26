@@ -28,6 +28,8 @@ SliceFx is not a replacement for ASP.NET Core. It is a generated vertical-slice 
 
 SliceFx compiles down to standard `WebApplication.MapMethods` calls — removing the source generator reference and expanding the generated output in place is the full exit path. For teams already on FastEndpoints or similar, SliceFx fills a different niche: compile-time portability classification across ASP.NET, Lambda, and wasi:http, not a richer filter and pipeline ecosystem.
 
+Existing ASP.NET Core apps do not need a rewrite. Start with one endpoint, keep the rest of the app on controllers or handwritten Minimal APIs, and use the migration audit plus contract checks to evaluate the shape. See [migrating from Minimal APIs](docs/migrations/from-minimal-api.md) and [migrating from controllers](docs/migrations/from-controllers.md).
+
 ### Latest benchmark results
 
 ![Latest source generator benchmark results](docs/perf/latest.svg)
@@ -206,6 +208,7 @@ The Slice route manifest is a separate build-time artifact for portability class
 | OpenAPI integration | [docs/guides/openapi.md](docs/guides/openapi.md) |
 | Lambda hosting and function-per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | WASI deploy path | [samples/SliceFx.WasiSample/README.md](samples/SliceFx.WasiSample/README.md) |
+| Migration guides | [Minimal API](docs/migrations/from-minimal-api.md), [controllers](docs/migrations/from-controllers.md) |
 | Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |
 | Design decisions FAQ | [docs/design-decisions.md](docs/design-decisions.md) |
 | Product direction | [docs/product-direction.md](docs/product-direction.md) |

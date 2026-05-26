@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
@@ -38,6 +39,25 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Where(static r => r.Model is not null)
             .Select(static (r, _) => r.Model!)
             .Collect();
+
+        var rawMinimalApiEndpoints = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: static (node, _) => node is InvocationExpressionSyntax,
+                transform: TransformRawMinimalApiEndpoint)
+            .Where(static endpoint => endpoint is not null)
+            .Select(static (endpoint, _) => endpoint!.Value)
+            .Collect()
+            .WithTrackingName("SliceRawMinimalApiEndpoints");
+
+        context.RegisterSourceOutput(
+            validModels.Combine(rawMinimalApiEndpoints),
+            static (spc, pair) =>
+            {
+                foreach (var diagnostic in FindRawMinimalApiOverlapDiagnostics(pair.Left, pair.Right))
+                {
+                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
+                }
+            });
 
         var validators = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -706,12 +726,17 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         var pattern = parts[1].Trim();
 
         string? tag = null;
+        string? name = null;
         string? summary = null;
         foreach (var kv in attrData.NamedArguments)
         {
             if (kv.Key == "Tag")
             {
                 tag = kv.Value.Value as string;
+            }
+            else if (kv.Key == "Name")
+            {
+                name = kv.Value.Value as string;
             }
             else if (kv.Key == "Summary")
             {
@@ -721,7 +746,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         var tagInferred = tag is null;
         tag ??= InferTag(featureType);
-        var endpointName = $"{tag}.{featureType.Name}";
+        var endpointName = string.IsNullOrWhiteSpace(name) ? $"{tag}.{featureType.Name}" : name!;
 
         // Find Handle method.
         var handleBuilder = ImmutableArray.CreateBuilder<IMethodSymbol>();
@@ -1722,7 +1747,276 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         return diagnostics.ToImmutable();
     }
+
+    private static RawMinimalApiEndpoint? TransformRawMinimalApiEndpoint(GeneratorSyntaxContext ctx, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var invocation = (InvocationExpressionSyntax)ctx.Node;
+        var invokedName = GetInvokedName(invocation);
+        if (invokedName == "WithName")
+        {
+            var endpointName = GetStringLiteralArgument(invocation, 0);
+            if (endpointName is null || !ContainsRawMapInvocation(GetReceiver(invocation)))
+            {
+                return null;
+            }
+
+            return new RawMinimalApiEndpoint(
+                "",
+                "",
+                endpointName,
+                CreateDiagnosticLocation(invocation.GetLocation()));
+        }
+
+        if (!TryGetMapInvocation(invocation, out var methods, out var pattern))
+        {
+            return null;
+        }
+
+        var prefix = FindLiteralMapGroupPrefix(GetReceiver(invocation));
+        return new RawMinimalApiEndpoint(
+            methods,
+            CombineRoutePatterns(prefix, pattern),
+            "",
+            CreateDiagnosticLocation(invocation.GetLocation()));
+    }
+
+    private static ImmutableArray<EquatableDiagnostic> FindRawMinimalApiOverlapDiagnostics(
+        ImmutableArray<FeatureModel> features,
+        ImmutableArray<RawMinimalApiEndpoint> rawEndpoints)
+    {
+        if (features.IsDefaultOrEmpty || rawEndpoints.IsDefaultOrEmpty)
+        {
+            return [];
+        }
+
+        var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
+        var featureRoutes = features
+            .GroupBy(static feature => RouteKey(feature.HttpMethod, feature.Pattern), StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
+        var featureNames = features
+            .GroupBy(static feature => feature.EndpointName, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
+
+        foreach (var endpoint in rawEndpoints)
+        {
+            if (!string.IsNullOrEmpty(endpoint.EndpointName)
+                && featureNames.TryGetValue(endpoint.EndpointName, out var nameFeature))
+            {
+                diagnostics.Add(EquatableDiagnostic.Create(
+                    SliceDiagnostics.RawMinimalApiEndpointNameOverlap,
+                    endpoint.Location,
+                    endpoint.EndpointName,
+                    nameFeature.FullyQualifiedTypeName));
+            }
+
+            foreach (var method in SplitMethods(endpoint.Methods))
+            {
+                if (featureRoutes.TryGetValue(RouteKey(method, endpoint.Pattern), out var routeFeature))
+                {
+                    diagnostics.Add(EquatableDiagnostic.Create(
+                        SliceDiagnostics.RawMinimalApiRouteOverlap,
+                        endpoint.Location,
+                        method,
+                        endpoint.Pattern,
+                        routeFeature.FullyQualifiedTypeName));
+                }
+            }
+        }
+
+        return diagnostics.ToImmutable();
+    }
+
+    private static bool TryGetMapInvocation(
+        InvocationExpressionSyntax invocation,
+        out string method,
+        out string pattern)
+    {
+        method = "";
+        pattern = "";
+        var invokedName = GetInvokedName(invocation);
+        method = invokedName switch
+        {
+            "MapGet" => "GET",
+            "MapPost" => "POST",
+            "MapPut" => "PUT",
+            "MapDelete" => "DELETE",
+            "MapPatch" => "PATCH",
+            _ => "",
+        };
+
+        if (invokedName == "MapMethods")
+        {
+            var mapMethodsRoute = GetStringLiteralArgument(invocation, 0);
+            var methods = invocation.ArgumentList.Arguments.Count > 1
+                ? GetStringLiteralCollection(invocation.ArgumentList.Arguments[1].Expression)
+                : [];
+            if (mapMethodsRoute is null || methods.Length == 0)
+            {
+                return false;
+            }
+
+            method = string.Join(";", methods.Select(static value => value.ToUpperInvariant()));
+            pattern = mapMethodsRoute;
+            return true;
+        }
+
+        if (method.Length == 0)
+        {
+            return false;
+        }
+
+        var route = GetStringLiteralArgument(invocation, 0);
+        if (route is null)
+        {
+            return false;
+        }
+
+        pattern = route;
+        return true;
+    }
+
+    private static string? GetInvokedName(InvocationExpressionSyntax invocation)
+        => invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            _ => null,
+        };
+
+    private static ExpressionSyntax? GetReceiver(InvocationExpressionSyntax invocation)
+        => invocation.Expression is MemberAccessExpressionSyntax memberAccess
+            ? memberAccess.Expression
+            : null;
+
+    private static string? GetStringLiteralArgument(InvocationExpressionSyntax invocation, int index)
+    {
+        if (invocation.ArgumentList.Arguments.Count <= index)
+        {
+            return null;
+        }
+
+        return invocation.ArgumentList.Arguments[index].Expression is LiteralExpressionSyntax literal
+            && literal.IsKind(SyntaxKind.StringLiteralExpression)
+            ? literal.Token.ValueText
+            : null;
+    }
+
+    private static string[] GetStringLiteralCollection(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            ArrayCreationExpressionSyntax arrayCreation when arrayCreation.Initializer is not null =>
+                GetStringLiteralExpressions(arrayCreation.Initializer.Expressions),
+            ImplicitArrayCreationExpressionSyntax arrayCreation when arrayCreation.Initializer is not null =>
+                GetStringLiteralExpressions(arrayCreation.Initializer.Expressions),
+            CollectionExpressionSyntax collectionExpression =>
+                [.. collectionExpression.Elements
+                    .OfType<ExpressionElementSyntax>()
+                    .Select(static element => element.Expression)
+                    .Select(GetStringLiteral)
+                    .Where(static value => value is not null)
+                    .Select(static value => value!)],
+            _ => [],
+        };
+    }
+
+    private static string[] GetStringLiteralExpressions(SeparatedSyntaxList<ExpressionSyntax> expressions)
+        => [.. expressions
+            .Select(GetStringLiteral)
+            .Where(static value => value is not null)
+            .Select(static value => value!)];
+
+    private static string? GetStringLiteral(ExpressionSyntax expression)
+        => expression is LiteralExpressionSyntax literal
+            && literal.IsKind(SyntaxKind.StringLiteralExpression)
+            ? literal.Token.ValueText
+            : null;
+
+    private static bool ContainsRawMapInvocation(ExpressionSyntax? expression)
+    {
+        while (expression is InvocationExpressionSyntax invocation)
+        {
+            if (TryGetMapInvocation(invocation, out _, out _))
+            {
+                return true;
+            }
+
+            expression = GetReceiver(invocation);
+        }
+
+        return false;
+    }
+
+    private static string? FindLiteralMapGroupPrefix(ExpressionSyntax? expression)
+    {
+        List<string>? prefixes = null;
+        while (expression is InvocationExpressionSyntax invocation)
+        {
+            if (GetInvokedName(invocation) == "MapGroup")
+            {
+                var prefix = GetStringLiteralArgument(invocation, 0);
+                if (prefix is null)
+                {
+                    return null;
+                }
+
+                prefixes ??= [];
+                prefixes.Add(prefix);
+            }
+
+            expression = GetReceiver(invocation);
+        }
+
+        if (prefixes is null)
+        {
+            return null;
+        }
+
+        prefixes.Reverse();
+        var combined = prefixes[0];
+        foreach (var prefix in prefixes.Skip(1))
+        {
+            combined = CombineRoutePatterns(combined, prefix);
+        }
+
+        return combined;
+    }
+
+    private static string CombineRoutePatterns(string? prefix, string pattern)
+    {
+        var routePrefix = prefix ?? "";
+        if (routePrefix.Length == 0)
+        {
+            return pattern;
+        }
+
+        if (routePrefix == "/")
+        {
+            return pattern.StartsWith("/", StringComparison.Ordinal) ? pattern : "/" + pattern;
+        }
+
+        if (pattern == "/")
+        {
+            return routePrefix;
+        }
+
+        return routePrefix.TrimEnd('/') + "/" + pattern.TrimStart('/');
+    }
+
+    private static string RouteKey(string method, string pattern)
+        => method.ToUpperInvariant() + " " + pattern;
+
+    private static string[] SplitMethods(string methods)
+        => string.IsNullOrEmpty(methods) ? [] : methods.Split(';');
 }
+
+internal readonly record struct RawMinimalApiEndpoint(
+    string Methods,
+    string Pattern,
+    string EndpointName,
+    DiagnosticLocationModel Location);
 
 internal readonly struct FeatureResult(FeatureModel? model, EquatableDiagnostic? diagnostic) : IEquatable<FeatureResult>
 {

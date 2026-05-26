@@ -1914,6 +1914,175 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_uses_explicit_feature_name_for_endpoint_name()
+    {
+        var source = """
+            using SliceFx;
+
+            namespace NamedApp.Features.Products;
+
+            [Feature("GET /products", Name = "Legacy.Products.List", Summary = "List products")]
+            public static class ListProducts
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateHostCompilation("NamedApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGenerators(compilation);
+        var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+
+        Assert.Contains(".WithName(\"Legacy.Products.List\")", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("SliceFeatureRouteAttribute(\"Legacy.Products.List\"", generatedSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(".WithName(\"Products.ListProducts\")", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE028_and_SLICE029_for_literal_raw_minimal_api_overlaps()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Builder;
+            using SliceFx;
+
+            namespace RawOverlapApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public static string Handle() => "ok";
+            }
+
+            namespace RawOverlapApp;
+
+            public static class Routes
+            {
+                public static void Map(WebApplication app)
+                {
+                    app.MapPost("/users", () => "raw").WithName("Users.CreateUser");
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("RawOverlapApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        Assert.Contains(generatorDiagnostics, static d =>
+            d.Id == "SLICE028" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.Contains(generatorDiagnostics, static d =>
+            d.Id == "SLICE029" && d.Severity == DiagnosticSeverity.Warning);
+    }
+
+    [Fact]
+    public void Generator_does_not_report_raw_minimal_api_overlap_for_dynamic_routes_or_names()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Builder;
+            using SliceFx;
+
+            namespace DynamicRawApp.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public static string Handle() => "ok";
+            }
+
+            namespace DynamicRawApp;
+
+            public static class Routes
+            {
+                public static void Map(WebApplication app)
+                {
+                    var route = "/users";
+                    var name = "Users.CreateUser";
+                    app.MapPost(route, () => "raw").WithName(name);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("DynamicRawApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id is "SLICE028" or "SLICE029");
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE028_for_literal_map_methods_overlap()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Builder;
+            using SliceFx;
+
+            namespace RawMapMethodsApp.Features.Users;
+
+            [Feature("PUT /users")]
+            public static class UpdateUser
+            {
+                public static string Handle() => "ok";
+            }
+
+            namespace RawMapMethodsApp;
+
+            public static class Routes
+            {
+                public static void Map(WebApplication app)
+                {
+                    app.MapMethods("/users", new[] { "GET", "PUT" }, () => "raw");
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("RawMapMethodsApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        Assert.Contains(generatorDiagnostics, static d =>
+            d.Id == "SLICE028" && d.Severity == DiagnosticSeverity.Warning);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE028_for_nested_literal_map_group_overlap()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Builder;
+            using SliceFx;
+
+            namespace NestedGroupApp.Features.Users;
+
+            [Feature("POST /api/v1/users")]
+            public static class CreateUser
+            {
+                public static string Handle() => "ok";
+            }
+
+            namespace NestedGroupApp;
+
+            public static class Routes
+            {
+                public static void Map(WebApplication app)
+                {
+                    app.MapGroup("/api").MapGroup("/v1").MapPost("/users", () => "raw");
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("NestedGroupApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+
+        Assert.Contains(generatorDiagnostics, static d =>
+            d.Id == "SLICE028" && d.Severity == DiagnosticSeverity.Warning);
+    }
+
+    [Fact]
     public void Generator_reports_SLICE010_when_filter_order_violates_FilterOrderHint()
     {
         var source = """

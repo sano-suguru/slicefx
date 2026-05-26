@@ -28,3 +28,5 @@ SLICE024 | Slice | Warning | UnconfiguredReferencedSliceModules
 SLICE025 | Slice | Error | InvalidSliceFxAggregateReferences
 SLICE026 | Slice | Error | UnsupportedValidationForAspNet
 SLICE027 | Slice | Error | DuplicateLambdaFunctionPerFeatureArtifactId
+SLICE028 | Slice | Warning | RawMinimalApiRouteOverlap
+SLICE029 | Slice | Warning | RawMinimalApiEndpointNameOverlap

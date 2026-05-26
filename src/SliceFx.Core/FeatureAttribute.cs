@@ -54,6 +54,9 @@ public sealed class FeatureAttribute : Attribute
     /// <summary>Optional OpenAPI tag. Defaults to the namespace segment after "Features".</summary>
     public string? Tag { get; set; }
 
+    /// <summary>Optional endpoint name. Defaults to "{Tag}.{FeatureClassName}".</summary>
+    public string? Name { get; set; }
+
     /// <summary>Optional summary for OpenAPI / documentation.</summary>
     public string? Summary { get; set; }
 
