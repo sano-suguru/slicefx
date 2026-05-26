@@ -2187,6 +2187,55 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public async Task MapSlices_composes_with_route_group_prefix()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Builder;
+            using Microsoft.AspNetCore.Routing;
+            using Microsoft.Extensions.DependencyInjection;
+            using SliceFx;
+            using System.Linq;
+            using System.Threading.Tasks;
+
+            namespace RuntimeGroupApp.Features.Users;
+
+            [Feature("GET /users/{id}")]
+            public static class GetUser
+            {
+                public static string Handle(int id) => id.ToString();
+            }
+
+            public static class RuntimeHarness
+            {
+                public static async Task<string> GetRoutePatternAsync()
+                {
+                    var builder = WebApplication.CreateSlimBuilder();
+                    builder.Services.AddSlice();
+                    await using var app = builder.Build();
+                    app.MapGroup("/api").MapSlices();
+
+                    return ((IEndpointRouteBuilder)app)
+                        .DataSources
+                        .SelectMany(static dataSource => dataSource.Endpoints)
+                        .OfType<RouteEndpoint>()
+                        .Single()
+                        .RoutePattern
+                        .RawText!;
+                }
+            }
+            """;
+
+        using var assemblyStream = CompileGeneratedHostAssembly("RuntimeGroupApp", source);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harnessType = assembly.GetType("RuntimeGroupApp.Features.Users.RuntimeHarness", throwOnError: true)!;
+        var getRoutePatternAsync = harnessType.GetMethod("GetRoutePatternAsync", BindingFlags.Public | BindingFlags.Static)!;
+
+        var routePattern = await (Task<string>)getRoutePatternAsync.Invoke(null, null)!;
+
+        Assert.Equal("/api/users/{id}", routePattern);
+    }
+
+    [Fact]
     public void Runtime_generated_required_validation_is_type_aware()
     {
         var source = """

@@ -76,9 +76,11 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Admin", policy => policy.RequireRole("Admin"));
 
 var app = builder.Build();
-var admin = app.MapGroup("").RequireAuthorization("Admin");
+var admin = app.MapGroup("").RequireAuthorization("Admin"); // no path prefix; metadata only
 admin.MapSlices();
 ```
+
+Use a real prefix when you want one: `app.MapGroup("/api").MapSlices()` maps `[Feature("GET /users/{id}")]` as `GET /api/users/{id}`.
 
 Use Slice filters for feature-local endpoint filter behavior that does not belong in the authorization system. The API-key examples below are intentionally demo-only; they show configuration mechanics, not a replacement for ASP.NET Core Authorization.
 

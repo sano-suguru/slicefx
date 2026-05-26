@@ -47,18 +47,18 @@ This is the right layer for cross-cutting concerns that do not need access to th
 
 ### Option B — Attach a shared endpoint filter or policy to all Slice routes via `MapGroup`
 
-`MapSlices()` is an `IEndpointRouteBuilder` extension, so it composes with `MapGroup`. Use this when the concern is genuinely an endpoint filter (needs the endpoint pipeline) but applies to every Slice route in the host.
+`MapSlices()` is an `IEndpointRouteBuilder` extension, so it composes with `MapGroup`. Use this when the concern is genuinely an endpoint filter (needs the endpoint pipeline) but applies to every Slice route mapped by that call.
 
 ```csharp
 var app = builder.Build();
 
-var slices = app.MapGroup("").RequireAuthorization("Admin");
-slices.MapSlices();   // every feature inherits the policy
+var slices = app.MapGroup("/api").RequireAuthorization("Admin");
+slices.MapSlices();   // every feature maps under /api and inherits the policy
 ```
 
-See [`filter-configuration.md`](../patterns/filter-configuration.md#when-the-concern-is-authorization) for the working authorization example, and the closed-generic-filter alternative when several filters share logic but differ by a policy marker.
+For example, `[Feature("GET /users/{id}")]` maps as `GET /api/users/{id}` in the group above. Use `MapGroup("")` only when you want shared metadata such as filters, policies, or tags without adding a path prefix. A group applies to every Slice route mapped through that `MapSlices()` call; it is not a per-feature opt-in mechanism.
 
-Path prefixes (`MapGroup("/api")`) will *not* prefix Slice features — `[Feature("GET /users/{id}")]` patterns are absolute. `MapGroup` is useful here for metadata aggregation (filters, policies, tags), not for routing.
+See [`filter-configuration.md`](../patterns/filter-configuration.md#when-the-concern-is-authorization) for the working authorization example, and the closed-generic-filter alternative when several filters share logic but differ by a policy marker.
 
 ### Option C — Accept per-feature declaration as the right level of explicitness
 
