@@ -1,6 +1,14 @@
 name: Perf (nightly)
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/perf.yml'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - 'src/SliceFx.Core/**'
+      - 'src/SliceFx.SourceGenerator/**'
+      - 'tests/SliceFx.Benchmarks/**'
   schedule:
     # 02:00 UTC daily
     - cron: '0 2 * * *'

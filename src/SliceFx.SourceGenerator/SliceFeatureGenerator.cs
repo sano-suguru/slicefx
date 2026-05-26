@@ -861,11 +861,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         INamedTypeSymbol featureType,
         Compilation compilation)
     {
-        var startupInterface = compilation.GetTypeByMetadataName("SliceFx.Lambda.FunctionPerFeature.ILambdaFunctionPerFeatureStartup");
         foreach (var attribute in featureType.GetAttributes())
         {
-            if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) !=
-                "global::SliceFx.Lambda.FunctionPerFeature.LambdaFunctionStartupAttribute")
+            if (!IsLambdaFunctionStartupAttribute(attribute.AttributeClass))
             {
                 continue;
             }
@@ -876,6 +874,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 continue;
             }
 
+            var startupInterface = compilation.GetTypeByMetadataName("SliceFx.Lambda.FunctionPerFeature.ILambdaFunctionPerFeatureStartup");
             var diagnostic = ValidateLambdaFunctionPerFeatureStartupType(startupType, startupInterface);
             if (diagnostic is not null)
             {
@@ -886,6 +885,16 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
 
         return (null, null);
+    }
+
+    private static bool IsLambdaFunctionStartupAttribute(INamedTypeSymbol? attributeType)
+    {
+        if (attributeType?.Name != "LambdaFunctionStartupAttribute")
+        {
+            return false;
+        }
+
+        return attributeType.ContainingNamespace?.ToDisplayString() == "SliceFx.Lambda.FunctionPerFeature";
     }
 
     private static bool IsNullableParameter(IParameterSymbol parameter)
