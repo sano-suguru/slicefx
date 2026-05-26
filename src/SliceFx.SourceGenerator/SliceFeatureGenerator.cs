@@ -148,31 +148,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Combine(wasiJsonContextPlan)
             .Combine(lambdaFunctionPerFeatureOptions)
             .Combine(lambdaJsonContextPlan)
-            .Select(static (pair, _) =>
-            {
-                var (lambdaOptionsPair, lambdaJsonContextPlan) = pair;
-                var (wasiPlanPair, lambdaOptions) = lambdaOptionsPair;
-                var (overridesPair, wasiJsonContextPlan) = wasiPlanPair;
-                var (emitExtensionsPair, jsonContextOverrides) = overridesPair;
-                var (referencedModulesPair, emitExtensions) = emitExtensionsPair;
-                var (emitWasiPair, referencedModules) = referencedModulesPair;
-                var (emitAspNetPair, emitWasi) = emitWasiPair;
-                var (modelsAndValidatorsPair, emitAspNet) = emitAspNetPair;
-                var (modelsAndValidators, asmName) = modelsAndValidatorsPair;
-                var (models, validators) = modelsAndValidators;
-                return CreateEmitPlan(
-                    models,
-                    validators,
-                    asmName,
-                    emitAspNet,
-                    emitWasi,
-                    referencedModules,
-                    emitExtensions,
-                    jsonContextOverrides,
-                    wasiJsonContextPlan,
-                    lambdaOptions,
-                    lambdaJsonContextPlan);
-            })
+            .Select(static (pair, _) => CreateEmitPlan(EmitPipelineInputs.FromCombined(pair)))
             .WithTrackingName("SliceEmitPlan");
 
         context.RegisterSourceOutput(
@@ -193,19 +169,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             });
     }
 
-    private static EmitPlan CreateEmitPlan(
-        ImmutableArray<FeatureModel> models,
-        ImmutableArray<ValidatorModel> validators,
-        string asmName,
-        bool emitAspNet,
-        bool emitWasi,
-        ReferencedSliceModulesResult referencedModulesResult,
-        bool emitExtensions,
-        JsonContextOverrides jsonContextOverrides,
-        JsonContextPlan wasiJsonContextPlan,
-        LambdaFunctionPerFeatureOptions lambdaOptions,
-        JsonContextPlan lambdaJsonContextPlan)
+    private static EmitPlan CreateEmitPlan(EmitPipelineInputs inputs)
     {
+        var (models, validators, asmName, emitAspNet, emitWasi, referencedModulesResult,
+            emitExtensions, jsonContextOverrides, wasiJsonContextPlan, lambdaOptions,
+            lambdaJsonContextPlan) = inputs;
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
         diagnostics.AddRange(referencedModulesResult.Diagnostics);
         var referencedModules = referencedModulesResult.Modules;
@@ -2010,6 +1978,52 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
     private static string[] SplitMethods(string methods)
         => string.IsNullOrEmpty(methods) ? [] : methods.Split(';');
+
+    // Keep this order in sync with the emitPlan .Combine(...) chain in Initialize.
+    private readonly record struct EmitPipelineInputs(
+        ImmutableArray<FeatureModel> Models,
+        ImmutableArray<ValidatorModel> Validators,
+        string AssemblyName,
+        bool EmitAspNet,
+        bool EmitWasi,
+        ReferencedSliceModulesResult ReferencedModules,
+        bool EmitExtensions,
+        JsonContextOverrides JsonContextOverrides,
+        JsonContextPlan WasiJsonContextPlan,
+        LambdaFunctionPerFeatureOptions LambdaOptions,
+        JsonContextPlan LambdaJsonContextPlan)
+    {
+        public static EmitPipelineInputs FromCombined(
+            ((((((((((ImmutableArray<FeatureModel>, ImmutableArray<ValidatorModel>),
+                string), bool), bool), ReferencedSliceModulesResult), bool),
+                JsonContextOverrides), JsonContextPlan),
+                LambdaFunctionPerFeatureOptions), JsonContextPlan) pair)
+        {
+            var (lambdaOptionsPair, lambdaJsonContextPlan) = pair;
+            var (wasiPlanPair, lambdaOptions) = lambdaOptionsPair;
+            var (overridesPair, wasiJsonContextPlan) = wasiPlanPair;
+            var (emitExtensionsPair, jsonContextOverrides) = overridesPair;
+            var (referencedModulesPair, emitExtensions) = emitExtensionsPair;
+            var (emitWasiPair, referencedModules) = referencedModulesPair;
+            var (emitAspNetPair, emitWasi) = emitWasiPair;
+            var (modelsAndValidatorsPair, emitAspNet) = emitAspNetPair;
+            var (modelsAndValidators, asmName) = modelsAndValidatorsPair;
+            var (models, validators) = modelsAndValidators;
+
+            return new EmitPipelineInputs(
+                models,
+                validators,
+                asmName,
+                emitAspNet,
+                emitWasi,
+                referencedModules,
+                emitExtensions,
+                jsonContextOverrides,
+                wasiJsonContextPlan,
+                lambdaOptions,
+                lambdaJsonContextPlan);
+        }
+    }
 }
 
 internal readonly record struct RawMinimalApiEndpoint(
