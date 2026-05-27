@@ -11,7 +11,7 @@ public sealed class SliceTestHostTests
     {
         await using var host = SliceTestHost.Create<Program>();
 
-        var message = await host.Client.GetStringAsync("/message");
+        var message = await host.Client.GetStringAsync("/message", TestContext.Current.CancellationToken);
 
         Assert.Equal("app", message);
         Assert.IsType<DefaultMessageService>(host.Services.GetRequiredService<IMessageService>());
@@ -23,7 +23,7 @@ public sealed class SliceTestHostTests
         await using var host = SliceTestHost.Create<Program>(services =>
             services.Replace<IMessageService>(new ReplacementMessageService()));
 
-        var message = await host.Client.GetStringAsync("/message");
+        var message = await host.Client.GetStringAsync("/message", TestContext.Current.CancellationToken);
 
         Assert.Equal("test", message);
     }
@@ -36,7 +36,7 @@ public sealed class SliceTestHostTests
         {
             await using var host = SliceTestHost.Create<Program>(contentRoot: contentRoot);
 
-            var observed = await host.Client.GetStringAsync("/content-root");
+            var observed = await host.Client.GetStringAsync("/content-root", TestContext.Current.CancellationToken);
 
             Assert.Equal(contentRoot, observed);
         }

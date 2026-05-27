@@ -538,10 +538,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
         var exitCode = await GenerateCSharpClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
         Assert.Contains("public async Task<Generated.Client.App.Features.Things.GetThing.Response> GetThingAsync(int id, CancellationToken cancellationToken = default)", client);
         Assert.DoesNotContain("Task<System.Threading.Tasks.Task", client);
         Assert.DoesNotContain("GetFromJsonAsync<System.Threading.Tasks.Task", client);
@@ -600,9 +600,9 @@ public class CliFixtureTests
         var csharpOutput = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
         var csharpExitCode = await GenerateCSharpClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", csharpOutput, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, csharpExitCode);
-        var csharpClient = await File.ReadAllTextAsync(csharpOutput);
+        var csharpClient = await File.ReadAllTextAsync(csharpOutput, TestContext.Current.CancellationToken);
         Assert.Contains("Task<Shared.Body.Client.App.Contracts.CreateItemResponse> CreateItemAsync(Shared.Body.Client.App.Contracts.CreateItemRequest request", csharpClient);
         Assert.Contains("JsonContent.Create(request)", csharpClient);
         Assert.DoesNotContain("CreateItem.Request", csharpClient);
@@ -610,18 +610,18 @@ public class CliFixtureTests
         var typescriptOutput = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var typescriptExitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", typescriptOutput, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, typescriptExitCode);
-        var typescriptClient = await File.ReadAllTextAsync(typescriptOutput);
+        var typescriptClient = await File.ReadAllTextAsync(typescriptOutput, TestContext.Current.CancellationToken);
         Assert.Contains("body: ContractsCreateItemRequest", typescriptClient);
         Assert.Contains("JSON.stringify(body)", typescriptClient);
 
         var openApiOutput = Path.Combine(fixture.Directory.FullName, "openapi.json");
         var openApiExitCode = await GenerateOpenApiCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", openApiOutput])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, openApiExitCode);
-        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(openApiOutput));
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(openApiOutput, TestContext.Current.CancellationToken));
         Assert.True(document.RootElement
             .GetProperty("paths")
             .GetProperty("/items")
@@ -670,10 +670,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
         var exitCode = await GenerateCSharpClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("public partial class SliceApiClient", client);
         Assert.Contains("public SliceApiClient(HttpMessageHandler handler)", client);
@@ -746,10 +746,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var exitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("export class SliceApiClient", client);
         Assert.Contains("export class ItemsClient", client);
@@ -822,10 +822,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var exitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("let url = `${this.baseUrl}/items/\\`/${encodeURIComponent(String(id))}`;", client);
         Assert.Contains("if (search != null) params.set('search', String(search));", client);
@@ -901,10 +901,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var exitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("export interface GetResponse", client);
         Assert.Contains("export interface UsersGetResponse", client);
@@ -972,10 +972,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var exitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("getItemAsync", client);
         Assert.DoesNotContain("deleteItemAsync", client);
@@ -1055,10 +1055,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "openapi.json");
         var exitCode = await GenerateOpenApiCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(outputFile));
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken));
         var root = document.RootElement;
 
         Assert.Equal("3.1.1", root.GetProperty("openapi").GetString());
@@ -1112,7 +1112,7 @@ public class CliFixtureTests
         var contentRoot = Path.Combine(FindRepoRoot(), "samples", "SliceFx.Sample");
         await using var host = SliceTestHost.Create<SliceSample::Program>(contentRoot: contentRoot);
 
-        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("/openapi/v1.json"));
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
         var root = document.RootElement;
         Assert.Equal("3.1.1", root.GetProperty("openapi").GetString());
 
@@ -1196,10 +1196,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var yaml = await File.ReadAllTextAsync(outputFile);
+        var yaml = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("AWS::Serverless-2016-10-31", yaml);
         Assert.Contains("SliceApi:", yaml);
@@ -1251,10 +1251,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var yaml = await File.ReadAllTextAsync(outputFile);
+        var yaml = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("Path: '/items/{id}'", yaml);
         Assert.DoesNotContain("Path: '/items/{id:int}'", yaml);
@@ -1298,13 +1298,13 @@ public class CliFixtureTests
 
         await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", nativeAotOutput, "--runtime", "provided.al2023"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", managedOutput, "--runtime", "dotnet8"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var nativeYaml = await File.ReadAllTextAsync(nativeAotOutput);
-        var managedYaml = await File.ReadAllTextAsync(managedOutput);
+        var nativeYaml = await File.ReadAllTextAsync(nativeAotOutput, TestContext.Current.CancellationToken);
+        var managedYaml = await File.ReadAllTextAsync(managedOutput, TestContext.Current.CancellationToken);
 
         Assert.Contains("Handler: 'bootstrap'", nativeYaml);
         Assert.Contains("Handler: 'lambda-runtime-app::Amazon.Lambda.AspNetCoreServer.Hosting.LambdaRuntimeSupportServer::Run'", managedYaml);
@@ -1346,10 +1346,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var yaml = await File.ReadAllTextAsync(outputFile);
+        var yaml = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("Path: '/files/{path+}'", yaml);
         Assert.DoesNotContain("Path: '/files/{**path}'", yaml);
@@ -1393,19 +1393,19 @@ public class CliFixtureTests
         // First run succeeds.
         var firstExit = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, firstExit);
 
         // Second run without --force fails.
         var noForceExit = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(1, noForceExit);
 
         // Third run with --force succeeds.
         var forceExit = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, forceExit);
     }
 
@@ -1445,7 +1445,7 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "deploy", "infra", "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
         Assert.True(File.Exists(outputFile));
@@ -1456,7 +1456,7 @@ public class CliFixtureTests
     {
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--mode", "function-per-feature", "--artifact-layout", "shared"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, exitCode);
     }
@@ -1549,10 +1549,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var yaml = await File.ReadAllTextAsync(outputFile);
+        var yaml = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("Function-per-feature mode: each eligible [Feature] becomes a separate Lambda function resource.", yaml);
         Assert.Contains("Artifact layout: per-feature. Each function points at its own NativeAOT custom-runtime artifact.", yaml);
@@ -1670,10 +1670,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "template.yaml");
         var exitCode = await ManifestAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--mode", "function-per-feature"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
-        var yaml = await File.ReadAllTextAsync(outputFile);
+        var yaml = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
         Assert.Contains("HealthGetHealthFunction:", yaml);
         Assert.Contains("CodeUri: './artifacts/health-gethealth'", yaml);
@@ -1690,13 +1690,13 @@ public class CliFixtureTests
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--skip-publish"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
         var manifestPath = Path.Combine(outputDir, "slicefx-lambda-package.json");
         Assert.True(File.Exists(manifestPath));
 
-        var json = await File.ReadAllTextAsync(manifestPath);
+        var json = await File.ReadAllTextAsync(manifestPath, TestContext.Current.CancellationToken);
         Assert.Contains("\"mode\": \"function-per-feature\"", json);
         Assert.Contains("\"artifactLayout\": \"per-feature\"", json);
         Assert.Contains("\"artifacts\": [", json);
@@ -1717,7 +1717,7 @@ public class CliFixtureTests
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "per-feature", "--skip-publish"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
         var manifestPath = Path.Combine(outputDir, "slicefx-lambda-package.json");
@@ -1725,7 +1725,7 @@ public class CliFixtureTests
         Assert.True(File.Exists(manifestPath));
         Assert.True(File.Exists(reportPath));
 
-        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath, TestContext.Current.CancellationToken));
         var root = document.RootElement;
 
         Assert.Equal("function-per-feature", root.GetProperty("mode").GetString());
@@ -1767,7 +1767,7 @@ public class CliFixtureTests
         Assert.True(File.Exists(healthProgram));
         Assert.True(Directory.Exists(Path.Combine(outputDir, "artifacts", "health-gethealth")));
 
-        var projectXml = await File.ReadAllTextAsync(healthProject);
+        var projectXml = await File.ReadAllTextAsync(healthProject, TestContext.Current.CancellationToken);
         Assert.Contains("<AssemblyName>bootstrap</AssemblyName>", projectXml);
         Assert.Contains("<PublishAot>true</PublishAot>", projectXml);
         Assert.Contains("<TrimMode>full</TrimMode>", projectXml);
@@ -1783,14 +1783,14 @@ public class CliFixtureTests
         Assert.Contains("Amazon.Lambda.RuntimeSupport", projectXml);
         Assert.Contains("Amazon.Lambda.Serialization.SystemTextJson", projectXml);
 
-        var programSource = await File.ReadAllTextAsync(healthProgram);
+        var programSource = await File.ReadAllTextAsync(healthProgram, TestContext.Current.CancellationToken);
         Assert.Contains("JsonTypeInfoProvider = static type => LambdaFeatureJsonContext.Default.GetTypeInfo(type);", programSource);
         Assert.Contains("SourceGeneratorLambdaJsonSerializer<LambdaFeatureJsonContext>", programSource);
         Assert.Contains("SliceFx.lambda_package_app_SliceLambdaFunctionPerFeatureHandlers_Health_GetHealth_", programSource);
         Assert.Contains("[JsonSerializable(typeof(APIGatewayHttpApiV2ProxyRequest))]", programSource);
         Assert.Contains("[JsonSerializable(typeof(APIGatewayHttpApiV2ProxyResponse))]", programSource);
 
-        using var reportDocument = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath));
+        using var reportDocument = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath, TestContext.Current.CancellationToken));
         var reportRoot = reportDocument.RootElement;
         Assert.Equal("1", reportRoot.GetProperty("schemaVersion").GetString());
         Assert.Equal("function-per-feature", reportRoot.GetProperty("mode").GetString());
@@ -1835,7 +1835,7 @@ public class CliFixtureTests
                             message = "Stale warning",
                         },
                     },
-                }));
+                }), TestContext.Current.CancellationToken);
 
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
@@ -1846,12 +1846,12 @@ public class CliFixtureTests
                 "--skip-publish",
                 "--warning-baseline", baselinePath,
             ])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, exitCode);
 
         var reportPath = Path.Combine(outputDir, "slicefx-lambda-package-report.json");
-        using var reportDocument = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath));
+        using var reportDocument = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath, TestContext.Current.CancellationToken));
         var baseline = reportDocument.RootElement.GetProperty("warningBaseline");
         Assert.Equal(0, baseline.GetProperty("currentWarningCount").GetInt32());
         Assert.Equal(1, baseline.GetProperty("staleBaselineCount").GetInt32());
@@ -1905,7 +1905,7 @@ public class CliFixtureTests
     {
         var exitCode = await PackageAwsLambdaCommand.Build()
             .Parse(["--mode", "function-per-feature", "--artifact-layout", "unknown"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, exitCode);
     }
@@ -1919,7 +1919,7 @@ public class CliFixtureTests
         var outputDir = Path.Combine(fixture.Directory.FullName, "artifacts", "lambda");
         var exitCode = await PackageAwsLambdaCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--mode", "function-per-feature", "--artifact-layout", "per-feature"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, exitCode);
         Assert.False(Directory.Exists(outputDir));
@@ -1942,7 +1942,7 @@ public class CliFixtureTests
 
         var exitCode = await NewWasiCloudflareCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
 
@@ -1955,9 +1955,9 @@ public class CliFixtureTests
         Assert.True(File.Exists(Path.Combine(dist, "stubs", "tcp.js")));
         Assert.True(File.Exists(Path.Combine(dist, "stubs", "udp.js")));
 
-        var packageJson = await File.ReadAllTextAsync(Path.Combine(dist, "package.json"));
-        var shim = await File.ReadAllTextAsync(Path.Combine(dist, "shim.mjs"));
-        var moduleMap = await File.ReadAllTextAsync(Path.Combine(dist, "generate-module-map.mjs"));
+        var packageJson = await File.ReadAllTextAsync(Path.Combine(dist, "package.json"), TestContext.Current.CancellationToken);
+        var shim = await File.ReadAllTextAsync(Path.Combine(dist, "shim.mjs"), TestContext.Current.CancellationToken);
+        var moduleMap = await File.ReadAllTextAsync(Path.Combine(dist, "generate-module-map.mjs"), TestContext.Current.CancellationToken);
 
         Assert.Contains("\"name\": \"my-wasi-app-host\"", packageJson);
         Assert.Contains("dotnet publish \\\"../My.Wasi.App.csproj\\\" -r wasi-wasm", packageJson);
@@ -1994,11 +1994,11 @@ public class CliFixtureTests
         var outputDir = Path.Combine(fixture.Directory.FullName, "deploy", "cloudflare");
         var exitCode = await NewWasiCloudflareCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
 
-        var packageJson = await File.ReadAllTextAsync(Path.Combine(outputDir, "package.json"));
+        var packageJson = await File.ReadAllTextAsync(Path.Combine(outputDir, "package.json"), TestContext.Current.CancellationToken);
 
         Assert.Contains("dotnet publish \\\"../../My.Wasi.App.csproj\\\" -r wasi-wasm", packageJson);
         Assert.Contains("jco transpile \\\"../../dist/my-wasi-app.wasm\\\"", packageJson);
@@ -2020,11 +2020,11 @@ public class CliFixtureTests
 
         var exitCode = await NewWasiCloudflareCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
 
-        var shim = await File.ReadAllTextAsync(Path.Combine(fixture.Directory.FullName, "dist", "shim.mjs"));
+        var shim = await File.ReadAllTextAsync(Path.Combine(fixture.Directory.FullName, "dist", "shim.mjs"), TestContext.Current.CancellationToken);
 
         Assert.Contains("""_setArgs(["My\"\\Wasi"]);""", shim);
         Assert.DoesNotContain("_setArgs(['", shim);
@@ -2314,10 +2314,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
         var exitCode = await GenerateCSharpClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, exitCode);
 
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
         Assert.Contains("class SliceApiException", client);
         Assert.Contains("class SliceProblemDetails", client);
         Assert.Contains("if (!__response.IsSuccessStatusCode)", client);
@@ -2370,7 +2370,7 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
         var exitCode = await GenerateCSharpClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, exitCode);
 
         await fixture.BuildAsync();
@@ -2447,10 +2447,10 @@ public class CliFixtureTests
         var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var exitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, exitCode);
 
-        var client = await File.ReadAllTextAsync(outputFile);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
         Assert.Contains("class SliceApiError", client);
         Assert.Contains("interface SliceProblemDetails", client);
         Assert.Contains("response.json()", client);
@@ -2464,32 +2464,35 @@ public class CliFixtureTests
         var tsDir = Path.Combine(FindRepoRoot(), "eng", "typescript-typecheck");
         var localTsc = Path.Combine(tsDir, "node_modules", "typescript", "bin", "tsc");
 
-        // Verify node is reachable; test is a no-op if absent.
-        // TODO: replace return with Assert.Skip after xUnit v3 migration.
+        // Verify node is reachable; skip if absent. CI provisions Node via setup-node.
+        bool nodeAvailable;
         try
         {
             var (nodeExit, _, _) = await RunProcessAsync("node", ["--version"], null);
-            if (nodeExit != 0)
-            {
-                return;
-            }
+            nodeAvailable = nodeExit == 0;
         }
-        catch { return; }
+        catch { nodeAvailable = false; }
+        if (!nodeAvailable)
+        {
+            Assert.Skip("node not found / not runnable; CI provisions Node via setup-node.");
+        }
 
         // Provision local TypeScript via npm ci when node_modules is absent (first local run).
         // CI pre-installs via the "Install TypeScript for client type-check tests" step.
         if (!File.Exists(localTsc))
         {
             var npm = OperatingSystem.IsWindows() ? "npm.cmd" : "npm";
+            bool npmRestored;
             try
             {
                 var (npmExit, _, _) = await RunProcessAsync(npm, ["ci"], tsDir);
-                if (npmExit != 0)
-                {
-                    return;
-                }
+                npmRestored = npmExit == 0;
             }
-            catch { return; }
+            catch { npmRestored = false; }
+            if (!npmRestored)
+            {
+                Assert.Skip("npm ci failed / npm not found; CI provisions Node+npm via setup-node.");
+            }
         }
 
         using var fixture = CliProjectFixture.Create(
@@ -2527,12 +2530,13 @@ public class CliFixtureTests
         var tsOutput = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
         var tsExitCode = await GenerateTypeScriptClientCommand.Build()
             .Parse(["--project", fixture.ProjectFile.FullName, "--output", tsOutput, "--force"])
-            .InvokeAsync();
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, tsExitCode);
 
         var tsconfig = Path.Combine(fixture.Directory.FullName, "tsconfig.json");
         await File.WriteAllTextAsync(tsconfig,
-            /*lang=json,strict*/ """{"compilerOptions":{"strict":true,"noEmit":true,"lib":["DOM","ES2020"],"target":"ES2020"}}""");
+            /*lang=json,strict*/ """{"compilerOptions":{"strict":true,"noEmit":true,"lib":["DOM","ES2020"],"target":"ES2020"}}""",
+            TestContext.Current.CancellationToken);
 
         // Run tsc via `node <localTsc>` to avoid platform differences in .bin shim scripts.
         var (tscExit, tscOut, tscErr) = await RunProcessAsync(

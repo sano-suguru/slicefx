@@ -92,15 +92,15 @@ public class IncrementalCacheTests
     [Fact]
     public void FeatureModels_step_is_cached_when_unrelated_file_is_edited()
     {
-        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }");
-        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }");
+        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }", cancellationToken: TestContext.Current.CancellationToken);
+        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }", cancellationToken: TestContext.Current.CancellationToken);
 
         var compilation = CreateCompilation("CacheTestApp", FeatureSource, unrelatedV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var compilationV2 = compilation.ReplaceSyntaxTree(unrelatedV1, unrelatedV2);
-        driver = driver.RunGenerators(compilationV2);
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
 
         var runResult = driver.GetRunResult();
         AssertStepReused(runResult, "SliceFeatureModels");
@@ -109,15 +109,15 @@ public class IncrementalCacheTests
     [Fact]
     public void ReferencedModules_step_is_cached_when_unrelated_file_is_edited()
     {
-        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }");
-        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }");
+        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }", cancellationToken: TestContext.Current.CancellationToken);
+        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }", cancellationToken: TestContext.Current.CancellationToken);
 
         var compilation = CreateCompilation("CacheTestApp", FeatureSource, unrelatedV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var compilationV2 = compilation.ReplaceSyntaxTree(unrelatedV1, unrelatedV2);
-        driver = driver.RunGenerators(compilationV2);
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
 
         var runResult = driver.GetRunResult();
         AssertStepReused(runResult, "SliceReferencedModules");
@@ -126,15 +126,15 @@ public class IncrementalCacheTests
     [Fact]
     public void EmitPlan_step_is_cached_when_unrelated_file_is_edited()
     {
-        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }");
-        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }");
+        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }", cancellationToken: TestContext.Current.CancellationToken);
+        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }", cancellationToken: TestContext.Current.CancellationToken);
 
         var compilation = CreateCompilation("CacheTestApp", FeatureSource, unrelatedV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var compilationV2 = compilation.ReplaceSyntaxTree(unrelatedV1, unrelatedV2);
-        driver = driver.RunGenerators(compilationV2);
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
 
         var runResult = driver.GetRunResult();
         AssertStepReused(runResult, "SliceEmitPlan");
@@ -146,12 +146,12 @@ public class IncrementalCacheTests
         var compilation = CreateCompilation("CacheTestApp", FeatureSourceTrackedEditV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var featureTree = compilation.SyntaxTrees.First();
         var compilationV2 = compilation.ReplaceSyntaxTree(
             featureTree,
-            CSharpSyntaxTree.ParseText(FeatureSourceTrackedEditV2, new CSharpParseOptions(LanguageVersion.Latest)));
-        driver = driver.RunGenerators(compilationV2);
+            CSharpSyntaxTree.ParseText(FeatureSourceTrackedEditV2, new CSharpParseOptions(LanguageVersion.Latest), cancellationToken: TestContext.Current.CancellationToken));
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
 
         var runResult = driver.GetRunResult();
         AssertStepReused(runResult, "SliceFeatureModels");
@@ -164,12 +164,12 @@ public class IncrementalCacheTests
         var compilation = CreateCompilation("CacheTestApp", FeatureSourceWithDiagnosticV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var featureTree = compilation.SyntaxTrees.First();
         var compilationV2 = compilation.ReplaceSyntaxTree(
             featureTree,
-            CSharpSyntaxTree.ParseText(FeatureSourceWithDiagnosticV2, new CSharpParseOptions(LanguageVersion.Latest)));
-        driver = driver.RunGenerators(compilationV2);
+            CSharpSyntaxTree.ParseText(FeatureSourceWithDiagnosticV2, new CSharpParseOptions(LanguageVersion.Latest), cancellationToken: TestContext.Current.CancellationToken));
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
 
         var runResult = driver.GetRunResult();
         AssertStepReused(runResult, "SliceFeatureModels");
@@ -182,12 +182,12 @@ public class IncrementalCacheTests
         var compilation = CreateCompilation("CacheTestApp", FeatureSourceWithDiagnosticV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var featureTree = compilation.SyntaxTrees.First();
         var compilationV2 = compilation.ReplaceSyntaxTree(
             featureTree,
-            CSharpSyntaxTree.ParseText("\n" + FeatureSourceWithDiagnosticV1, new CSharpParseOptions(LanguageVersion.Latest)));
-        driver = driver.RunGenerators(compilationV2);
+            CSharpSyntaxTree.ParseText("\n" + FeatureSourceWithDiagnosticV1, new CSharpParseOptions(LanguageVersion.Latest), cancellationToken: TestContext.Current.CancellationToken));
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
 
         var runResult = driver.GetRunResult();
         AssertStepInvalidated(runResult, "SliceFeatureModels");
@@ -196,17 +196,17 @@ public class IncrementalCacheTests
     [Fact]
     public void Generated_source_text_is_identical_across_noop_edits()
     {
-        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }");
-        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }");
+        var unrelatedV1 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 42; } }", cancellationToken: TestContext.Current.CancellationToken);
+        var unrelatedV2 = CSharpSyntaxTree.ParseText("namespace CacheTestApp { public static class Unrelated { public static int Answer() => 43; } }", cancellationToken: TestContext.Current.CancellationToken);
 
         var compilation = CreateCompilation("CacheTestApp", FeatureSource, unrelatedV1);
         GeneratorDriver driver = CreateTrackingDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var firstRun = string.Join("\n", driver.GetRunResult().GeneratedTrees.Select(t => t.GetText().ToString()));
 
         var compilationV2 = compilation.ReplaceSyntaxTree(unrelatedV1, unrelatedV2);
-        driver = driver.RunGenerators(compilationV2);
+        driver = driver.RunGenerators(compilationV2, TestContext.Current.CancellationToken);
         var secondRun = string.Join("\n", driver.GetRunResult().GeneratedTrees.Select(t => t.GetText().ToString()));
 
         Assert.Equal(firstRun, secondRun);
@@ -223,7 +223,7 @@ public class IncrementalCacheTests
     {
         List<SyntaxTree> trees =
         [
-            CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest)),
+            CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest), cancellationToken: TestContext.Current.CancellationToken),
             CSharpSyntaxTree.ParseText(
                 "public static class __EntryPoint { public static void Main() { } }",
                 new CSharpParseOptions(LanguageVersion.Latest)),

@@ -48,11 +48,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("123.My-App", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var runResult = driver.GetRunResult();
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var generatedSource = string.Join(Environment.NewLine, runResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.Contains("public static class _123_My_App_SliceRegistrations", generatedSource, StringComparison.Ordinal);
@@ -110,11 +110,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("TryAddScoped<global::SliceFx.ISliceValidator<global::ValidatorApp.Features.Users.CreateUser.Request>, global::ValidatorApp.Features.Users.CreateUserValidator>(services)", generatedSource, StringComparison.Ordinal);
         Assert.Contains("GetService<global::SliceFx.ISliceValidator<global::ValidatorApp.Features.Users.CreateUser.Request>>(invocationContext.HttpContext.RequestServices)", generatedSource, StringComparison.Ordinal);
 
@@ -178,7 +178,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorAliasApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE012");
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE011");
@@ -215,7 +215,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE013"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -242,11 +242,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorNoopApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("__CreateSliceValidatorFactory_", generatedSource, StringComparison.Ordinal);
         Assert.DoesNotContain("GetService<global::SliceFx.ISliceValidator<global::ValidatorNoopApp.Features.Users.CreateUser.Request>>", generatedSource, StringComparison.Ordinal);
     }
@@ -279,11 +279,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorGateApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("IsService(typeof(global::SliceFx.ISliceValidator<T>))", generatedSource, StringComparison.Ordinal);
         Assert.DoesNotContain("IsService(typeof(T))", generatedSource, StringComparison.Ordinal);
     }
@@ -309,7 +309,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE011"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -336,7 +336,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE011"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -377,7 +377,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("ValidatorDiagnosticsApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE012"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -408,11 +408,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("EmptyHost", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var runResult = driver.GetRunResult();
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var generatedSource = string.Join(Environment.NewLine, runResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.Contains("public static class EmptyHost_SliceRegistrations", generatedSource, StringComparison.Ordinal);
@@ -454,11 +454,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiHostApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var runResult = driver.GetRunResult();
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var generatedSource = string.Join(Environment.NewLine, runResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.Contains("namespace SliceFx;", generatedSource, StringComparison.Ordinal);
@@ -609,11 +609,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiEscapingApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("/control", generatedSource, StringComparison.Ordinal);
         Assert.DoesNotContain('\0', generatedSource);
     }
@@ -638,10 +638,10 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiRouteApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var id)", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain(".TryGetFromQuery<global::System.Guid>(ctx, \"id\", out var id)", wasiSource, StringComparison.Ordinal);
     }
@@ -668,10 +668,10 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiQueryApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".BindFromQuery<int>(ctx, \"page\")", wasiSource, StringComparison.Ordinal);
         Assert.Contains("WasiArgumentBindingStatus.Invalid", wasiSource, StringComparison.Ordinal);
         Assert.Contains("Query value 'page' is missing.", wasiSource, StringComparison.Ordinal);
@@ -733,11 +733,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiBindingApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var itemId)", wasiSource, StringComparison.Ordinal);
         Assert.Contains(".BindFromQuery<int>(ctx, \"p\")", wasiSource, StringComparison.Ordinal);
         Assert.Contains(".BindFromHeader<string>(ctx, \"x-trace\")", wasiSource, StringComparison.Ordinal);
@@ -791,12 +791,12 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiSharedBodyApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".ReadAsync<global::WasiSharedBodyApp.CreateItemRequest>", wasiSource, StringComparison.Ordinal);
         Assert.Contains("\"WasiSharedBodyApp.CreateItemRequest\"", manifestSource, StringComparison.Ordinal);
     }
@@ -850,11 +850,11 @@ public class SourceGeneratorCompileTests
 
         var compilation = CreateHostCompilation("KeyedServiceApp", wasiSource, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedWasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.Contains("GetRequiredKeyedService(ctx.Services, typeof(global::KeyedServiceApp.IOrderAuditor), \"primary\")", generatedWasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("GetRequiredService(typeof(global::KeyedServiceApp.IOrderAuditor))", generatedWasiSource, StringComparison.Ordinal);
     }
@@ -913,11 +913,11 @@ public class SourceGeneratorCompileTests
 
         var compilation = CreateHostCompilation("KeyedLambdaApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.Contains("GetRequiredKeyedService<global::KeyedLambdaApp.IOrderAuditor>(\"primary\")", lambdaSource, StringComparison.Ordinal);
         Assert.DoesNotContain(".GetRequiredService<global::KeyedLambdaApp.IOrderAuditor>()", lambdaSource, StringComparison.Ordinal);
     }
@@ -967,11 +967,11 @@ public class SourceGeneratorCompileTests
 
         var compilation = CreateHostCompilation("TypeofKeyApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.Contains("GetRequiredKeyedService(ctx.Services, typeof(global::TypeofKeyApp.ISvc), typeof(global::TypeofKeyApp.ISvc))", wasiSource, StringComparison.Ordinal);
     }
 
@@ -1020,11 +1020,11 @@ public class SourceGeneratorCompileTests
 
         var compilation = CreateHostCompilation("UnsupportedKeyApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE037");
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("GetRequiredKeyedService", wasiSource, StringComparison.Ordinal);
         Assert.Contains("GetRequiredService(typeof(global::UnsupportedKeyApp.ISvc))", wasiSource, StringComparison.Ordinal);
     }
@@ -1069,11 +1069,11 @@ public class SourceGeneratorCompileTests
 
         var compilation = CreateHostCompilation("AsParamsApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("\"GET\"", wasiSource, StringComparison.Ordinal);
         Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE023");
     }
@@ -1123,11 +1123,11 @@ public class SourceGeneratorCompileTests
 
         var compilation = CreateHostCompilation("CtrlCharKeyApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.Contains("GetRequiredKeyedService(ctx.Services, typeof(global::CtrlCharKeyApp.ISvc), \"a\\nb\")", wasiSource, StringComparison.Ordinal);
     }
 
@@ -1186,11 +1186,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiValidationApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE022");
         Assert.Contains("Name is required.", wasiSource, StringComparison.Ordinal);
         Assert.Contains("Name length is invalid.", wasiSource, StringComparison.Ordinal);
@@ -1272,12 +1272,12 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("LambdaApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("public static class LambdaApp_SliceLambdaFunctionPerFeatureHandlers", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("public static class LambdaApp_SliceLambdaFunctionPerFeatureHandlers_Users_GetUser", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("new global::LambdaApp.LambdaStartup().ConfigureServices(services);", lambdaSource, StringComparison.Ordinal);
@@ -1431,12 +1431,12 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("LambdaIdentifierApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("public static class LambdaIdentifierApp_SliceLambdaFunctionPerFeatureHandlers__123_GetUser_", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("Task<global::Amazon.Lambda.APIGatewayEvents.APIGatewayHttpApiV2ProxyResponse> _123_GetUser_", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("\"_123_GetUser_", manifestSource, StringComparison.Ordinal);
@@ -1473,7 +1473,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("LambdaArtifactApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE036"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -1530,11 +1530,11 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         GeneratorDriver driver = CreateDriver(("SliceFxAggregateReferences", "true"));
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("TryAddScoped<global::SliceFx.ISliceValidator<global::FeatureLib.Features.Users.SharedCreateUser.Request>, global::FeatureLib.Features.Users.SharedCreateUserValidator>(services)", lambdaSource, StringComparison.Ordinal);
     }
 
@@ -1563,11 +1563,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("LambdaQueryApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("BindFromQuery<int>(ctx, \"page\")", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("LambdaArgumentBindingStatus.Invalid", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("Query value 'page' is missing.", lambdaSource, StringComparison.Ordinal);
@@ -1629,11 +1629,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("LambdaBindingApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".TryGetFromRoute<global::System.Guid>(ctx, \"id\", out var itemId)", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("BindFromQuery<int>(ctx, \"p\")", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("BindFromHeader<string>(ctx, \"x-trace\")", lambdaSource, StringComparison.Ordinal);
@@ -1666,12 +1666,12 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("MissingJsonLambdaApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE032");
         Assert.Contains("JsonTypeInfoProvider", lambdaSource, StringComparison.Ordinal);
         Assert.Contains("\"eligible\"", manifestSource, StringComparison.Ordinal);
@@ -1726,9 +1726,9 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("DuplicateJsonContextApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic =>
             diagnostic.Id == "SLICE040" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
@@ -1750,9 +1750,9 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("InvalidJsonContextApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic =>
             diagnostic.Id == "SLICE041" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
@@ -1775,11 +1775,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("NoLambdaHandlersApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         var compactManifestSource = manifestSource
             .Replace(" ", "", StringComparison.Ordinal)
             .Replace("\r", "", StringComparison.Ordinal)
@@ -1838,11 +1838,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("LambdaCatchAllApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var lambdaSource = GetGeneratedSource(driver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(".TryGetFromRoute<string>(ctx, \"path\", out var path)", lambdaSource, StringComparison.Ordinal);
         Assert.DoesNotContain(".TryGetFromQuery<string>(ctx, \"path\", out var path)", lambdaSource, StringComparison.Ordinal);
     }
@@ -1881,7 +1881,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("InvalidStartupApp", source, includeLambdaReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static diagnostic =>
             diagnostic.Id == "SLICE035" && diagnostic.Severity == DiagnosticSeverity.Error);
@@ -1909,11 +1909,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiMissingJsonContextApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE021" && diagnostic.Severity == DiagnosticSeverity.Warning);
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/items\"", wasiSource, StringComparison.Ordinal);
@@ -1972,12 +1972,12 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiValidatorApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var registrationSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("TryAddScoped<global::SliceFx.ISliceValidator<global::WasiValidatorApp.Features.Items.CreateItem.Request>, global::WasiValidatorApp.Features.Items.CreateItemValidator>(services)", registrationSource, StringComparison.Ordinal);
         Assert.Contains("ServiceProviderServiceExtensions.GetService<global::SliceFx.ISliceValidator<global::WasiValidatorApp.Features.Items.CreateItem.Request>>(ctx.Services)", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("GetRequiredService<global::SliceFx.ISliceValidator", wasiSource, StringComparison.Ordinal);
@@ -2012,11 +2012,11 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiReflectionValidationApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE010" && diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE022");
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/items\"", wasiSource, StringComparison.Ordinal);
@@ -2080,12 +2080,12 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("WasiTypedResultsApp", source, includeWasiReference: true);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Equal(4, generatorDiagnostics.Count(static diagnostic => diagnostic.Id == "SLICE020"));
         Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"/ok\"", wasiSource, StringComparison.Ordinal);
@@ -2136,14 +2136,14 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var runResult = driver.GetRunResult();
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE050"));
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
         Assert.Contains("FeatureLib", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var generatedSource = string.Join(Environment.NewLine, runResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.DoesNotContain("FeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
@@ -2190,12 +2190,12 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         var driver = CreateDriver(("SliceFxAggregateReferences", "true"));
 
-        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE050");
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("global::SliceFx.FeatureLib_SliceRegistrations.AddSliceServices(services);", generatedSource, StringComparison.Ordinal);
         Assert.Contains("global::SliceFx.FeatureLib_SliceRegistrations.MapSliceRoutes(app);", generatedSource, StringComparison.Ordinal);
         Assert.Contains("[assembly: global::SliceFx.SliceAggregatedFeatureAssemblyAttribute(\"FeatureLib\")]", generatedSource, StringComparison.Ordinal);
@@ -2252,7 +2252,7 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         GeneratorDriver driver = CreateDriver(("SliceFxAggregateReferences", "true"));
 
-        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static diagnostic =>
             diagnostic.Id == "SLICE005"
@@ -2320,7 +2320,7 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         GeneratorDriver driver = CreateDriver(("SliceFxAggregateReferences", "true"));
 
-        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE012"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -2368,12 +2368,12 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         var driver = CreateDriver(("SliceFxAggregateReferences", "false"));
 
-        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE050");
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain("FeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
     }
 
@@ -2418,7 +2418,7 @@ public class SourceGeneratorCompileTests
             extraReferences: [MetadataReference.CreateFromImage(featureAssembly.ToArray())]);
         var driver = CreateDriver(("SliceFxAggregateReferences", "sure"));
 
-        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static diagnostic => diagnostic.Id == "SLICE051"));
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
@@ -2482,12 +2482,12 @@ public class SourceGeneratorCompileTests
             ]);
         var driver = CreateDriver(("SliceFxReferencedAssemblies", "FirstFeatureLib"));
 
-        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics);
+        var runDriver = driver.RunGeneratorsAndUpdateCompilation(hostCompilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, runDriver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE050");
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Contains("global::SliceFx.FirstFeatureLib_SliceRegistrations.AddSliceServices(services);", generatedSource, StringComparison.Ordinal);
         Assert.Contains("[assembly: global::SliceFx.SliceAggregatedFeatureAssemblyAttribute(\"FirstFeatureLib\")]", generatedSource, StringComparison.Ordinal);
         Assert.DoesNotContain("SecondFeatureLib_SliceRegistrations", generatedSource, StringComparison.Ordinal);
@@ -2530,7 +2530,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("OrderedApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         AssertBefore(generatedSource, "app.MapMethods(", "__CreateDataAnnotationsValidationFactory_global__OrderedApp_Features_Products_ListProducts");
@@ -2559,7 +2559,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("NamedApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         var generatedSource = string.Join(Environment.NewLine, driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
 
         Assert.Contains(".WithName(\"Legacy.Products.List\")", generatedSource, StringComparison.Ordinal);
@@ -2596,7 +2596,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("RawOverlapApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static d =>
             d.Id == "SLICE060" && d.Severity == DiagnosticSeverity.Warning);
@@ -2635,7 +2635,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("DynamicRawApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Id is "SLICE060" or "SLICE061");
     }
@@ -2669,7 +2669,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("RawMapMethodsApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static d =>
             d.Id == "SLICE060" && d.Severity == DiagnosticSeverity.Warning);
@@ -2704,7 +2704,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("NestedGroupApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static d =>
             d.Id == "SLICE060" && d.Severity == DiagnosticSeverity.Warning);
@@ -2745,7 +2745,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("OrderHintApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE007"));
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
@@ -2789,7 +2789,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("OrderHintOkApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE007");
     }
@@ -2838,13 +2838,13 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("GenericFilterApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var generatedSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
         var adminFilter = "global::GenericFilterApp.Features.Security.RequireApiKeyFilter<global::GenericFilterApp.Features.Security.AdminPolicy>";
         var readOnlyFilter = "global::GenericFilterApp.Features.Security.RequireApiKeyFilter<global::GenericFilterApp.Features.Security.ReadOnlyPolicy>";
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(outputCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Equal(1, CountOccurrences(generatedSource, $"services.AddScoped<{adminFilter}>();"));
         Assert.Equal(1, CountOccurrences(generatedSource, $"services.AddScoped<{readOnlyFilter}>();"));
         Assert.Equal(2, CountOccurrences(generatedSource, $".AddEndpointFilter<{adminFilter}>()"));
@@ -2888,7 +2888,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateHostCompilation("GenericOrderHintApp", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE007"));
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
@@ -3285,7 +3285,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateCompilation("App", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static d =>
             d.Id == "SLICE001" && d.Severity == DiagnosticSeverity.Error);
@@ -3310,7 +3310,7 @@ public class SourceGeneratorCompileTests
         var compilation = CreateCompilation("App", source);
         GeneratorDriver driver = CreateDriver();
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics);
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.Contains(generatorDiagnostics, static d =>
             d.Id == "SLICE003" && d.Severity == DiagnosticSeverity.Error);
@@ -3506,7 +3506,7 @@ public class SourceGeneratorCompileTests
     private static MemoryStream CompileGeneratedAssembly(CSharpCompilation compilation)
     {
         GeneratorDriver driver = CreateDriver();
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 

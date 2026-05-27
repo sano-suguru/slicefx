@@ -14,11 +14,11 @@ public sealed class SliceRuntimeHttpTests
     {
         await using var host = SliceTestHost.Create<SliceApp::Program>();
 
-        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "Alice" });
+        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "Alice" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("executed", Assert.Single(response.Headers.GetValues("X-Slice-Filter")));
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         var root = document.RootElement;
         Assert.Equal(1, root.GetProperty("id").GetInt32());
         Assert.Equal("Alice", root.GetProperty("name").GetString());
@@ -30,12 +30,12 @@ public sealed class SliceRuntimeHttpTests
     {
         await using var host = SliceTestHost.Create<SliceApp::Program>();
 
-        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "" });
+        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.False(response.Headers.Contains("X-Slice-Filter"));
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         var root = document.RootElement;
         Assert.Equal(400, root.GetProperty("status").GetInt32());
         Assert.True(root.GetProperty("errors").TryGetProperty("Name", out var errors));
@@ -47,11 +47,11 @@ public sealed class SliceRuntimeHttpTests
     {
         await using var host = SliceTestHost.Create<SliceApp::Program>();
 
-        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "blocked" });
+        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "blocked" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.False(response.Headers.Contains("X-Slice-Filter"));
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         var errors = document.RootElement.GetProperty("errors").GetProperty("Name");
         Assert.Equal("Name is blocked.", errors[0].GetString());
     }
@@ -61,11 +61,11 @@ public sealed class SliceRuntimeHttpTests
     {
         await using var host = SliceTestHost.Create<SliceApp::Program>();
 
-        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "x" });
+        using var response = await host.Client.PostAsJsonAsync("/widgets", new { name = "x" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.False(response.Headers.Contains("X-Slice-Filter"));
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         var errors = document.RootElement.GetProperty("errors").GetProperty("Name");
         var messages = errors.EnumerateArray().Select(static error => error.GetString()).ToArray();
         Assert.NotEmpty(messages);
