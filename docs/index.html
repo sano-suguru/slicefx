@@ -441,6 +441,10 @@
                         <p class="text-slate-400 leading-relaxed"><span class="lang-ja">Minimal API のバインディング、DI、エンドポイントフィルター、DataAnnotations をそのまま利用できます。必要な場面では ASP.NET 固有の <code>IResult</code> も使えます。</span><span class="lang-en">Keep Minimal API binding, DI, endpoint filters, and DataAnnotations; use ASP.NET-specific <code>IResult</code> when a slice needs it.</span></p>
                     </article>
                 </div>
+                <p class="mt-6 text-center text-sm text-slate-500">
+                    <span class="lang-ja">SliceFx は ASP.NET の機能を制限しません。認可・レート制限・キャッシュ・CORS・カスタム検証はそのまま使えます。<a class="text-brand-400 hover:underline" href="https://github.com/sano-suguru/slicefx/blob/main/docs/guides/aspnet-features.md">ASP.NET 機能とエスケープハッチ →</a></span>
+                    <span class="lang-en">SliceFx doesn't restrict any ASP.NET feature — authorization, rate limiting, caching, CORS, and custom validation all stay available. <a class="text-brand-400 hover:underline" href="https://github.com/sano-suguru/slicefx/blob/main/docs/guides/aspnet-features.md">ASP.NET features and escape hatches →</a></span>
+                </p>
             </div>
         </section>
 
@@ -536,7 +540,14 @@
                         <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
                         <div>
                             <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ロックインが小さい</span><span class="lang-en">Low lock-in</span></h3>
-                            <p class="text-slate-400"><span class="lang-ja">ジェネレータが出力するのは標準の <code>MapMethods</code> 呼び出しです。ジェネレータ参照を外して生成コードをその場で展開すれば、フレームワーク残留物ゼロの離脱経路になります。</span><span class="lang-en">The generator emits standard <code>MapMethods</code> calls. Remove the source generator reference and expand the generated output in place for a zero-framework exit path.</span></p>
+                            <p class="text-slate-400"><span class="lang-ja">ジェネレータが出力するのは標準の <code>MapMethods</code> 呼び出しです。ジェネレータ参照を外して生成コードをその場で展開すれば、フレームワーク残留物の少ない離脱経路になります。</span><span class="lang-en">The generator emits standard <code>MapMethods</code> calls. Remove the source generator reference and expand the generated output in place for a low-residue exit path.</span></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ASP.NET の機能はそのまま</span><span class="lang-en">Full ASP.NET surface</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">生成コードは純粋な Minimal API 展開です。<code>[Authorize]</code>、認証・認可ポリシー、出力キャッシュ、レート制限、CORS、OpenAPI、標準バインディングはすべて使い続けられます。<a class="text-brand-400 hover:underline" href="https://github.com/sano-suguru/slicefx/blob/main/docs/guides/aspnet-features.md">ASP.NET 機能とエスケープハッチ →</a></span><span class="lang-en">Generated code is pure Minimal API expansion. <code>[Authorize]</code>, auth policies, output caching, rate limiting, CORS, OpenAPI, and standard binding all stay available. <a class="text-brand-400 hover:underline" href="https://github.com/sano-suguru/slicefx/blob/main/docs/guides/aspnet-features.md">ASP.NET features and escape hatches →</a></span></p>
                         </div>
                     </div>
                 </div>
@@ -633,6 +644,10 @@ slicefx client typescript --output slice-api-client.ts
 slicefx openapi --output openapi.json</code></pre>
                 </div>
             </div>
+            <div class="mt-8 glass-panel rounded-xl border border-brand-400/20 bg-brand-950/10 p-5 text-sm text-slate-300">
+                <p class="font-semibold mb-2 text-brand-300"><span class="lang-ja">DI バインディングのヒント: <code>[FromServices]</code></span><span class="lang-en">DI binding tip: <code>[FromServices]</code></span></p>
+                <p><span class="lang-ja">POST / PUT / PATCH ハンドラーでは、ジェネレータがリクエスト本体をシングル DTO から推論します。具象クラスの DI サービスは <code>[FromServices]</code>、キー付きサービスは <code>[FromKeyedServices(key)]</code> を付けてください。インターフェイスと抽象クラスは DI から自動推論されます。<a class="text-brand-400 hover:underline" href="https://github.com/sano-suguru/slicefx/blob/main/docs/guides/aspnet-features.md">詳細 →</a></span><span class="lang-en">On POST / PUT / PATCH handlers the generator infers the request body from a single DTO. Annotate concrete DI services with <code>[FromServices]</code> (keyed services with <code>[FromKeyedServices(key)]</code>) so they aren't mistaken for the body. Interface and abstract dependencies are inferred from DI automatically. <a class="text-brand-400 hover:underline" href="https://github.com/sano-suguru/slicefx/blob/main/docs/guides/aspnet-features.md">DI binding details →</a></span></p>
+            </div>
         </section>
 
         <section class="max-w-7xl mx-auto px-6 py-20" id="portability">
@@ -647,6 +662,10 @@ slicefx openapi --output openapi.json</code></pre>
                     <p class="text-slate-500 text-sm">
                         <span class="lang-ja">edge は利用者に近い場所でコードを動かす考え方、WASI はサーバー側コードを WebAssembly component として動かす仕組みです。SliceFx.Wasi は、生成されたルートテーブルを使って ASP.NET の外でも portable な機能を dispatch します。</span>
                         <span class="lang-en">Edge means running code closer to users. WASI packages server-side code as a WebAssembly component; SliceFx.Wasi uses a generated route table to dispatch portable features outside ASP.NET.</span>
+                    </p>
+                    <p class="mt-4 text-slate-300">
+                        <span class="lang-ja">ほとんどのプロジェクトは 3 つの移植性クラスを同じコードベースで併用します。分類はツールに「どこで動かせるか」を伝えるもので、コードの良し悪しを表すものではありません。</span>
+                        <span class="lang-en">Most projects use all three portability classes in the same codebase — the classification tells tooling where a feature can run, not whether it is well-written.</span>
                     </p>
                 </div>
                 <div class="grid md:grid-cols-3 gap-6">

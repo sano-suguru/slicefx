@@ -23,7 +23,7 @@ Curious about the design choices? See **[Design decisions FAQ](docs/design-decis
 | Standard ASP.NET Core behavior | Minimal API binding, DI, endpoint filters, DataAnnotations, OpenAPI compatibility, and `IResult` remain available. |
 | Native AOT-friendly startup | Generated `MapMethods` calls avoid startup route scanning; `SliceFx.Core` has no `PackageReference` entries and only uses the `Microsoft.AspNetCore.App` framework reference. |
 | Early portability feedback | `slicefx routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only`; Lambda and wasi:http adapters are optional. |
-| Low lock-in | Generated code compiles down to standard `MapMethods` calls. Remove the source generator reference and expand the output in place for a zero-framework exit path. |
+| Low lock-in | Generated code compiles down to standard `MapMethods` calls. Remove the source generator reference and expand the output in place for a low-residue exit path. |
 
 SliceFx doesn't restrict any ASP.NET feature. For authorization, rate limiting, caching, CORS, and custom validation patterns see [What you keep](#what-you-keep).
 
