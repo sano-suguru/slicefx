@@ -8,6 +8,7 @@ nupkg/
 samples/SliceFx.WasiSample/dist/*.wasm
 samples/SliceFx.WasiSample/dist/component/
 samples/SliceFx.WasiSample/dist/node_modules/
+eng/typescript-typecheck/node_modules/
 samples/SliceFx.WasiSample/dist/.wrangler/
 *.nupkg
 *.snupkg

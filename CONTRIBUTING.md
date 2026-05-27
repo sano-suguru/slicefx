@@ -47,6 +47,20 @@ dotnet test SliceFx.slnx --configuration Release --no-build --no-restore
 dotnet format SliceFx.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
 ```
 
+### TypeScript type-check test
+
+`Generated_typescript_client_passes_tsc_type_check` verifies the generated TypeScript client compiles under `tsc --noEmit`. The test uses a locally pinned TypeScript install (no global `tsc` required).
+
+- **Node.js version**: pinned in `.node-version` (currently Node 24 LTS). Use fnm, nodenv, asdf, or mise to switch automatically.
+- **First run**: if `eng/typescript-typecheck/node_modules` is absent, the test runs `npm ci` automatically. Subsequent runs skip the install step.
+- **No Node.js**: the test is a no-op and passes vacuously. CI always provisions Node via `setup-node`.
+
+To pre-install manually:
+
+```pwsh
+npm ci --prefix eng/typescript-typecheck
+```
+
 For user-facing behavior, run the affected sample and smoke-test the route:
 
 ```pwsh

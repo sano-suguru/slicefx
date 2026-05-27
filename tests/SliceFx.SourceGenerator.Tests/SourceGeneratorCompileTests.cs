@@ -584,9 +584,9 @@ public class SourceGeneratorCompileTests
         Assert.Contains("\"tenant\":\"acme\"", success, StringComparison.Ordinal);
         Assert.Contains("\"sku\":\"abc\"", success, StringComparison.Ordinal);
         Assert.Contains("\"priority\":5", success, StringComparison.Ordinal);
-        Assert.StartsWith("400|application/json|", validationFailure, StringComparison.Ordinal);
+        Assert.StartsWith("400|application/problem+json|", validationFailure, StringComparison.Ordinal);
         Assert.Contains("\"Sku\":[\"SKU is blocked.\"]", validationFailure, StringComparison.Ordinal);
-        Assert.StartsWith("404|application/json|", missing, StringComparison.Ordinal);
+        Assert.StartsWith("404|application/problem+json|", missing, StringComparison.Ordinal);
         Assert.Contains("No route matched GET /missing", missing, StringComparison.Ordinal);
     }
 

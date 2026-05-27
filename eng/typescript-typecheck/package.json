@@ -1,0 +1,11 @@
+{
+  "name": "slicefx-ts-typecheck",
+  "private": true,
+  "description": "Pinned TypeScript used by SliceFx.Cli.Tests to type-check generated TypeScript clients. Not shipped.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

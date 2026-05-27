@@ -12,6 +12,8 @@ public static partial class SliceResult
 {
     private static readonly IReadOnlyDictionary<string, string> s_jsonHeaders =
         new Dictionary<string, string>(StringComparer.Ordinal) { ["Content-Type"] = "application/json" };
+    private static readonly IReadOnlyDictionary<string, string> s_problemHeaders =
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["Content-Type"] = "application/problem+json" };
     private static readonly IReadOnlyDictionary<string, string> s_emptyHeaders =
         new Dictionary<string, string>(StringComparer.Ordinal);
     private static readonly byte[] s_emptyBody = [];
@@ -119,7 +121,7 @@ public static partial class SliceResult
             400,
             Detail: null,
             Errors: errors);
-        return new(400, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(problem, SliceResultJsonContext.Default.ProblemDto));
+        return new(400, s_problemHeaders, JsonSerializer.SerializeToUtf8Bytes(problem, SliceResultJsonContext.Default.ProblemDto));
     }
 
     /// <summary>
@@ -132,7 +134,7 @@ public static partial class SliceResult
     public static WasiResponse Problem(int status, string title, string? detail = null)
     {
         var problem = new ProblemDto("about:blank", title, status, detail, Errors: null);
-        return new(status, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(problem, SliceResultJsonContext.Default.ProblemDto));
+        return new(status, s_problemHeaders, JsonSerializer.SerializeToUtf8Bytes(problem, SliceResultJsonContext.Default.ProblemDto));
     }
 
     /// <summary>

@@ -21,6 +21,7 @@ This project follows semantic versioning once stable packages are published. Bef
 - Added route source assembly reporting to CLI route metadata and notices when generated tooling consumes aggregated referenced routes.
 - Added route metadata manifests with portability vocabulary for `portable`, `partial`, and `aspnet-only` routes.
 - Added CLI scaffolding, route inspection, compatibility reporting, and C# typed client generation.
+- Generated C# and TypeScript clients now surface validation errors as typed exceptions (`SliceApiException` / `SliceApiError`) with structured `errors` access instead of a bare `HttpRequestException`. WASI and Lambda FunctionPerFeature `Problem`/`ValidationProblem` responses now use `application/problem+json` consistently with ASP.NET Core.
 - Added AWS Lambda, TestHost, and WASI experimental adapters.
 - Added DataAnnotations validation and `ISliceValidator<T>` custom validation support.
 - Added function-per-feature Lambda sample (`samples/SliceFx.LambdaFunctionPerFeatureSample/`) and restructured `docs/lambda.md` with a mode-selection guide, pipeline diagram, per-feature isolation section, and diagnostics reference table.

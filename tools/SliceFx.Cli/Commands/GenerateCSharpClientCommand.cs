@@ -119,8 +119,10 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.Globalization;");
+        sb.AppendLine("using System.Net;");
         sb.AppendLine("using System.Net.Http;");
         sb.AppendLine("using System.Net.Http.Json;");
+        sb.AppendLine("using System.Text.Json;");
         sb.AppendLine("using System.Threading;");
         sb.AppendLine("using System.Threading.Tasks;");
         sb.AppendLine();
@@ -159,6 +161,28 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine();
         sb.AppendLine("    private static string FormatRouteValue<T>(T value)");
         sb.AppendLine("        => Uri.EscapeDataString(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty);");
+        sb.AppendLine();
+        sb.AppendLine("    private static readonly JsonSerializerOptions __ProblemJsonOptions = new() { PropertyNameCaseInsensitive = true };");
+        sb.AppendLine();
+        sb.AppendLine("    private static async Task __ThrowApiException(HttpResponseMessage response, string operation, CancellationToken cancellationToken)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        SliceProblemDetails? problem = null;");
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var __body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);");
+        sb.AppendLine("            if (__body.Length > 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var __mediaType = response.Content.Headers.ContentType?.MediaType;");
+        sb.AppendLine("                if (__mediaType is \"application/problem+json\" or \"application/json\")");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    problem = JsonSerializer.Deserialize<SliceProblemDetails>(__body, __ProblemJsonOptions);");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch (Exception ex) when (ex is not OperationCanceledException) { }");
+        sb.AppendLine("        var __message = problem?.Title ?? $\"{operation} failed: {(int)response.StatusCode} {response.ReasonPhrase}\";");
+        sb.AppendLine("        throw new SliceApiException(__message, response.StatusCode, problem);");
+        sb.AppendLine("    }");
 
         foreach (var group in groups)
         {
@@ -166,6 +190,26 @@ internal static partial class GenerateCSharpClientCommand
             EmitGroupClient(sb, className, groupNames[group.Key], group.OrderBy(static route => route.FeatureName, StringComparer.Ordinal));
         }
 
+        sb.AppendLine();
+        sb.AppendLine("    public sealed class SliceProblemDetails");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public string? Type { get; set; }");
+        sb.AppendLine("        public string? Title { get; set; }");
+        sb.AppendLine("        public int? Status { get; set; }");
+        sb.AppendLine("        public string? Detail { get; set; }");
+        sb.AppendLine("        public IReadOnlyDictionary<string, string[]>? Errors { get; set; }");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public class SliceApiException : HttpRequestException");
+        sb.AppendLine("    {");
+        sb.AppendLine("        public SliceProblemDetails? Problem { get; }");
+        sb.AppendLine("        public IReadOnlyDictionary<string, string[]>? Errors => Problem?.Errors;");
+        sb.AppendLine("        public SliceApiException(string message, HttpStatusCode statusCode, SliceProblemDetails? problem)");
+        sb.AppendLine("            : base(message, null, statusCode)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            Problem = problem;");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -225,7 +269,10 @@ internal static partial class GenerateCSharpClientCommand
             sb.AppendLine("            using var __message = new HttpRequestMessage(HttpMethod.Get, __url);");
             sb.AppendLine("            _prepareRequest(__message);");
             sb.AppendLine("            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);");
-            sb.AppendLine("            __response.EnsureSuccessStatusCode();");
+            sb.AppendLine("            if (!__response.IsSuccessStatusCode)");
+            sb.AppendLine("            {");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"                await {outerClassName}.__ThrowApiException(__response, \"{route.FeatureName}\", cancellationToken).ConfigureAwait(false);");
+            sb.AppendLine("            }");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync<{responseType}>(cancellationToken).ConfigureAwait(false)");
             sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
             sb.AppendLine("        }");
@@ -240,7 +287,10 @@ internal static partial class GenerateCSharpClientCommand
 
         sb.AppendLine("            _prepareRequest(__message);");
         sb.AppendLine("            using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);");
-        sb.AppendLine("            __response.EnsureSuccessStatusCode();");
+        sb.AppendLine("            if (!__response.IsSuccessStatusCode)");
+        sb.AppendLine("            {");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"                await {outerClassName}.__ThrowApiException(__response, \"{route.FeatureName}\", cancellationToken).ConfigureAwait(false);");
+        sb.AppendLine("            }");
 
         if (responseType == "void")
         {

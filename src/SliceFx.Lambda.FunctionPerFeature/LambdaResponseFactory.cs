@@ -12,6 +12,8 @@ public static partial class LambdaResponseFactory
 {
     private static readonly Dictionary<string, string> s_jsonHeaders =
         new(StringComparer.Ordinal) { ["Content-Type"] = "application/json" };
+    private static readonly Dictionary<string, string> s_problemHeaders =
+        new(StringComparer.Ordinal) { ["Content-Type"] = "application/problem+json" };
 
     /// <summary>
     /// Creates a 200 OK response with a JSON response body.
@@ -50,7 +52,7 @@ public static partial class LambdaResponseFactory
             400,
             Detail: null,
             Errors: errors);
-        return Json(400, problem, LambdaResponseJsonContext.Default.ProblemDto);
+        return ProblemJson(400, problem);
     }
 
     /// <summary>
@@ -59,7 +61,18 @@ public static partial class LambdaResponseFactory
     public static APIGatewayHttpApiV2ProxyResponse Problem(int status, string title, string? detail = null)
     {
         var problem = new ProblemDto("about:blank", title, status, detail, Errors: null);
-        return Json(status, problem, LambdaResponseJsonContext.Default.ProblemDto);
+        return ProblemJson(status, problem);
+    }
+
+    private static APIGatewayHttpApiV2ProxyResponse ProblemJson(int status, ProblemDto problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        return new APIGatewayHttpApiV2ProxyResponse
+        {
+            StatusCode = status,
+            Headers = new Dictionary<string, string>(s_problemHeaders, StringComparer.Ordinal),
+            Body = JsonSerializer.Serialize(problem, LambdaResponseJsonContext.Default.ProblemDto),
+        };
     }
 
     private sealed partial record ProblemDto(

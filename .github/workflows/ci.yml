@@ -23,6 +23,17 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: eng/typescript-typecheck/package-lock.json
+
+      - name: Install TypeScript for client type-check tests
+        run: npm ci
+        working-directory: eng/typescript-typecheck
+
       - name: Restore
         run: dotnet restore SliceFx.slnx
 

@@ -2272,6 +2272,317 @@ public class CliFixtureTests
             ValidatorTypes: validatorTypes);
     }
 
+    [Fact]
+    public async Task Generated_csharp_client_emits_typed_exception_helpers_and_compiles_cleanly()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "client-exception-helpers",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>ClientExceptionHelpers</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Users/CreateUser.cs",
+            """
+            using System.ComponentModel.DataAnnotations;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace ClientExceptionHelpers.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public sealed record Request([Required, MinLength(2)] string Name);
+                public sealed record Response(int Id, string Name);
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1, req.Name));
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, exitCode);
+
+        var client = await File.ReadAllTextAsync(outputFile);
+        Assert.Contains("class SliceApiException", client);
+        Assert.Contains("class SliceProblemDetails", client);
+        Assert.Contains("if (!__response.IsSuccessStatusCode)", client);
+        Assert.Contains("PropertyNameCaseInsensitive = true", client);
+        Assert.Contains("application/problem+json", client);
+        Assert.Contains("application/json", client);
+        Assert.DoesNotContain("__response.EnsureSuccessStatusCode();", client);
+
+        // Verify generated client compiles cleanly via real SDK (includes SliceApiException, nullable refs, all usings)
+        await fixture.BuildAsync();
+    }
+
+    [Fact]
+    public async Task Generated_csharp_client_surfaces_structured_validation_errors_at_runtime()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "client-runtime-errors",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>ClientRuntimeErrors</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace ClientRuntimeErrors.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public sealed record Response(int Id);
+                public static Task<Response> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, exitCode);
+
+        await fixture.BuildAsync();
+
+        var dllPath = Path.Combine(fixture.Directory.FullName, "bin", "Debug", "net10.0", "client-runtime-errors.dll");
+        var assembly = Assembly.LoadFrom(dllPath);
+
+        var problemJson = /*lang=json,strict*/ "{\"title\":\"One or more validation errors occurred.\",\"status\":400,\"errors\":{\"Name\":[\"Name is required.\"]}}";
+        var stubResponse = new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent(problemJson, System.Text.Encoding.UTF8, "application/problem+json"),
+        };
+        using var handler = new StubHttpHandler(stubResponse);
+
+        var clientType = assembly.GetTypes().Single(static t => t.Name == "SliceApiClient" && !t.IsNested);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://test") };
+        var ctor = clientType.GetConstructor([typeof(HttpClient)])!;
+        var clientInstance = ctor.Invoke([httpClient])!;
+
+        var groupProp = clientType.GetProperties().First(static p => p.PropertyType.Name.EndsWith("Client", StringComparison.Ordinal));
+        var groupClientInstance = groupProp.GetValue(clientInstance)!;
+        var method = groupClientInstance.GetType().GetMethod("GetItemAsync")!;
+        var task = (Task)method.Invoke(groupClientInstance, [42, CancellationToken.None])!;
+
+        Exception? caught = null;
+        try { await task; }
+        catch (Exception ex) { caught = ex; }
+
+        Assert.NotNull(caught);
+        Assert.Equal("SliceApiException", caught.GetType().Name);
+
+        var errorsProp = caught.GetType().GetProperty("Errors")!;
+        var errors = (IReadOnlyDictionary<string, string[]>?)errorsProp.GetValue(caught);
+        Assert.NotNull(errors);
+        Assert.True(errors.ContainsKey("Name"), "Key 'Name' must be preserved verbatim (not lowercased to 'name').");
+        Assert.Contains("Name is required.", errors["Name"]);
+    }
+
+    [Fact]
+    public async Task Generated_typescript_client_emits_typed_error_helpers()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "ts-exception-helpers",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TsExceptionHelpers</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace TsExceptionHelpers.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public sealed record Response(int Id);
+                public static Task<Response> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var exitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, exitCode);
+
+        var client = await File.ReadAllTextAsync(outputFile);
+        Assert.Contains("class SliceApiError", client);
+        Assert.Contains("interface SliceProblemDetails", client);
+        Assert.Contains("response.json()", client);
+        Assert.Contains("content-type", client);
+        Assert.Contains("throw new SliceApiError(", client);
+    }
+
+    [Fact]
+    public async Task Generated_typescript_client_passes_tsc_type_check()
+    {
+        var tsDir = Path.Combine(FindRepoRoot(), "eng", "typescript-typecheck");
+        var localTsc = Path.Combine(tsDir, "node_modules", "typescript", "bin", "tsc");
+
+        // Verify node is reachable; test is a no-op if absent.
+        // TODO: replace return with Assert.Skip after xUnit v3 migration.
+        try
+        {
+            var (nodeExit, _, _) = await RunProcessAsync("node", ["--version"], null);
+            if (nodeExit != 0)
+            {
+                return;
+            }
+        }
+        catch { return; }
+
+        // Provision local TypeScript via npm ci when node_modules is absent (first local run).
+        // CI pre-installs via the "Install TypeScript for client type-check tests" step.
+        if (!File.Exists(localTsc))
+        {
+            var npm = OperatingSystem.IsWindows() ? "npm.cmd" : "npm";
+            try
+            {
+                var (npmExit, _, _) = await RunProcessAsync(npm, ["ci"], tsDir);
+                if (npmExit != 0)
+                {
+                    return;
+                }
+            }
+            catch { return; }
+        }
+
+        using var fixture = CliProjectFixture.Create(
+            "ts-compile-check",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TsCompileCheck</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace TsCompileCheck.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public sealed record Response(int Id);
+                public static Task<Response> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new Response(id));
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var tsOutput = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
+        var tsExitCode = await GenerateTypeScriptClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", tsOutput, "--force"])
+            .InvokeAsync();
+        Assert.Equal(0, tsExitCode);
+
+        var tsconfig = Path.Combine(fixture.Directory.FullName, "tsconfig.json");
+        await File.WriteAllTextAsync(tsconfig,
+            /*lang=json,strict*/ """{"compilerOptions":{"strict":true,"noEmit":true,"lib":["DOM","ES2020"],"target":"ES2020"}}""");
+
+        // Run tsc via `node <localTsc>` to avoid platform differences in .bin shim scripts.
+        var (tscExit, tscOut, tscErr) = await RunProcessAsync(
+            "node", [localTsc, "--project", tsconfig], fixture.Directory.FullName);
+        Assert.True(tscExit == 0, tscOut + tscErr);
+    }
+
+    private static async Task<(int exitCode, string stdout, string stderr)> RunProcessAsync(
+        string fileName, string[] args, string? workingDirectory)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = fileName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var arg in args)
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
+        if (workingDirectory is not null)
+        {
+            psi.WorkingDirectory = workingDirectory;
+        }
+        using var process = System.Diagnostics.Process.Start(psi)
+            ?? throw new InvalidOperationException($"Failed to start '{fileName}'.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"'{fileName}' did not exit within the timeout.");
+        }
+        return (process.ExitCode, await stdoutTask, await stderrTask);
+    }
+
+    private sealed class StubHttpHandler : HttpMessageHandler
+    {
+        private readonly HttpResponseMessage _response;
+        internal StubHttpHandler(HttpResponseMessage response) => _response = response;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            => Task.FromResult(_response);
+    }
+
     private sealed class CliProjectFixture : IDisposable
     {
         private CliProjectFixture(DirectoryInfo directory, FileInfo projectFile)
@@ -2317,10 +2628,10 @@ public class CliFixtureTests
                 RedirectStandardOutput = true,
             }) ?? throw new InvalidOperationException("Could not start dotnet build.");
 
-            var output = await process.StandardOutput.ReadToEndAsync();
-            var error = await process.StandardError.ReadToEndAsync();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
-            Assert.True(process.ExitCode == 0, output + error);
+            Assert.True(process.ExitCode == 0, await stdoutTask + await stderrTask);
         }
 
         public void Dispose() => Directory.Delete(recursive: true);

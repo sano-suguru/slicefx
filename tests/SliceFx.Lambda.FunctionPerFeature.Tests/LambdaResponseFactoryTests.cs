@@ -40,7 +40,7 @@ public sealed class LambdaResponseFactoryTests
         var response = LambdaResponseFactory.Problem(404, "Not Found", "Missing");
 
         Assert.Equal(404, response.StatusCode);
-        Assert.Equal("application/json", response.Headers["Content-Type"]);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
         using var document = JsonDocument.Parse(response.Body);
         Assert.Equal("Not Found", document.RootElement.GetProperty("title").GetString());
         Assert.Equal(404, document.RootElement.GetProperty("status").GetInt32());
@@ -55,7 +55,7 @@ public sealed class LambdaResponseFactoryTests
             new Dictionary<string, string[]> { ["Name"] = ["Name is required."] });
 
         Assert.Equal(400, response.StatusCode);
-        Assert.Equal("application/json", response.Headers["Content-Type"]);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
         using var document = JsonDocument.Parse(response.Body);
         Assert.Equal("One or more validation errors occurred.", document.RootElement.GetProperty("title").GetString());
         Assert.Equal("Name is required.", document.RootElement.GetProperty("errors").GetProperty("Name")[0].GetString());
