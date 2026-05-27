@@ -25,6 +25,8 @@ Curious about the design choices? See **[Design decisions FAQ](docs/design-decis
 | Early portability feedback | `slicefx routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only`; Lambda and wasi:http adapters are optional. |
 | Low lock-in | Generated code compiles down to standard `MapMethods` calls. Remove the source generator reference and expand the output in place for a zero-framework exit path. |
 
+SliceFx doesn't restrict any ASP.NET feature. For authorization, rate limiting, caching, CORS, and custom validation patterns see [What you keep](#what-you-keep).
+
 SliceFx is not a replacement for ASP.NET Core. It is a generated vertical-slice layer around Minimal APIs for teams that want explicit feature files, generated contracts, and portability checks without adopting a mediator stack or custom endpoint pipeline.
 
 SliceFx compiles down to standard `WebApplication.MapMethods` calls — removing the source generator reference and expanding the generated output in place is the full exit path. For teams already on FastEndpoints or similar, SliceFx fills a different niche: compile-time portability classification across ASP.NET, Lambda, and wasi:http, not a richer filter and pipeline ecosystem.
@@ -51,6 +53,8 @@ SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions un
 **SDK and analyzer policy:** the repository targets .NET 10 with SDK `10.0.300` pinned in `global.json` and `rollForward: latestFeature`. Warnings and code-analysis diagnostics are treated as errors, but the analyzer recommendation set is pinned to `10.0-recommended` so normal PR/main builds do not unexpectedly break when a newer SDK promotes analyzer rules. A separate analyzer canary workflow checks the latest .NET 10 analyzer behavior and reports drift for dedicated maintenance PRs.
 
 WASI support (`SliceFx.Wasi`) is experimental and depends on an unstable upstream toolchain: [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet), NativeAOT-LLVM preview packages, WASI Preview 2 / `wasi:http@0.2`, and Cloudflare's JS transpile/shim path when targeting Workers. Native WASI publish requires Linux x64 or Windows x64; macOS requires a Linux x64 Docker cross-build. "Experimental" means SliceFx.Wasi's own 0.x API may change; "unstable upstream toolchain" means those external build and deployment tools may break independently of SliceFx runtime code.
+
+All adapters are opt-in. Reference only the packages you need; the source generator emits code only for the surfaces you reference. An ASP.NET-only app uses just `SliceFx.Core` and `SliceFx.SourceGenerator`.
 
 | Package | Purpose |
 | --- | --- |
@@ -104,6 +108,8 @@ public static class CreateUser
 
 The generator discovers `[Feature]` classes, emits `AddSlice()` / `MapSlices()`, wires Minimal API binding, and attaches validation. Prefer plain response records for portable endpoints. Use `IResult` when the feature intentionally needs ASP.NET-specific response helpers such as `Results.NotFound()` or `Results.NoContent()`.
 
+> **DI binding note:** On POST/PUT/PATCH handlers the generator infers the request body from a single request-like DTO. Annotate concrete DI services with `[FromServices]` (and keyed services with `[FromKeyedServices(key)]`) so they aren't mistaken for the body. Interface and abstract dependencies are inferred from DI automatically. See `samples/SliceFx.Sample/Features/Users/PromoteUser.cs` for a working example.
+
 ## Filters and validation
 
 Feature filters are standard ASP.NET Core `IEndpointFilter` types:
@@ -133,6 +139,33 @@ Read more:
 - [Filter declarations](docs/guides/filter-declarations.md)
 - [Filter configuration](docs/patterns/filter-configuration.md)
 - [Return-type guidance](docs/guides/return-types.md)
+- [ASP.NET features and escape hatches](docs/guides/aspnet-features.md)
+
+## What you keep
+
+SliceFx generated code is pure Minimal API expansion — the full ASP.NET surface stays available.
+
+**Features you keep on every endpoint:**
+
+- ASP.NET Core Authorization — `[Authorize]`, policies, fallback policy, `RequireAuthorization()`
+- Output caching — `CacheOutput()` via route group
+- Rate limiting — `RequireRateLimiting()` via route group
+- CORS — `RequireCors()` via route group
+- Exception handling middleware and `IProblemDetailsService`
+- `[Filter<T>]` endpoint filters with full `IEndpointFilter` access
+- OpenAPI integration — `builder.Services.AddOpenApi()` / `app.MapOpenApi()`
+- Standard Minimal API binding — `[FromRoute]`, `[FromQuery]`, `[FromHeader]`, `[FromForm]`, `[FromServices]`, `[FromKeyedServices]`
+
+**Escape hatches for common needs:**
+
+| Need | Default path | Escape hatch |
+| --- | --- | --- |
+| Validation | DataAnnotations attributes on the request record | Implement `ISliceValidator<T>` for the request type |
+| Authorization | ASP.NET Core Authorization (`[Authorize]`, policies) | Group-level `RequireAuthorization(...)` or fallback policy |
+| Rate limiting / caching / CORS | Route group: `app.MapGroup("/api").RequireRateLimiting(...).MapSlices()` | Per-group or per-endpoint policy |
+| Cross-cutting behavior | `[Filter<T>]` endpoint filter | Standard ASP.NET Core middleware |
+
+For more detail see [ASP.NET features and escape hatches](docs/guides/aspnet-features.md).
 
 ## What works today
 
@@ -165,6 +198,8 @@ The C# typed client reuses C# request/response types rather than generating DTO 
 
 ## Portability
 
+Most projects use all three portability classes in the same codebase — the classification tells tooling where a feature can run, not whether it is well-written.
+
 The source generator classifies each feature endpoint at build time. `slicefx routes` reports the result; the same data drives typed-client generation, WASI route tables, and Lambda function-per-feature eligibility.
 
 | Class | Meaning |
@@ -173,7 +208,7 @@ The source generator classifies each feature endpoint at build time. `slicefx ro
 | `partial` | Portable handler shape, but attached endpoint filters are ASP.NET-only today. |
 | `aspnet-only` | Returns `IResult` or uses ASP.NET-specific behavior. The full Minimal API feature set is available. |
 
-Mixing all three classes in the same project is the expected pattern. `aspnet-only` features are standard Minimal API endpoints with the complete ASP.NET ecosystem available — they are not penalized or degraded. The classification tells tooling where a feature can run, not whether it is well-written.
+`aspnet-only` features are standard Minimal API endpoints with the complete ASP.NET ecosystem available — they are not penalized or degraded.
 
 ### WASI and edge are optional
 
@@ -214,6 +249,7 @@ The Slice route manifest is a separate build-time artifact for portability class
 | WASI deploy path | [samples/SliceFx.WasiSample/README.md](samples/SliceFx.WasiSample/README.md) |
 | Migration guides | [Minimal API](docs/migrations/from-minimal-api.md), [controllers](docs/migrations/from-controllers.md) |
 | Platform abstraction and DI swap patterns | [docs/patterns/platform-abstraction.md](docs/patterns/platform-abstraction.md) |
+| ASP.NET features and escape hatches | [docs/guides/aspnet-features.md](docs/guides/aspnet-features.md) |
 | Design decisions FAQ | [docs/design-decisions.md](docs/design-decisions.md) |
 | Product direction | [docs/product-direction.md](docs/product-direction.md) |
 | Production readiness | [docs/production-readiness.md](docs/production-readiness.md) |
