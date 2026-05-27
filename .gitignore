@@ -23,6 +23,7 @@ coverage.*
 
 # BenchmarkDotNet output
 BenchmarkDotNet.Artifacts/
+BenchmarkDotNet.Artifacts.Runtime/
 
 # Visual Studio / Rider / VS Code user state
 .vs/

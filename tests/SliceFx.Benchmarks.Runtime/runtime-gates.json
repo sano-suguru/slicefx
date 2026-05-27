@@ -1,0 +1,17 @@
+{
+  "$comment": "Runtime benchmark gate values. Means in milliseconds; allocations in megabytes. Baseline: Apple M1, macOS 26.4.1, runtime 10.0.8 / SDK 10.0.300, ServerGC=true. Gates set at ~2x baseline. CI enforces these on GitHub Actions ubuntu-latest (x64); the 2x headroom absorbs cross-architecture and infrastructure noise — a breach is a signal to investigate, not necessarily a confirmed regression. See docs/production-readiness.md.",
+  "gates": [
+    { "method": "BuildHostOnly", "featureCount": 50,  "maxMeanMs": 160.0, "maxAllocatedMB": 0.65 },
+    { "method": "BuildHostOnly", "featureCount": 100, "maxMeanMs": 160.0, "maxAllocatedMB": 0.65 },
+    { "method": "BuildHostOnly", "featureCount": 200, "maxMeanMs": 160.0, "maxAllocatedMB": 0.65 },
+    { "method": "Startup",       "featureCount": 50,  "maxMeanMs": 325.0, "maxAllocatedMB": 3.0  },
+    { "method": "Startup",       "featureCount": 100, "maxMeanMs": 465.0, "maxAllocatedMB": 5.5  },
+    { "method": "Startup",       "featureCount": 200, "maxMeanMs": 712.0, "maxAllocatedMB": 12.0 },
+    { "method": "Request_SimpleGet",          "featureCount": 50,  "maxMeanMs": 0.30, "maxAllocatedMB": 0.025 },
+    { "method": "Request_SimpleGet",          "featureCount": 100, "maxMeanMs": 0.30, "maxAllocatedMB": 0.025 },
+    { "method": "Request_SimpleGet",          "featureCount": 200, "maxMeanMs": 0.30, "maxAllocatedMB": 0.025 },
+    { "method": "Request_PostWithValidation", "featureCount": 50,  "maxMeanMs": 0.33, "maxAllocatedMB": 0.030 },
+    { "method": "Request_PostWithValidation", "featureCount": 100, "maxMeanMs": 0.33, "maxAllocatedMB": 0.030 },
+    { "method": "Request_PostWithValidation", "featureCount": 200, "maxMeanMs": 0.33, "maxAllocatedMB": 0.030 }
+  ]
+}

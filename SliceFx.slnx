@@ -20,6 +20,11 @@
     <Project Path="src/SliceFx.Wasi/SliceFx.Wasi.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SliceFx.Benchmarks/SliceFx.Benchmarks.csproj" />
+    <Project Path="tests/SliceFx.Benchmarks.Runtime/SliceFx.Benchmarks.Runtime.csproj" />
+    <Project Path="tests/SliceFx.Benchmarks.RuntimeApps/Bench50/Bench50.csproj" />
+    <Project Path="tests/SliceFx.Benchmarks.RuntimeApps/Bench100/Bench100.csproj" />
+    <Project Path="tests/SliceFx.Benchmarks.RuntimeApps/Bench200/Bench200.csproj" />
     <Project Path="tests/SliceFx.Core.Tests/SliceFx.Core.Tests.csproj" />
     <Project Path="tests/SliceFx.Cli.Tests/SliceFx.Cli.Tests.csproj" />
     <Project Path="tests/SliceFx.Lambda.FunctionPerFeature.Tests/SliceFx.Lambda.FunctionPerFeature.Tests.csproj" />

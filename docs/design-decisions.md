@@ -45,7 +45,7 @@ The [`IIncrementalGenerator`](https://learn.microsoft.com/en-us/dotnet/csharp/ro
 - Reduces the `Compilation` to small, equatable record types **before** the final `RegisterSourceOutput` action, preventing cache busts when unrelated parts of the compilation change.
 - `IncrementalCacheTests` in `tests/SliceFx.SourceGenerator.Tests` explicitly verifies that `SliceFeatureModels` and `SliceReferencedModules` stages report `Cached` / `Unchanged` on no-op edits.
 
-The full perf baseline (M1, 200 features, 6.7 ms cold-run) is in [`production-readiness.md`](production-readiness.md), with **2× headroom gates enforced nightly** by `.github/workflows/perf.yml`.
+The full perf baseline (M1, 200 features, 6.7 ms cold-run) is in [`production-readiness.md`](production-readiness.md), with **2× headroom gates enforced nightly** by `.github/workflows/perf.yml`. Runtime performance (host startup cost and per-request dispatch latency across 50/100/200 features) is measured separately in `tests/SliceFx.Benchmarks.Runtime` and gated by the same script against `runtime-gates.json`.
 
 ## Why DataAnnotations *and* `ISliceValidator<T>`?
 
