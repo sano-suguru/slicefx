@@ -23,3 +23,13 @@ public sealed class InMemoryWidgetStore : IWidgetStore
     public Widget Add(string name)
         => new(Interlocked.Increment(ref _nextId), name);
 }
+
+public interface IClock
+{
+    string Name { get; }
+}
+
+public sealed class PromotionClock : IClock
+{
+    public string Name => "promotion-clock";
+}

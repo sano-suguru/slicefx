@@ -3292,6 +3292,54 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_reports_SLICE002_for_non_public_handle_method()
+    {
+        var source = """
+            using SliceFx;
+
+            namespace App.Features.Orders;
+
+            [Feature("GET /orders")]
+            public static class GetOrders
+            {
+                internal static string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateCompilation("App", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.Contains(generatorDiagnostics, static d =>
+            d.Id == "SLICE002" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE002_for_non_static_handle_method()
+    {
+        var source = """
+            using SliceFx;
+
+            namespace App.Features.Orders;
+
+            [Feature("GET /orders")]
+            public static class GetOrders
+            {
+                public string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateCompilation("App", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.Contains(generatorDiagnostics, static d =>
+            d.Id == "SLICE002" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
     public void Generator_reports_SLICE003_for_feature_with_multiple_handle_methods()
     {
         var source = """

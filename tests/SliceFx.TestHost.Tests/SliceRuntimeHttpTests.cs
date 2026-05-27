@@ -89,4 +89,40 @@ public sealed class SliceRuntimeHttpTests
         Assert.NotEmpty(messages);
         Assert.DoesNotContain("Name failed Slice validator.", messages);
     }
+
+    [Fact]
+    public async Task PromoteWidget_resolves_route_body_FromServices_interface_and_keyed_dependencies()
+    {
+        await using var host = SliceTestHost.Create<SliceApp::Program>();
+
+        using var response = await host.Client.PostAsJsonAsync(
+            "/widgets/7/promote",
+            new { tier = "gold" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var root = document.RootElement;
+        Assert.Equal(7, root.GetProperty("id").GetInt32());
+        Assert.Equal("gold", root.GetProperty("tier").GetString());
+        Assert.Equal("promote:7:gold", root.GetProperty("audit").GetString());
+        Assert.Equal("promotion-clock", root.GetProperty("clock").GetString());
+    }
+
+    [Fact]
+    public async Task PromoteWidget_validates_inferred_body_dto_not_concrete_service()
+    {
+        await using var host = SliceTestHost.Create<SliceApp::Program>();
+
+        using var response = await host.Client.PostAsJsonAsync(
+            "/widgets/7/promote",
+            new { tier = "x" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.True(document.RootElement.GetProperty("errors").TryGetProperty("Tier", out var tierErrors));
+        Assert.NotEmpty(tierErrors.EnumerateArray());
+    }
 }
