@@ -33,7 +33,6 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("using global::SliceFx.Wasi;");
         sb.AppendLine("using global::SliceFx.Wasi.Binding;");
         sb.AppendLine("using global::SliceFx.Wasi.Routing;");
-        sb.AppendLine("using global::SliceFx.Wasi.Validation;");
         if (!features.IsEmpty || !validators.IsEmpty)
         {
             sb.AppendLine();

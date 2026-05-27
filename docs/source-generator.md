@@ -21,7 +21,7 @@ public static IEndpointRouteBuilder MapSlices(this IEndpointRouteBuilder app)
 }
 ```
 
-Generated validation is emitted only when supported DataAnnotations rules are present (`Required`, length/range rules, `EmailAddress`, `Url`, and `RegularExpression`). Unsupported reflection-based validation such as custom `ValidationAttribute`, type-level validation, `IValidatableObject`, or resource-based messages is reported with `SLICE010` for ASP.NET registrations so default registrations stay reflection-free and trimming-friendly; move those rules to `ISliceValidator<TRequest>`.
+Generated validation is emitted only when supported DataAnnotations rules are present (`Required`, length/range rules, `EmailAddress`, `Url`, and `RegularExpression`). Support is shape-conditional: `StringLength` is generated only for `string` properties, `Range` only for numeric types (`int`, `long`, `double`, `float`, `decimal`), and any attribute carrying a resource or localized error message is treated as unsupported regardless of type. Unsupported reflection-based validation such as custom `ValidationAttribute`, type-level validation, `IValidatableObject`, resource-based messages, or supported attribute types in unsupported shapes is reported with `SLICE010` for ASP.NET registrations so default registrations stay reflection-free and trimming-friendly; move those rules to `ISliceValidator<TRequest>`.
 
 ## Multi-assembly apps
 
