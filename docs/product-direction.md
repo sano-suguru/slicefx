@@ -1,6 +1,6 @@
 # Product direction
 
-SliceFx should stay focused on a simple product promise: one feature file per endpoint, portable across ASP.NET-hosted apps, serverless functions, and WASI hosts without changing the feature code. Authors keep the standard ASP.NET Core model, write one explicit feature file per endpoint, and let SliceFx generate the surrounding API contracts and tooling from that shape. The public story should be SliceFx's own: portable .NET API features with generated contracts.
+SliceFx should stay focused on a simple product promise: one feature file per endpoint, portable across ASP.NET-hosted apps, serverless functions, and WASI hosts without changing the feature code. Authors keep the standard ASP.NET Core model, write one explicit feature file per endpoint, and let SliceFx generate the surrounding API contracts and tooling from that shape. The public story should be SliceFx's own: one feature file per endpoint, with generated API contracts and optional portability across host environments.
 
 ## Product principles
 
@@ -11,10 +11,10 @@ SliceFx should stay focused on a simple product promise: one feature file per en
 
 ## Primary users
 
-- **AOT, serverless, and WASI-minded teams** that want the same feature file to run across ASP.NET-hosted apps, function hosts, and wasi:http hosts, with portability classified at build time rather than discovered at deploy time.
 - **Small API and product teams** that want endpoint code to stay local to the feature instead of spreading across controllers, services, validators, and mapping profiles.
 - **Blazor and .NET client teams** that want typed clients generated from server routes instead of hand-maintained route strings and DTO wiring.
 - **Framework-light .NET teams** that prefer ASP.NET Core Minimal API binding and endpoint filters over mediator-style abstractions or required third-party validation stacks.
+- **AOT, serverless, and WASI-minded teams** that want the same feature file to run across ASP.NET-hosted apps, function hosts, and wasi:http hosts, with portability classified at build time rather than discovered at deploy time.
 
 ## What is already true
 

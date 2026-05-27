@@ -342,10 +342,14 @@
                     <a href="#engineering" class="nav-link hover:text-white"><span class="lang-ja">技術詳細</span><span class="lang-en">Engineering</span></a>
                 </div>
                 <div class="flex items-center gap-3 sm:gap-4">
-                    <button id="langToggle" class="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors px-3 py-1.5 rounded-md bg-slate-800/80 border border-slate-700 hover:bg-slate-700" type="button" aria-label="Switch language to Japanese" aria-live="polite">
-                        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
-                        <span class="lang-ja">EN</span><span class="lang-en">JA</span>
-                    </button>
+                    <div class="relative flex items-center">
+                        <i data-lucide="globe" class="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none z-10"></i>
+                        <select id="langSelect" class="appearance-none text-xs font-bold text-slate-300 hover:text-white transition-colors pl-7 pr-6 py-1.5 rounded-md bg-slate-800/80 border border-slate-700 hover:bg-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500" aria-label="Select language">
+                            <option value="en">EN</option>
+                            <option value="ja">JA</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="absolute right-1.5 w-3 h-3 text-slate-400 pointer-events-none z-10"></i>
+                    </div>
                     <a href="https://github.com/sano-suguru/slicefx" class="flex px-3 sm:px-4 py-2 text-sm font-medium bg-white text-slate-900 rounded-md hover:bg-slate-200 transition-colors items-center gap-2" aria-label="GitHub repository">
                         <svg class="github-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.63 7.63 0 0 1 8 3.86c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
@@ -526,6 +530,13 @@
                         <div>
                             <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ルートマニフェスト</span><span class="lang-en">Route-manifest tooling</span></h3>
                             <p class="text-slate-400"><span class="lang-ja">ルートマニフェストをもとに、<code data-kind="command">slicefx routes</code>、<code data-kind="command">slicefx client csharp</code>、<code data-kind="command">slicefx client typescript</code>、<code data-kind="command">slicefx openapi</code> が同じ定義を使います。</span><span class="lang-en">The route manifest powers <code data-kind="command">slicefx routes</code>, <code data-kind="command">slicefx client csharp</code>, <code data-kind="command">slicefx client typescript</code>, and <code data-kind="command">slicefx openapi</code> from the same definitions.</span></p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 mt-1"><i data-lucide="check-circle-2" class="text-brand-400"></i></div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-2"><span class="lang-ja">ロックインが小さい</span><span class="lang-en">Low lock-in</span></h3>
+                            <p class="text-slate-400"><span class="lang-ja">ジェネレータが出力するのは標準の <code>MapMethods</code> 呼び出しです。ジェネレータ参照を外して生成コードをその場で展開すれば、フレームワーク残留物ゼロの離脱経路になります。</span><span class="lang-en">The generator emits standard <code>MapMethods</code> calls. Remove the source generator reference and expand the generated output in place for a zero-framework exit path.</span></p>
                         </div>
                     </div>
                 </div>
@@ -753,7 +764,7 @@ slicefx openapi --output openapi.json</code></pre>
     <script>
         const languageStorageKey = 'slice-docs-language';
         const supportedLanguages = new Set(['en', 'ja']);
-        const langToggle = document.getElementById('langToggle');
+        const langSelect = document.getElementById('langSelect');
         const copyStatus = document.getElementById('copyStatus');
         const copyCommandButton = document.getElementById('copyCommandButton');
         let copyStatusTimeout;
@@ -785,9 +796,8 @@ slicefx openapi --output openapi.json</code></pre>
             document.body.setAttribute('data-lang', nextLang);
             document.documentElement.lang = nextLang;
 
-            if (langToggle) {
-                const switchLabel = nextLang === 'ja' ? '英語に切り替え' : 'Switch language to Japanese';
-                langToggle.setAttribute('aria-label', switchLabel);
+            if (langSelect) {
+                langSelect.value = nextLang;
             }
 
             if (copyCommandButton) {
@@ -814,9 +824,8 @@ slicefx openapi --output openapi.json</code></pre>
             }
         });
 
-        langToggle?.addEventListener('click', () => {
-            const newLang = getCurrentLanguage() === 'ja' ? 'en' : 'ja';
-            setLanguage(newLang, true);
+        langSelect?.addEventListener('change', () => {
+            setLanguage(langSelect.value, true);
         });
 
         function copyText(text) {
