@@ -109,7 +109,7 @@ The source generator discovers startup types and calls `ConfigureServices` once 
 - Header parameters (`[FromHeader(Name = "...")]`)
 - JSON body contract types, including nested `Request` records and non-nested shared DTOs
 - Explicit `[FromBody]` JSON bodies
-- DI services (`[FromServices]` for concrete service types; interface and abstract dependencies are inferred from DI)
+- DI services — interface and abstract types are inferred from DI automatically; **concrete service types require `[FromServices]`** because the Lambda function-per-feature generator uses a compile-time heuristic and cannot probe the DI container (an un-annotated concrete type becomes a body candidate and the feature is excluded with SLICE033). See [parameter-binding.md](guides/parameter-binding.md).
 - `CancellationToken`
 
 Missing nullable parameters bind `null`; missing non-nullable parameters return `400 Bad Request`. Present empty strings bind as `""`.

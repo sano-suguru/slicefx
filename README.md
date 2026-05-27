@@ -108,7 +108,7 @@ public static class CreateUser
 
 The generator discovers `[Feature]` classes, emits `AddSlice()` / `MapSlices()`, wires Minimal API binding, and attaches validation. Prefer plain response records for portable endpoints. Use `IResult` when the feature intentionally needs ASP.NET-specific response helpers such as `Results.NotFound()` or `Results.NoContent()`.
 
-> **DI binding note:** On POST/PUT/PATCH handlers the generator infers the request body from a single request-like DTO. Annotate concrete DI services with `[FromServices]` (and keyed services with `[FromKeyedServices(key)]`) so they aren't mistaken for the body. Interface and abstract dependencies are inferred from DI automatically. See `samples/SliceFx.Sample/Features/Users/PromoteUser.cs` for a working example.
+> **DI binding note:** On the ASP.NET path binding is plain Minimal API — any registered service (concrete or interface) resolves from DI automatically, identical to raw Minimal API. Annotate concrete service params with `[FromServices]` (keyed services with `[FromKeyedServices(key)]`) only if you want the handler portable across ASP.NET, WASI, and Lambda — the portable-dispatch generator cannot probe the DI container at compile time. See [`docs/guides/parameter-binding.md`](docs/guides/parameter-binding.md) and `samples/SliceFx.Sample/Features/Users/PromoteUser.cs`.
 
 ## Filters and validation
 

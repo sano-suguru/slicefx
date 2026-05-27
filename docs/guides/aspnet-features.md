@@ -104,38 +104,19 @@ audit, etc.).
 **Escape hatch:** standard ASP.NET Core middleware for concerns that apply to all requests or to
 non-SliceFx endpoints too.
 
-## DI binding: [FromServices] and concrete service types
+## DI binding
 
-On POST/PUT/PATCH handlers the generator infers the request body from a single request-like DTO.
-Interface and abstract DI dependencies are inferred from DI automatically, but **concrete service
-types must be annotated with `[FromServices]`** so the generator doesn't treat them as the body.
+On the ASP.NET path the generated code is plain Minimal API — no binding annotations are
+injected. ASP.NET Core resolves **any registered service** (concrete or interface) from DI via
+its built-in `IServiceProviderIsService` check; `[FromServices]` is never required here and
+behaves identically to raw Minimal API.
 
-```csharp
-public static class PromoteUser
-{
-    public record Request([Required, MinLength(1)] string Tier);
+> **Portability note:** Annotate concrete service parameters with `[FromServices]` (keyed
+> services with `[FromKeyedServices(key)]`) if you want the handler to be portable across
+> ASP.NET, WASI, and Lambda. The portable-dispatch generator uses a compile-time heuristic
+> and cannot probe the DI container; an un-annotated concrete service becomes a second body
+> candidate and the feature is excluded from the portable route table (SLICE023/SLICE033).
+>
+> See [Parameter binding across hosting targets](parameter-binding.md) for the full rules.
 
-    // AuditLog is a concrete class — must use [FromServices]
-    // IClock is an interface — inferred from DI automatically
-    public static async Task<Response> Handle(
-        Guid id,
-        Request req,
-        [FromServices] AuditLog audit,
-        IClock clock,
-        CancellationToken ct)
-    {
-        // ...
-    }
-}
-```
-
-Keyed services require `[FromKeyedServices(key)]`:
-
-```csharp
-public static async Task<Response> Handle(
-    Request req,
-    [FromKeyedServices("promotion")] IClock clock,
-    CancellationToken ct)
-```
-
-See `samples/SliceFx.Sample/Features/Users/PromoteUser.cs` for a full working example.
+`samples/SliceFx.Sample/Features/Users/PromoteUser.cs` demonstrates the pattern.

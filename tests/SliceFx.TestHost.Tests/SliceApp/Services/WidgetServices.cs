@@ -1,5 +1,14 @@
 namespace SliceFx.TestHost.SliceApp.Services;
 
+public sealed class AuditRecorder
+{
+    private string _latest = "";
+
+    public void Record(string message) => _latest = message;
+
+    public string GetLatestEntry() => _latest;
+}
+
 public interface IWidgetStore
 {
     Widget Add(string name);

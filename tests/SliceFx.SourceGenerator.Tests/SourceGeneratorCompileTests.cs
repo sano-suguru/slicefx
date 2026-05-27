@@ -3378,6 +3378,117 @@ public class SourceGeneratorCompileTests
         }
     }
 
+    [Fact]
+    public void Generator_emits_SLICE023_and_excludes_wasi_route_for_unannotated_concrete_service_on_post()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace ConcreteBodyApp
+            {
+                public sealed record CreateItemRequest(string Name);
+                public sealed record CreateItemResponse(string Name);
+                public sealed class ConcreteAuditLog { public void Record(string msg) { } }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace ConcreteBodyApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public static ConcreteBodyApp.CreateItemResponse Handle(
+                        ConcreteBodyApp.CreateItemRequest req,
+                        ConcreteBodyApp.ConcreteAuditLog audit)
+                    {
+                        audit.Record(req.Name);
+                        return new(req.Name);
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ConcreteBodyApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE023");
+        Assert.Contains("// SLICE023:", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ReadAsync<global::ConcreteBodyApp.CreateItemRequest>", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Generator_includes_wasi_route_and_emits_di_service_lookup_when_concrete_service_has_FromServices()
+    {
+        var source = """
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Mvc;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace ConcreteBodyApp
+            {
+                public sealed record CreateItemRequest(string Name);
+                public sealed record CreateItemResponse(string Name);
+                public sealed class ConcreteAuditLog { public void Record(string msg) { } }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+                    private WasiJsonContext() : base(null) { }
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+            }
+
+            namespace ConcreteBodyApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public static ConcreteBodyApp.CreateItemResponse Handle(
+                        ConcreteBodyApp.CreateItemRequest req,
+                        [FromServices] ConcreteBodyApp.ConcreteAuditLog audit)
+                    {
+                        audit.Record(req.Name);
+                        return new(req.Name);
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ConcreteBodyApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE023");
+        Assert.Contains(".ReadAsync<global::ConcreteBodyApp.CreateItemRequest>", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("ctx.Services.GetRequiredService(typeof(global::ConcreteBodyApp.ConcreteAuditLog))", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+    }
+
     private static async Task<APIGatewayHttpApiV2ProxyResponse> InvokeLambdaHandlerAsync(
         MethodInfo handler,
         APIGatewayHttpApiV2ProxyRequest request)

@@ -57,6 +57,24 @@ public sealed class SliceRuntimeHttpTests
     }
 
     [Fact]
+    public async Task Concrete_registered_DI_service_without_FromServices_resolves_from_DI_not_as_body_on_aspnet_path()
+    {
+        // AuditRecorder is a concrete class registered via AddSingleton<AuditRecorder>().
+        // On the ASP.NET path the generated code is plain Minimal API: IServiceProviderIsService
+        // returns true for AuditRecorder, so ASP.NET resolves it from DI without [FromServices].
+        // The Request record binds from the JSON body. This pin verifies that SliceFx's ASP.NET
+        // path behaves identically to raw Minimal API and does NOT apply the portable-dispatch
+        // concrete/interface heuristic used by the WASI/Lambda generators.
+        await using var host = SliceTestHost.Create<SliceApp::Program>();
+
+        using var response = await host.Client.PostAsJsonAsync("/audit", new { message = "hello" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("hello", document.RootElement.GetProperty("recorded").GetString());
+    }
+
+    [Fact]
     public async Task Generated_slice_endpoint_short_circuits_data_annotations_before_slice_validator()
     {
         await using var host = SliceTestHost.Create<SliceApp::Program>();
