@@ -12,7 +12,7 @@ The sample uses a **standalone** hosting model: the Blazor WASM client and the S
 | `SliceFx.BlazorSample.Server/Features/Users/CreateUser.cs` | SliceFx feature using non-nested types from a referenced assembly as its `Handle` parameters |
 | `SliceFx.BlazorSample.Server/Features/Users/ListUsers.cs` | GET feature returning `IReadOnlyList<UserSummary>` — included in the typed client as `Users.ListUsersAsync()` |
 | `SliceFx.BlazorSample.Server/Program.cs` | CORS policy with `AllowAnyHeader()` — required for preflight on cross-origin requests that carry an `Authorization` header |
-| `SliceFx.BlazorSample.Client/SliceApiClient.g.cs` | Pre-committed generated typed client; `(HttpClient)` constructor + `OnRequestPreparing` hook; `SliceApiException.Errors` for Problem Details |
+| `SliceFx.BlazorSample.Client/SliceApiClient.g.cs` | Pre-committed generated typed client; `(HttpClient)` constructor + `OnRequestPreparing` hook; `SliceApiException.Errors` for Problem Details; trim/AOT-safe via auto-emitted `SliceApiClientJsonContext` (System.Text.Json source generation) |
 | `SliceFx.BlazorSample.Client/BearerTokenHandler.cs` | `DelegatingHandler` attached via `IHttpClientFactory` to add a bearer token — swap for MSAL or IdentityModel in production |
 | `SliceFx.BlazorSample.Client/Program.cs` | `IHttpClientFactory` registration + `new SliceApiClient(factory.CreateClient(...))` wired as a scoped service |
 | `SliceFx.BlazorSample.Client/Pages/CreateUser.razor` | `EditForm` + `DataAnnotationsValidator` using Contracts attributes; `SliceApiException.Errors` mapped into `ValidationMessageStore` for server-side field errors |
@@ -82,7 +82,13 @@ dotnet build samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client -p:RegenSl
 
 **Why CORS with `AllowAnyHeader`?** The `BearerTokenHandler` adds an `Authorization` header. Any cross-origin request with a non-simple header triggers an `OPTIONS` preflight. Without `AllowAnyHeader()`, the preflight fails and the browser never sends the actual POST — the failure is visible only in browser devtools, not in `curl` output.
 
-**`dotnet run` only, not `dotnet publish`.** `Microsoft.NET.Sdk.BlazorWebAssembly` enables `PublishTrimmed=true` by default. Trimming would strip the DataAnnotations validation reflection metadata and the JSON reflection used in `ReadFromJsonAsync<T>` and `SliceApiClient.SliceApiException` deserialization. Production trimming configuration is out of scope for this sample.
+**`dotnet publish` (trimmed) supported.** `Microsoft.NET.Sdk.BlazorWebAssembly` enables `PublishTrimmed=true` by default. The CLI-generated client uses trim-safe `JsonTypeInfo<T>` overloads (System.Text.Json source generation) and auto-emits an internal `SliceApiClientJsonContext` that registers all request/response types plus `SliceProblemDetails`. `DataAnnotationsValidator` uses only `[Required]`, `[EmailAddress]`, and `[MinLength]` — attributes whose reflection metadata Blazor's trimmer roots automatically. To verify:
+
+```bash
+dotnet publish samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client -c Release
+```
+
+To override the JSON context (e.g. to add `PropertyNamingPolicy`), pass `--json-context <FullyQualifiedName>` to `slicefx client csharp` — see [docs/cli.md](../../docs/cli.md#typed-c-client).
 
 **Hosted alternative.** If you want a single-process deployment where the server also serves the WASM static files, add `Microsoft.AspNetCore.Components.WebAssembly.Server` to the server project, add a project reference from server to client, and call `app.UseBlazorFrameworkFiles()` + `app.UseStaticFiles()` + `app.MapFallbackToFile("index.html")` in `Program.cs`. The CORS policy and separate client process are not needed in that configuration.
 

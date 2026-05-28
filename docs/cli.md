@@ -79,6 +79,33 @@ builder.Services.AddScoped(sp =>
     new SliceApiClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SliceApiClient))));
 ```
 
+### Trim/AOT-safe generation
+
+The generated client uses trim-safe `JsonTypeInfo<T>` overloads (`ReadFromJsonAsync(JsonTypeInfo<T>, ct)`, `JsonContent.Create(value, JsonTypeInfo<T>)`, `JsonSerializer.Deserialize(body, JsonTypeInfo<T>)`) instead of reflection-based equivalents. By default, the generator auto-emits an internal `{ClassName}JsonContext : JsonSerializerContext` at the end of the generated file registering all request/response types and `SliceProblemDetails`. This makes the generated client compatible with `PublishTrimmed=true` and `PublishAot=true` without any extra setup.
+
+If you want to provide your own `JsonSerializerContext` (e.g. to add `PropertyNamingPolicy` or merge with app-wide JSON options), pass `--json-context`:
+
+```bash
+slicefx client csharp --json-context My.App.MyJsonContext --output SliceApiClient.g.cs
+```
+
+When `--json-context` is specified, the auto-emitted context is suppressed and the user-provided FQN is referenced instead. Your context must register every route's request/response type **and** `{YourClassName}.SliceProblemDetails` (the error-response nested type in the generated client class) with `TypeInfoPropertyName` values that match the convention below.
+
+#### TypeInfoPropertyName naming convention
+
+The auto-emitted context derives property names deterministically:
+
+| Type shape | Property name |
+|---|---|
+| Simple type `Foo.Bar.MyResponse` | `MyResponse` (last segment) |
+| Any type whose last segment is `Request` or `Response` | `{ParentSegment}Request` / `{ParentSegment}Response` — where _parent_ is the segment immediately to the left of the final dot (e.g. `Acme.Features.CreateItem.Request` → `CreateItemRequest`) |
+| `IReadOnlyList<X>` / `IList<X>` / `List<X>` / `IEnumerable<X>` / `X[]` | `{X}List` (X resolved recursively) |
+| `IReadOnlyDictionary<K,V>` / `Dictionary<K,V>` | `{V}Dictionary` (V resolved recursively) |
+| `{ClassName}.SliceProblemDetails` | `SliceProblemDetails` — **required** when using `--json-context` |
+| Other generic | CLI error — use `--json-context` |
+
+When using `--json-context`, your `JsonSerializerContext` must register types with `TypeInfoPropertyName` values that match this convention so that the generated `Default.{Name}` property accesses resolve.
+
 ## Typed TypeScript client
 
 `slicefx client typescript` generates a zero-dependency `fetch`-based TypeScript client for portable and partial routes. TypeScript interfaces are emitted for request and response record shapes where property information is available in the built project output. The schema reader honors common `System.Text.Json` metadata such as `[JsonPropertyName]`, `[JsonIgnore]`, required members, string-enum converters, and binary members represented as base64 strings.

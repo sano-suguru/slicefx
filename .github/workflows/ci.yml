@@ -43,6 +43,15 @@ jobs:
       - name: Test
         run: dotnet test SliceFx.slnx --configuration Release --no-build --no-restore
 
+      - name: Upload trim-publish test binlogs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-binlogs
+          path: ${{ runner.temp }}/slicefx-test-binlogs/**/*.binlog
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Verify Lambda NativeAOT per-feature packaging
         run: dotnet run --project tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build -- package aws-lambda --project tests/SliceFx.Lambda.NativeAotFixture/SliceFx.Lambda.NativeAotFixture.csproj --mode function-per-feature --rid linux-x64 --output artifacts/lambda-nativeaot --force
 

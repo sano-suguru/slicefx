@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -35,8 +36,6 @@ public partial class SliceApiClient
     private static string FormatRouteValue<T>(T value)
         => Uri.EscapeDataString(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty);
 
-    private static readonly JsonSerializerOptions __ProblemJsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private static async Task __ThrowApiException(HttpResponseMessage response, string operation, CancellationToken cancellationToken)
     {
         SliceProblemDetails? problem = null;
@@ -48,7 +47,7 @@ public partial class SliceApiClient
                 var __mediaType = response.Content.Headers.ContentType?.MediaType;
                 if (__mediaType is "application/problem+json" or "application/json")
                 {
-                    problem = JsonSerializer.Deserialize<SliceProblemDetails>(__body, __ProblemJsonOptions);
+                    problem = JsonSerializer.Deserialize(__body, SliceApiClientJsonContext.Default.SliceProblemDetails);
                 }
             }
         }
@@ -72,14 +71,14 @@ public partial class SliceApiClient
         {
             var __url = $"/users";
             using var __message = new HttpRequestMessage(new HttpMethod("POST"), __url);
-            __message.Content = JsonContent.Create(req);
+            __message.Content = JsonContent.Create(req, SliceApiClientJsonContext.Default.CreateUserRequest);
             _prepareRequest(__message);
             using var __response = await _http.SendAsync(__message, cancellationToken).ConfigureAwait(false);
             if (!__response.IsSuccessStatusCode)
             {
                 await SliceApiClient.__ThrowApiException(__response, "CreateUser", cancellationToken).ConfigureAwait(false);
             }
-            return await __response.Content.ReadFromJsonAsync<SliceFx.BlazorSample.Contracts.CreateUserResponse>(cancellationToken).ConfigureAwait(false)
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.CreateUserResponse, cancellationToken).ConfigureAwait(false)
                 ?? throw new HttpRequestException("Route 'Users.CreateUser' returned an empty response body.");
         }
 
@@ -93,7 +92,7 @@ public partial class SliceApiClient
             {
                 await SliceApiClient.__ThrowApiException(__response, "ListUsers", cancellationToken).ConfigureAwait(false);
             }
-            return await __response.Content.ReadFromJsonAsync<System.Collections.Generic.IReadOnlyList<SliceFx.BlazorSample.Contracts.UserSummary>>(cancellationToken).ConfigureAwait(false)
+            return await __response.Content.ReadFromJsonAsync(SliceApiClientJsonContext.Default.UserSummaryList, cancellationToken).ConfigureAwait(false)
                 ?? throw new HttpRequestException("Route 'Users.ListUsers' returned an empty response body.");
         }
     }
@@ -117,4 +116,13 @@ public partial class SliceApiClient
             Problem = problem;
         }
     }
+}
+
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(System.Collections.Generic.IReadOnlyList<SliceFx.BlazorSample.Contracts.UserSummary>), TypeInfoPropertyName = "UserSummaryList")]
+[JsonSerializable(typeof(SliceFx.BlazorSample.Contracts.CreateUserRequest))]
+[JsonSerializable(typeof(SliceFx.BlazorSample.Contracts.CreateUserResponse))]
+[JsonSerializable(typeof(SliceApiClient.SliceProblemDetails))]
+internal sealed partial class SliceApiClientJsonContext : JsonSerializerContext
+{
 }

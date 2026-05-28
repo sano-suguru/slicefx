@@ -24,6 +24,11 @@ internal static partial class GenerateCSharpClientCommand
             Description = "Generated client class name.",
             DefaultValueFactory = _ => "SliceApiClient",
         };
+        var jsonContextOpt = new Option<string?>("--json-context")
+        {
+            Description = "Fully-qualified name of an existing JsonSerializerContext to use for trim-safe serialization. " +
+                          "When omitted, an internal context class is auto-emitted in the generated file.",
+        };
         var forceOpt = SharedOptions.CreateForce();
 
         var cmd = new Command("csharp", "Generate a C# typed HttpClient for portable Slice routes.")
@@ -32,6 +37,7 @@ internal static partial class GenerateCSharpClientCommand
             outputOpt,
             namespaceOpt,
             classOpt,
+            jsonContextOpt,
             forceOpt
         };
 
@@ -41,11 +47,12 @@ internal static partial class GenerateCSharpClientCommand
             var output = parseResult.GetValue(outputOpt);
             var @namespace = parseResult.GetValue(namespaceOpt);
             var className = parseResult.GetValue(classOpt) ?? "SliceApiClient";
+            var jsonContext = parseResult.GetValue(jsonContextOpt);
             var force = parseResult.GetValue(forceOpt);
 
             try
             {
-                await RunAsync(project, output, @namespace, className, force, ct).ConfigureAwait(false);
+                await RunAsync(project, output, @namespace, className, jsonContext, force, ct).ConfigureAwait(false);
                 return 0;
             }
             catch (CliException ex)
@@ -63,6 +70,7 @@ internal static partial class GenerateCSharpClientCommand
         string? output,
         string? @namespace,
         string className,
+        string? jsonContextFqn,
         bool force,
         CancellationToken ct)
     {
@@ -71,6 +79,10 @@ internal static partial class GenerateCSharpClientCommand
             string.IsNullOrWhiteSpace(@namespace) ? $"{ctx.RootNamespace}.Client" : @namespace,
             "Namespace");
         className = CliValidation.RequireClassName(className, "Class");
+        if (jsonContextFqn is not null)
+        {
+            jsonContextFqn = CliValidation.RequireNamespace(jsonContextFqn, "--json-context");
+        }
 
         var discovery = RouteCatalog.DiscoverDetailed(ctx);
         RouteCatalog.WriteAggregatedRouteNotice(discovery);
@@ -95,13 +107,17 @@ internal static partial class GenerateCSharpClientCommand
             Directory.CreateDirectory(outputDir);
         }
 
-        var content = RenderClient(@namespace, className, routes);
+        var content = RenderClient(@namespace, className, routes, jsonContextFqn);
         await File.WriteAllTextAsync(outputFile, content, ct).ConfigureAwait(false);
         Console.WriteLine($"Generated {outputFile}");
     }
 
-    private static string RenderClient(string @namespace, string className, SliceRouteInfo[] routes)
+    private static string RenderClient(string @namespace, string className, SliceRouteInfo[] routes, string? jsonContextFqn)
     {
+        var autoEmitContext = jsonContextFqn is null;
+        // When auto-emitting, the context class is in the same namespace so we can use the short name.
+        var contextRef = jsonContextFqn ?? $"{className}JsonContext";
+
         var groups = routes
             .GroupBy(static route => route.Tag)
             .OrderBy(static group => group.Key, StringComparer.Ordinal)
@@ -123,6 +139,11 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("using System.Net.Http;");
         sb.AppendLine("using System.Net.Http.Json;");
         sb.AppendLine("using System.Text.Json;");
+        if (autoEmitContext)
+        {
+            sb.AppendLine("using System.Text.Json.Serialization;");
+        }
+
         sb.AppendLine("using System.Threading;");
         sb.AppendLine("using System.Threading.Tasks;");
         sb.AppendLine();
@@ -159,9 +180,7 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("    private static string FormatRouteValue<T>(T value)");
         sb.AppendLine("        => Uri.EscapeDataString(Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty);");
         sb.AppendLine();
-        sb.AppendLine("    private static readonly JsonSerializerOptions __ProblemJsonOptions = new() { PropertyNameCaseInsensitive = true };");
-        sb.AppendLine();
-        sb.AppendLine("    private static async Task __ThrowApiException(HttpResponseMessage response, string operation, CancellationToken cancellationToken)");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    private static async Task __ThrowApiException(HttpResponseMessage response, string operation, CancellationToken cancellationToken)");
         sb.AppendLine("    {");
         sb.AppendLine("        SliceProblemDetails? problem = null;");
         sb.AppendLine("        try");
@@ -172,7 +191,7 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("                var __mediaType = response.Content.Headers.ContentType?.MediaType;");
         sb.AppendLine("                if (__mediaType is \"application/problem+json\" or \"application/json\")");
         sb.AppendLine("                {");
-        sb.AppendLine("                    problem = JsonSerializer.Deserialize<SliceProblemDetails>(__body, __ProblemJsonOptions);");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"                    problem = JsonSerializer.Deserialize(__body, {contextRef}.Default.SliceProblemDetails);");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("        }");
@@ -184,7 +203,7 @@ internal static partial class GenerateCSharpClientCommand
         foreach (var group in groups)
         {
             sb.AppendLine();
-            EmitGroupClient(sb, className, groupNames[group.Key], group.OrderBy(static route => route.FeatureName, StringComparer.Ordinal));
+            EmitGroupClient(sb, className, groupNames[group.Key], group.OrderBy(static route => route.FeatureName, StringComparer.Ordinal), contextRef);
         }
 
         sb.AppendLine();
@@ -208,6 +227,13 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
+
+        if (autoEmitContext)
+        {
+            sb.AppendLine();
+            EmitAutoJsonContext(sb, className, routes);
+        }
+
         return sb.ToString();
     }
 
@@ -215,7 +241,8 @@ internal static partial class GenerateCSharpClientCommand
         StringBuilder sb,
         string outerClassName,
         string groupName,
-        IEnumerable<SliceRouteInfo> routes)
+        IEnumerable<SliceRouteInfo> routes,
+        string contextRef)
     {
         sb.AppendLine(CultureInfo.InvariantCulture, $"    public sealed class {groupName}Client");
         sb.AppendLine("    {");
@@ -231,13 +258,13 @@ internal static partial class GenerateCSharpClientCommand
         foreach (var route in routes)
         {
             sb.AppendLine();
-            EmitRouteMethod(sb, outerClassName, route);
+            EmitRouteMethod(sb, outerClassName, route, contextRef);
         }
 
         sb.AppendLine("    }");
     }
 
-    private static void EmitRouteMethod(StringBuilder sb, string outerClassName, SliceRouteInfo route)
+    private static void EmitRouteMethod(StringBuilder sb, string outerClassName, SliceRouteInfo route, string contextRef)
     {
         var responseType = ToClientType(route, ClientGenerationHelpers.UnwrapReturnType(route.ReturnType));
         var bodyParameter = ClientGenerationHelpers.FindBodyParameter(route);
@@ -270,7 +297,8 @@ internal static partial class GenerateCSharpClientCommand
             sb.AppendLine("            {");
             sb.AppendLine(CultureInfo.InvariantCulture, $"                await {outerClassName}.__ThrowApiException(__response, \"{route.FeatureName}\", cancellationToken).ConfigureAwait(false);");
             sb.AppendLine("            }");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync<{responseType}>(cancellationToken).ConfigureAwait(false)");
+            var getPropName = ComputeTypeInfoPropertyName(responseType);
+            sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync({contextRef}.Default.{getPropName}, cancellationToken).ConfigureAwait(false)");
             sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
             sb.AppendLine("        }");
             return;
@@ -279,7 +307,8 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine(CultureInfo.InvariantCulture, $"            using var __message = new HttpRequestMessage(new HttpMethod(\"{route.Method}\"), __url);");
         if (bodyParameter is not null)
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"            __message.Content = JsonContent.Create({bodyParameter.Name});");
+            var bodyPropName = ComputeTypeInfoPropertyName(ToClientType(route, bodyParameter.Type));
+            sb.AppendLine(CultureInfo.InvariantCulture, $"            __message.Content = JsonContent.Create({bodyParameter.Name}, {contextRef}.Default.{bodyPropName});");
         }
 
         sb.AppendLine("            _prepareRequest(__message);");
@@ -295,9 +324,142 @@ internal static partial class GenerateCSharpClientCommand
             return;
         }
 
-        sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync<{responseType}>(cancellationToken).ConfigureAwait(false)");
+        var postPropName = ComputeTypeInfoPropertyName(responseType);
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync({contextRef}.Default.{postPropName}, cancellationToken).ConfigureAwait(false)");
         sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
         sb.AppendLine("        }");
+    }
+
+    private static void EmitAutoJsonContext(StringBuilder sb, string className, SliceRouteInfo[] routes)
+    {
+        var types = CollectJsonSerializableTypes(routes, className).ToArray();
+        sb.AppendLine("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]");
+        foreach (var (typeExpr, explicitPropName) in types)
+        {
+            if (explicitPropName is not null)
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"[JsonSerializable(typeof({typeExpr}), TypeInfoPropertyName = \"{explicitPropName}\")]");
+            }
+            else
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"[JsonSerializable(typeof({typeExpr}))]");
+            }
+        }
+
+        sb.AppendLine(CultureInfo.InvariantCulture, $"internal sealed partial class {className}JsonContext : JsonSerializerContext");
+        sb.AppendLine("{");
+        sb.AppendLine("}");
+    }
+
+    internal static IEnumerable<(string TypeExpr, string? ExplicitPropName)> CollectJsonSerializableTypes(
+        SliceRouteInfo[] routes, string className)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<(string, string?)>();
+
+        foreach (var route in routes)
+        {
+            var bodyParam = ClientGenerationHelpers.FindBodyParameter(route);
+            if (bodyParam is not null)
+            {
+                var typeExpr = ClientGenerationHelpers.StripGlobal(ToClientType(route, bodyParam.Type));
+                if (seen.Add(typeExpr))
+                {
+                    var computed = ComputeTypeInfoPropertyName(typeExpr);
+                    result.Add((typeExpr, computed == ClientGenerationHelpers.ShortName(typeExpr) ? null : computed));
+                }
+            }
+
+            var responseRaw = ClientGenerationHelpers.UnwrapReturnType(route.ReturnType);
+            if (responseRaw is not ("void" or ""))
+            {
+                var typeExpr = ClientGenerationHelpers.StripGlobal(ToClientType(route, responseRaw));
+                if (seen.Add(typeExpr))
+                {
+                    var computed = ComputeTypeInfoPropertyName(typeExpr);
+                    result.Add((typeExpr, computed == ClientGenerationHelpers.ShortName(typeExpr) ? null : computed));
+                }
+            }
+        }
+
+        // Always include SliceProblemDetails from the outer class.
+        var pdKey = $"{className}.SliceProblemDetails";
+        if (seen.Add(pdKey))
+        {
+            result.Add((pdKey, null));
+        }
+        return result;
+    }
+
+    internal static string ComputeTypeInfoPropertyName(string typeRef)
+    {
+        var t = ClientGenerationHelpers.StripGlobal(typeRef);
+
+        // Array: T[] → TList
+        if (t.EndsWith("[]", StringComparison.Ordinal))
+        {
+            return ComputeTypeInfoPropertyName(t[..^2]) + "List";
+        }
+
+        // Generic: Outer<Inner>
+        var bracket = t.IndexOf('<');
+        if (bracket >= 0)
+        {
+            var outerShort = ClientGenerationHelpers.ShortName(t[..bracket]);
+            var innerArgs = t[(bracket + 1)..^1];
+            if (outerShort is "IReadOnlyList" or "IList" or "List" or "ICollection" or "IEnumerable")
+            {
+                return ComputeTypeInfoPropertyName(innerArgs) + "List";
+            }
+
+            if (outerShort is "IReadOnlyDictionary" or "IDictionary" or "Dictionary")
+            {
+                return ComputeTypeInfoPropertyName(ExtractLastGenericArg(innerArgs)) + "Dictionary";
+            }
+
+            throw new CliException(
+                $"Unsupported generic type '{typeRef}' for source-generated JSON context. " +
+                "Use --json-context to provide a custom JsonSerializerContext, or register the type manually " +
+                "with an explicit TypeInfoPropertyName.");
+        }
+
+        var shortName = ClientGenerationHelpers.ShortName(t);
+        // Nested feature types are named Request/Response — combine parent class name to avoid collisions.
+        if (shortName is "Request" or "Response")
+        {
+            var lastDot = t.LastIndexOf('.');
+            if (lastDot > 0)
+            {
+                var parentDot = t.LastIndexOf('.', lastDot - 1);
+                var parent = t[(parentDot + 1)..lastDot];
+                return parent + shortName;
+            }
+        }
+
+        return shortName;
+    }
+
+    private static string ExtractLastGenericArg(string args)
+    {
+        var depth = 0;
+        var lastComma = -1;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == '<')
+            {
+                depth++;
+            }
+            else if (args[i] == '>')
+            {
+                depth--;
+            }
+            else if (args[i] == ',' && depth == 0)
+            {
+                lastComma = i;
+            }
+        }
+
+        return lastComma >= 0 ? args[(lastComma + 1)..].Trim() : args.Trim();
     }
 
     private static void EmitQueryString(StringBuilder sb, string outerClassName, SliceRouteParameter[] queryParameters)

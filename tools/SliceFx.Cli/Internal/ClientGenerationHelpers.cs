@@ -125,6 +125,16 @@ internal static partial class ClientGenerationHelpers
         return normalized;
     }
 
+    internal static string StripGlobal(string type)
+        => type.StartsWith("global::", StringComparison.Ordinal) ? type["global::".Length..] : type;
+
+    internal static string ShortName(string type)
+    {
+        var stripped = StripGlobal(type);
+        var dot = stripped.LastIndexOf('.');
+        return dot >= 0 ? stripped[(dot + 1)..] : stripped;
+    }
+
     internal static string ToPascalIdentifier(string value, string fallback)
     {
         var parts = IdentifierSeparatorRegex().Split(value)

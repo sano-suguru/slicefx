@@ -8,6 +8,7 @@ using SliceFx.Testing;
 
 namespace SliceFx.Cli.Tests;
 
+[Collection("DotnetPublish")]
 public class CliFixtureTests
 {
     [Fact]
@@ -604,7 +605,7 @@ public class CliFixtureTests
         Assert.Equal(0, csharpExitCode);
         var csharpClient = await File.ReadAllTextAsync(csharpOutput, TestContext.Current.CancellationToken);
         Assert.Contains("Task<Shared.Body.Client.App.Contracts.CreateItemResponse> CreateItemAsync(Shared.Body.Client.App.Contracts.CreateItemRequest request", csharpClient);
-        Assert.Contains("JsonContent.Create(request)", csharpClient);
+        Assert.Contains("JsonContent.Create(request, ", csharpClient);
         Assert.DoesNotContain("CreateItem.Request", csharpClient);
 
         var typescriptOutput = Path.Combine(fixture.Directory.FullName, "slice-api-client.ts");
@@ -2657,6 +2658,365 @@ public class CliFixtureTests
     }
 
     [Fact]
+    public async Task Csharp_client_default_emits_internal_json_context_for_trim_safety()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "trim-safe-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TrimSafe.Client.App</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Contracts.cs",
+            """
+            namespace TrimSafe.Client.App.Contracts;
+            public sealed record CreateItemRequest(string Name);
+            public sealed record CreateItemResponse(int Id, string Name);
+            public sealed record ItemSummary(int Id, string Name);
+            """);
+        fixture.WriteFeature("Features/Items/CreateItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using System.Collections.Generic;
+            using SliceFx;
+            using TrimSafe.Client.App.Contracts;
+
+            namespace TrimSafe.Client.App.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public static Task<CreateItemResponse> Handle(CreateItemRequest request, CancellationToken ct)
+                    => Task.FromResult(new CreateItemResponse(1, request.Name));
+            }
+            """);
+        fixture.WriteFeature("Features/Items/ListItems.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using System.Collections.Generic;
+            using SliceFx;
+            using TrimSafe.Client.App.Contracts;
+
+            namespace TrimSafe.Client.App.Features.Items;
+
+            [Feature("GET /items")]
+            public static class ListItems
+            {
+                public static Task<IReadOnlyList<ItemSummary>> Handle(CancellationToken ct)
+                    => Task.FromResult<IReadOnlyList<ItemSummary>>([]);
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(0, exitCode);
+
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+
+        // Auto-emitted context class
+        Assert.Contains("internal sealed partial class SliceApiClientJsonContext : JsonSerializerContext", client);
+        Assert.Contains("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]", client);
+        Assert.Contains("[JsonSerializable(typeof(TrimSafe.Client.App.Contracts.CreateItemRequest))]", client);
+        Assert.Contains("[JsonSerializable(typeof(TrimSafe.Client.App.Contracts.CreateItemResponse))]", client);
+        Assert.Contains("TypeInfoPropertyName = \"ItemSummaryList\"", client);
+        Assert.Contains("[JsonSerializable(typeof(SliceApiClient.SliceProblemDetails))]", client);
+
+        // Trim-safe method bodies
+        Assert.Contains("ReadFromJsonAsync(SliceApiClientJsonContext.Default.ItemSummaryList, cancellationToken)", client);
+        Assert.Contains("JsonContent.Create(request, SliceApiClientJsonContext.Default.CreateItemRequest)", client);
+        Assert.Contains("ReadFromJsonAsync(SliceApiClientJsonContext.Default.CreateItemResponse, cancellationToken)", client);
+        Assert.Contains("JsonSerializer.Deserialize(__body, SliceApiClientJsonContext.Default.SliceProblemDetails)", client);
+
+        // No reflection-based paths
+        Assert.DoesNotContain("ReadFromJsonAsync<", client);
+        Assert.DoesNotContain("JsonContent.Create(request)", client);
+        Assert.DoesNotContain("__ProblemJsonOptions", client);
+
+        // Compiles cleanly
+        await fixture.BuildAsync();
+    }
+
+    [Fact]
+    public async Task Csharp_client_uses_user_provided_json_context_when_specified()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "custom-context-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>CustomContext.Client.App</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Contracts.cs",
+            """
+            namespace CustomContext.Client.App.Contracts;
+            public sealed record GetThingResponse(int Id);
+            """);
+        fixture.WriteFeature("Features/Things/GetThing.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using CustomContext.Client.App.Contracts;
+
+            namespace CustomContext.Client.App.Features.Things;
+
+            [Feature("GET /things/{id:int}")]
+            public static class GetThing
+            {
+                public static Task<GetThingResponse> Handle(int id, CancellationToken ct)
+                    => Task.FromResult(new GetThingResponse(id));
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse([
+                "--project", fixture.ProjectFile.FullName,
+                "--output", outputFile,
+                "--json-context", "My.App.MyJsonContext",
+                "--force"
+            ])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(0, exitCode);
+
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+
+        // User context FQN is referenced
+        Assert.Contains("My.App.MyJsonContext.Default.GetThingResponse", client);
+        Assert.Contains("My.App.MyJsonContext.Default.SliceProblemDetails", client);
+
+        // Auto-emitted context must NOT appear
+        Assert.DoesNotContain("internal sealed partial class SliceApiClientJsonContext", client);
+        Assert.DoesNotContain("[JsonSerializable(", client);
+
+        // Write a minimal MyJsonContext that satisfies the --json-context contract and verify compilation.
+        // The generated client's default namespace is {RootNamespace}.Client = "CustomContext.Client.App.Client".
+        fixture.WriteFeature("MyJsonContext.cs",
+            """
+            using System.Text.Json.Serialization;
+            using CustomContext.Client.App.Client;
+            using CustomContext.Client.App.Contracts;
+
+            namespace My.App;
+
+            [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+            [JsonSerializable(typeof(GetThingResponse))]
+            [JsonSerializable(typeof(SliceApiClient.SliceProblemDetails))]
+            public partial class MyJsonContext : JsonSerializerContext { }
+            """);
+        await fixture.BuildAsync();
+    }
+
+    // Skip locally with: dotnet test --filter "Category!=RequiresPublish"
+    [Fact]
+    [Trait("Category", "RequiresPublish")]
+    public async Task Csharp_client_publishes_trim_safe_under_release_publishtrimmed_full()
+    {
+        // Phase 1: Server fixture (SliceFx.Core + SourceGenerator) — build to produce route manifest.
+        using var serverFixture = CliProjectFixture.Create(
+            "trim-publish-server-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TrimPublish.Server.App</RootNamespace>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        // Contracts live in a shared namespace so the generated client's type references
+        // (TrimPublish.Shared.Contracts.*) resolve in the separate client fixture.
+        serverFixture.WriteFeature("Contracts.cs",
+            """
+            namespace TrimPublish.Shared.Contracts;
+            public sealed record CreateItemRequest(string Name, string Email);
+            public sealed record CreateItemResponse(System.Guid Id, string Name, string Email);
+            public sealed record ItemSummary(System.Guid Id, string Name);
+            """);
+        serverFixture.WriteFeature("Features/Items/CreateItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using TrimPublish.Shared.Contracts;
+
+            namespace TrimPublish.Server.App.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public static Task<CreateItemResponse> Handle(CreateItemRequest request, CancellationToken ct)
+                    => Task.FromResult(new CreateItemResponse(System.Guid.NewGuid(), request.Name, request.Email));
+            }
+            """);
+        serverFixture.WriteFeature("Features/Items/ListItems.cs",
+            """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using TrimPublish.Shared.Contracts;
+
+            namespace TrimPublish.Server.App.Features.Items;
+
+            [Feature("GET /items")]
+            public static class ListItems
+            {
+                public static Task<IReadOnlyList<ItemSummary>> Handle(CancellationToken ct)
+                    => Task.FromResult<IReadOnlyList<ItemSummary>>([]);
+            }
+            """);
+        await serverFixture.BuildAsync();
+
+        // Phase 2: Generate SliceApiClient.g.cs from the server manifest.
+        var clientSrcDir = Path.Combine(serverFixture.Directory.FullName, "client-src");
+        Directory.CreateDirectory(clientSrcDir);
+        var generatedClientPath = Path.Combine(clientSrcDir, "SliceApiClient.g.cs");
+        var genExitCode = await GenerateCSharpClientCommand.Build()
+            .Parse([
+                "--project", serverFixture.ProjectFile.FullName,
+                "--namespace", "TrimPublish.Client.App",
+                "--output", generatedClientPath,
+                "--force",
+            ])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(0, genExitCode);
+
+        // Phase 3: Client fixture — intentionally no SliceFx.Core/ASP.NET reference.
+        // PublishTrimmed=true + TrimMode=full here; the client only uses System.Net.Http + System.Text.Json.
+        using var clientFixture = CliProjectFixture.Create(
+            "trim-publish-client-app",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TrimPublish.Client.App</RootNamespace>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <PublishTrimmed>true</PublishTrimmed>
+                <TrimMode>full</TrimMode>
+                <TrimmerSingleWarn>false</TrimmerSingleWarn>
+                <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+                <InvariantGlobalization>true</InvariantGlobalization>
+              </PropertyGroup>
+            </Project>
+            """);
+        // Contract records declared in the same shared namespace used by the server.
+        // This mirrors the shared-contracts project pattern (no separate project needed here).
+        clientFixture.WriteFeature("Contracts.cs",
+            """
+            namespace TrimPublish.Shared.Contracts;
+            public sealed record CreateItemRequest(string Name, string Email);
+            public sealed record CreateItemResponse(System.Guid Id, string Name, string Email);
+            public sealed record ItemSummary(System.Guid Id, string Name);
+            """);
+        File.Copy(generatedClientPath, Path.Combine(clientFixture.Directory.FullName, "SliceApiClient.g.cs"));
+        // Program.cs establishes a real trim root into every generated method body.
+        // typeof() alone would not cause ILLink to walk method bodies; Func<> + conditional call does.
+        clientFixture.WriteFeature("Program.cs",
+            """
+            using System;
+            using System.Collections.Generic;
+            using System.Net;
+            using System.Net.Http;
+            using TrimPublish.Client.App;
+            using TrimPublish.Shared.Contracts;
+
+            var client = new SliceApiClient(new HttpClient());
+            Func<System.Threading.Tasks.Task<CreateItemResponse>> createCall =
+                () => client.Items.CreateItemAsync(new CreateItemRequest("x", "y@z"));
+            Func<System.Threading.Tasks.Task<IReadOnlyList<ItemSummary>>> listCall =
+                () => client.Items.ListItemsAsync();
+            _ = new SliceApiClient.SliceApiException("t", HttpStatusCode.OK, null);
+
+            if (args.Length > 999_999)
+            {
+                _ = await createCall();
+                _ = await listCall();
+            }
+
+            Console.WriteLine("ok");
+            """);
+
+        // Phase 4: Build (sanity-check that trim analyzer doesn't fire at build time either).
+        await clientFixture.BuildAsync();
+
+        // Phase 5: Publish with full-trim enabled.
+        var publishDir = Path.Combine(clientFixture.Directory.FullName, "publish-out");
+        var binlogRoot = Environment.GetEnvironmentVariable("RUNNER_TEMP") ?? Path.GetTempPath();
+        var binlogDir = Path.Combine(binlogRoot, "slicefx-test-binlogs");
+        Directory.CreateDirectory(binlogDir);
+        var binlogPath = Path.Combine(binlogDir, $"csharp-client-trim-{Guid.NewGuid():N}.binlog");
+
+        var (publishExit, publishOut, publishErr) = await RunProcessAsync(
+            "dotnet",
+            [
+                "publish", clientFixture.ProjectFile.FullName,
+                "--configuration", "Release",
+                "--runtime", "linux-x64",
+                "--output", publishDir,
+                $"-bl:{binlogPath}",
+                "--verbosity", "minimal",
+                "-nologo",
+            ],
+            clientFixture.Directory.FullName);
+
+        Assert.True(publishExit == 0,
+            $"dotnet publish failed (exit {publishExit}).\nbinlog: {binlogPath}\nstdout:\n{publishOut}\nstderr:\n{publishErr}");
+
+        // Phase 6: Parse binlog and assert no ILLink trim warnings (IL2026, IL3050, etc.).
+        var build = Microsoft.Build.Logging.StructuredLogger.BinaryLog.ReadBuild(binlogPath);
+        var ilWarnings = build
+            .FindChildrenRecursive<Microsoft.Build.Logging.StructuredLogger.Warning>(static _ => true)
+            .Where(static w => w.Code is { Length: >= 3 } code
+                && code.StartsWith("IL", StringComparison.Ordinal)
+                && code[2..].All(char.IsAsciiDigit))
+            .ToArray();
+
+        if (ilWarnings.Length > 0)
+        {
+            var shown = ilWarnings.Take(10).Select(w =>
+                $"  {w.Code} at {w.File ?? "?"}:{w.LineNumber} — {w.Text}");
+            var suffix = ilWarnings.Length > 10
+                ? $"\n  … and {ilWarnings.Length - 10} more (open binlog: {binlogPath})"
+                : "";
+            Assert.Fail(
+                $"Generated SliceApiClient.g.cs has {ilWarnings.Length} trim warning(s). " +
+                "The emitter in GenerateCSharpClientCommand.cs must use JsonTypeInfo<T> overloads only.\n" +
+                string.Join("\n", shown) + suffix);
+        }
+    }
+
+    [Fact]
     public async Task Generated_typescript_client_emits_typed_error_helpers()
     {
         using var fixture = CliProjectFixture.Create(
@@ -2888,3 +3248,7 @@ public class CliFixtureTests
         public void Dispose() => Directory.Delete(recursive: true);
     }
 }
+
+// Serializes any publish-heavy facts so they don't run concurrently.
+[CollectionDefinition("DotnetPublish", DisableParallelization = true)]
+public sealed class DotnetPublishSuite { }
