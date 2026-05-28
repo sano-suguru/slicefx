@@ -1,0 +1,83 @@
+@page "/"
+@inject SliceApiClient ApiClient
+
+<h1>Create User</h1>
+
+@if (_created is not null)
+{
+    <p>
+        Created <strong>@_created.Name</strong> (<code>@_created.Email</code>)
+        with ID <code>@_created.Id</code> at @_created.CreatedAt.ToString("u").
+    </p>
+    <button @onclick="Reset">Create another</button>
+}
+else
+{
+    <EditForm EditContext="_editContext" OnValidSubmit="SubmitAsync">
+        <DataAnnotationsValidator />
+
+        <div>
+            <label for="name">Name</label>
+            <InputText id="name" @bind-Value="_model.Name" />
+            <ValidationMessage For="@(() => _model.Name)" />
+        </div>
+
+        <div>
+            <label for="email">Email</label>
+            <InputText id="email" @bind-Value="_model.Email" />
+            <ValidationMessage For="@(() => _model.Email)" />
+        </div>
+
+        <button type="submit" disabled="@_submitting">@(_submitting ? "Creating…" : "Create")</button>
+    </EditForm>
+}
+
+@code {
+    private CreateUserRequest _model = new();
+    private CreateUserResponse? _created;
+    private bool _submitting;
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _serverErrors = default!;
+
+    protected override void OnInitialized() => InitForm();
+
+    private void InitForm()
+    {
+        _model = new();
+        _editContext = new EditContext(_model);
+        _serverErrors = new ValidationMessageStore(_editContext);
+    }
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        _serverErrors.Clear();
+        try
+        {
+            _created = await ApiClient.Users.CreateUserAsync(_model);
+        }
+        catch (SliceApiClient.SliceApiException ex) when (ex.Errors is not null)
+        {
+            // Map server-side Problem Details field errors into the EditForm's ValidationMessageStore.
+            // SliceFx emits Pascal-case property names (e.g. "Name", "Email") that match
+            // the FieldIdentifier.FieldName produced by @bind-Value="_model.Name".
+            foreach (var (field, messages) in ex.Errors)
+            {
+                var fi = new FieldIdentifier(_model, field);
+                foreach (var msg in messages)
+                    _serverErrors.Add(fi, msg);
+            }
+            _editContext.NotifyValidationStateChanged();
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _created = null;
+        InitForm();
+    }
+}

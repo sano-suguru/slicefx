@@ -50,7 +50,7 @@ internal static class NewWasiCloudflareCommand
     }
 
     private static async Task RunAsync(
-        FileInfo? project,
+        string? project,
         string? componentName,
         DirectoryInfo? output,
         bool force,

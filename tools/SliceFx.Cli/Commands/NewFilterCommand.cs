@@ -43,7 +43,7 @@ internal static class NewFilterCommand
         return cmd;
     }
 
-    private static async Task RunAsync(string filterName, FileInfo? project, bool force, CancellationToken ct)
+    private static async Task RunAsync(string filterName, string? project, bool force, CancellationToken ct)
     {
         var ctx = ProjectContextDiscovery.Discover(project);
         filterName = CliValidation.RequireClassName(filterName, "FilterName");

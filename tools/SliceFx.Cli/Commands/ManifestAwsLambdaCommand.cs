@@ -31,9 +31,9 @@ internal static partial class ManifestAwsLambdaCommand
     internal static Command Build()
     {
         var projectOpt = SharedOptions.CreateProject();
-        var outputOpt = new Option<FileInfo?>("--output")
+        var outputOpt = new Option<string?>("--output")
         {
-            Description = "Output file. Defaults to template.yaml in the project directory.",
+            Description = "Output file or directory (in which case template.yaml is used). Defaults to template.yaml in the project directory.",
         };
         var runtimeOpt = new Option<string>("--runtime")
         {
@@ -101,8 +101,8 @@ internal static partial class ManifestAwsLambdaCommand
     }
 
     private static async Task RunAsync(
-        FileInfo? project,
-        FileInfo? output,
+        string? project,
+        string? output,
         string runtime,
         int memory,
         int timeout,
@@ -136,10 +136,10 @@ internal static partial class ManifestAwsLambdaCommand
             throw new CliException("No [Feature] routes found. Build the project first if the generated manifest is not yet available.");
         }
 
-        var outputFile = output ?? new FileInfo(Path.Combine(ctx.ProjectDirectory.FullName, "template.yaml"));
-        if (outputFile.Exists && !force)
+        var outputFile = SharedOptions.ResolveOutputFile(output, "template.yaml", ctx.ProjectDirectory);
+        if (File.Exists(outputFile) && !force)
         {
-            throw new CliException($"Output file already exists: {outputFile.FullName}\nUse --force to overwrite.");
+            throw new CliException($"Output file already exists: {outputFile}\nUse --force to overwrite.");
         }
 
         var functionPerFeature = string.Equals(mode, FunctionPerFeatureMode, StringComparison.OrdinalIgnoreCase);
@@ -147,10 +147,14 @@ internal static partial class ManifestAwsLambdaCommand
             ? GenerateFunctionPerFeatureSamTemplate(ctx, discovery, runtime, memory, timeout)
             : GenerateHostedSamTemplate(ctx, routes, runtime, memory, timeout);
 
-        Directory.CreateDirectory(outputFile.DirectoryName!);
-        await File.WriteAllTextAsync(outputFile.FullName, yaml, ct).ConfigureAwait(false);
+        var outputDir = Path.GetDirectoryName(outputFile);
+        if (!string.IsNullOrEmpty(outputDir))
+        {
+            Directory.CreateDirectory(outputDir);
+        }
+        await File.WriteAllTextAsync(outputFile, yaml, ct).ConfigureAwait(false);
 
-        Console.WriteLine($"Generated {outputFile.FullName}");
+        Console.WriteLine($"Generated {outputFile}");
         if (functionPerFeature)
         {
             var eligibleCount = CountEligibleLambdaFunctionPerFeatureRoutes(routes);

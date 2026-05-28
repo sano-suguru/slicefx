@@ -67,7 +67,17 @@ The table output includes a `SOURCE` column with the assembly that contributed t
 
 The C# client reuses the C# contract types from the Slice handler signature; it does not emit DTO copies. A client project must reference the assembly that contains those request and response types. Nested feature DTOs such as `CreateUser.Request` and `CreateUser.Response` therefore require visibility of the feature assembly. For Blazor or shared .NET clients that should not reference the server feature assembly, put request/response records in a shared contracts project and use those non-nested types in the handler signature.
 
-The generated class is `public partial class` so it can be extended in a sibling file. Two extension points are available: a `public {ClassName}(HttpMessageHandler handler)` constructor overload for injecting `DelegatingHandler` chains (Polly, auth headers, telemetry), and a `partial void OnRequestPreparing(HttpRequestMessage request)` hook that runs before every outgoing request. A `public static {ClassName} Create(IHttpClientFactory factory, string? name = null)` factory method integrates with `IHttpClientFactory` registrations.
+The generated class is `public partial class` so it can be extended in a sibling file. Two extension points are available: a `public {ClassName}(HttpMessageHandler handler)` constructor overload for injecting `DelegatingHandler` chains (Polly, auth headers, telemetry), and a `partial void OnRequestPreparing(HttpRequestMessage request)` hook that runs before every outgoing request.
+
+To integrate with `IHttpClientFactory`, wire up the named client in your composition root and pass the resolved `HttpClient` to the constructor directly:
+
+```csharp
+// Registration (ASP.NET host or Blazor WASM)
+builder.Services.AddHttpClient(nameof(SliceApiClient), c => c.BaseAddress = new Uri("https://api.example.com"))
+    .AddHttpMessageHandler<YourDelegatingHandler>();
+builder.Services.AddScoped(sp =>
+    new SliceApiClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SliceApiClient))));
+```
 
 ## Typed TypeScript client
 

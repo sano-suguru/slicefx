@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SliceFx.BlazorSample.Client": {
+      "commandName": "Project",
+      "applicationUrl": "http://localhost:5102"
+    }
+  }
+}

@@ -23,9 +23,9 @@ internal static partial class GenerateOpenApiCommand
     internal static Command Build()
     {
         var projectOpt = SharedOptions.CreateProject();
-        var outputOpt = new Option<FileInfo?>("--output")
+        var outputOpt = new Option<string?>("--output")
         {
-            Description = "Output OpenAPI JSON file. Defaults to openapi.json in the target project directory.",
+            Description = "Output OpenAPI JSON file or directory (in which case openapi.json is used). Defaults to openapi.json in the target project directory.",
         };
         var titleOpt = new Option<string?>("--title")
         {
@@ -90,8 +90,8 @@ internal static partial class GenerateOpenApiCommand
     }
 
     private static async Task RunAsync(
-        FileInfo? project,
-        FileInfo? output,
+        string? project,
+        string? output,
         string? title,
         string version,
         string openApiVersion,
@@ -134,10 +134,10 @@ internal static partial class GenerateOpenApiCommand
             throw new CliException("No portable or partial Slice routes found for OpenAPI manifest projection.");
         }
 
-        var outputFile = output ?? new FileInfo(Path.Combine(ctx.ProjectDirectory.FullName, "openapi.json"));
-        if (outputFile.Exists && !force)
+        var outputFile = SharedOptions.ResolveOutputFile(output, "openapi.json", ctx.ProjectDirectory);
+        if (File.Exists(outputFile) && !force)
         {
-            throw new CliException($"Output file already exists: {outputFile.FullName}. Pass --force to overwrite it.");
+            throw new CliException($"Output file already exists: {outputFile}. Pass --force to overwrite it.");
         }
 
         var assemblyFiles = BuildOutputAssemblyFinder.FindAssemblyFiles(ctx);
@@ -147,14 +147,18 @@ internal static partial class GenerateOpenApiCommand
             included,
             omitted,
             reader,
-            string.IsNullOrWhiteSpace(title) ? ctx.AssemblyName : title!,
+            string.IsNullOrWhiteSpace(title) ? ctx.AssemblyName : title,
             version,
             openApiVersion);
         var json = JsonSerializer.Serialize(document, JsonOptions);
 
-        Directory.CreateDirectory(outputFile.DirectoryName!);
-        await File.WriteAllTextAsync(outputFile.FullName, json + Environment.NewLine, ct).ConfigureAwait(false);
-        Console.WriteLine($"Generated {outputFile.FullName}");
+        var outputDir = Path.GetDirectoryName(outputFile);
+        if (!string.IsNullOrEmpty(outputDir))
+        {
+            Directory.CreateDirectory(outputDir);
+        }
+        await File.WriteAllTextAsync(outputFile, json + Environment.NewLine, ct).ConfigureAwait(false);
+        Console.WriteLine($"Generated {outputFile}");
         foreach (var route in omitted)
         {
             Console.Error.WriteLine($"Warning: omitted ASP.NET-only route {route.EndpointName} ({route.Method} {route.Pattern}) from manifest OpenAPI projection.");

@@ -113,7 +113,7 @@ internal static class PackageAwsLambdaCommand
     }
 
     private static async Task RunAsync(
-        FileInfo? project,
+        string? project,
         DirectoryInfo? output,
         string mode,
         string artifactLayout,

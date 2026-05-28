@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.BlazorSample.Client</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SliceFx.BlazorSample.Contracts\SliceFx.BlazorSample.Contracts.csproj" />
+  </ItemGroup>
+
+  <!--
+    Run after building the Server to regenerate SliceApiClient.g.cs from the current route manifest.
+    Not hooked to the normal build; CI never runs this. Invoke with:
+      dotnet build -p:RegenSliceClient=true
+  -->
+  <Target Name="RegenSliceClient" Condition="'$(RegenSliceClient)' == 'true'">
+    <Exec Command="dotnet run --project ../../../tools/SliceFx.Cli/SliceFx.Cli.csproj -- client csharp --project ../SliceFx.BlazorSample.Server --namespace SliceFx.BlazorSample.Client --output SliceApiClient.g.cs --force" />
+  </Target>
+
+</Project>

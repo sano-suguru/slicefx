@@ -49,7 +49,7 @@ internal static partial class ListRoutesCommand
         return cmd;
     }
 
-    private static void Run(FileInfo? project, string format)
+    private static void Run(string? project, string format)
     {
         format = NormalizeFormat(format);
         var ctx = ProjectContextDiscovery.Discover(project);

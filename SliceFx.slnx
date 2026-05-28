@@ -5,6 +5,9 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/samples/">
+    <Project Path="samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Contracts/SliceFx.BlazorSample.Contracts.csproj" />
+    <Project Path="samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Server/SliceFx.BlazorSample.Server.csproj" />
+    <Project Path="samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client/SliceFx.BlazorSample.Client.csproj" />
     <Project Path="samples/SliceFx.LambdaFunctionPerFeatureSample/SliceFx.LambdaFunctionPerFeatureSample.csproj" />
     <Project Path="samples/SliceFx.LambdaSample/SliceFx.LambdaSample.csproj" />
     <Project Path="samples/SliceFx.Sample/SliceFx.Sample.csproj" />

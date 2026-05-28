@@ -11,9 +11,9 @@ internal static partial class GenerateCSharpClientCommand
     internal static Command Build()
     {
         var projectOpt = SharedOptions.CreateProject();
-        var outputOpt = new Option<FileInfo?>("--output")
+        var outputOpt = new Option<string?>("--output")
         {
-            Description = "Output .cs file. Defaults to SliceApiClient.g.cs in the target project directory.",
+            Description = "Output .cs file or directory (in which case {className}.g.cs is used). Defaults to SliceApiClient.g.cs in the target project directory.",
         };
         var namespaceOpt = new Option<string?>("--namespace")
         {
@@ -59,8 +59,8 @@ internal static partial class GenerateCSharpClientCommand
     }
 
     private static async Task RunAsync(
-        FileInfo? project,
-        FileInfo? output,
+        string? project,
+        string? output,
         string? @namespace,
         string className,
         bool force,
@@ -83,7 +83,7 @@ internal static partial class GenerateCSharpClientCommand
             throw new CliException("No portable or partial Slice routes found for C# client generation.");
         }
 
-        var outputFile = output?.FullName ?? Path.Combine(ctx.ProjectDirectory.FullName, $"{className}.g.cs");
+        var outputFile = SharedOptions.ResolveOutputFile(output, $"{className}.g.cs", ctx.ProjectDirectory);
         if (File.Exists(outputFile) && !force)
         {
             throw new CliException($"Output file already exists: {outputFile}. Pass --force to overwrite it.");
@@ -144,9 +144,6 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"    public {className}(HttpMessageHandler handler) : this(new HttpClient(handler)) {{ }}");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"    public static {className} Create(IHttpClientFactory factory, string? name = null)");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"        => new(factory.CreateClient(name ?? nameof({className})));");
         sb.AppendLine();
         sb.AppendLine("    partial void OnRequestPreparing(HttpRequestMessage request);");
         sb.AppendLine();

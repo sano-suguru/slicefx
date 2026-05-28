@@ -67,7 +67,7 @@ internal static class NewFeatureCommand
         string? group,
         string method,
         string? route,
-        FileInfo? project,
+        string? project,
         bool force,
         CancellationToken ct)
     {

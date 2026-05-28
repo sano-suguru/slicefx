@@ -11,9 +11,9 @@ internal static partial class GenerateTypeScriptClientCommand
     internal static Command Build()
     {
         var projectOpt = SharedOptions.CreateProject();
-        var outputOpt = new Option<FileInfo?>("--output")
+        var outputOpt = new Option<string?>("--output")
         {
-            Description = "Output .ts file. Defaults to slice-api-client.ts in the target project directory.",
+            Description = "Output .ts file or directory (in which case {kebab-class}.ts is used). Defaults to slice-api-client.ts in the target project directory.",
         };
         var classOpt = new Option<string>("--class")
         {
@@ -53,8 +53,8 @@ internal static partial class GenerateTypeScriptClientCommand
     }
 
     private static async Task RunAsync(
-        FileInfo? project,
-        FileInfo? output,
+        string? project,
+        string? output,
         string className,
         bool force,
         CancellationToken ct)
@@ -73,7 +73,7 @@ internal static partial class GenerateTypeScriptClientCommand
             throw new CliException("No portable or partial Slice routes found for TypeScript client generation.");
         }
 
-        var outputFile = output?.FullName ?? Path.Combine(ctx.ProjectDirectory.FullName, ToKebabCase(className) + ".ts");
+        var outputFile = SharedOptions.ResolveOutputFile(output, ToKebabCase(className) + ".ts", ctx.ProjectDirectory);
         if (File.Exists(outputFile) && !force)
         {
             throw new CliException($"Output file already exists: {outputFile}. Pass --force to overwrite it.");

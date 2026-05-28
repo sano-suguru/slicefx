@@ -15,7 +15,7 @@ public class CliFixtureTests
     {
         using var fixture = CliProjectFixture.Create("my-app");
 
-        var context = ProjectContextDiscovery.Discover(fixture.ProjectFile);
+        var context = ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName);
 
         Assert.Equal("my_app", context.RootNamespace);
     }
@@ -39,7 +39,7 @@ public class CliFixtureTests
             }
             """);
 
-        var routes = RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var routes = RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName));
 
         var route = Assert.Single(routes);
         Assert.Equal("Things.GetThing", route.EndpointName);
@@ -77,7 +77,7 @@ public class CliFixtureTests
             }
             """");
 
-        var routes = RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var routes = RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName));
 
         Assert.Equal(2, routes.Length);
         Assert.Contains(routes, static route => route.EndpointName == "Things.ListThings");
@@ -103,7 +103,7 @@ public class CliFixtureTests
             }
             """);
 
-        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
 
         Assert.Equal(RouteCatalog.PortabilityPartial, route.Portability);
         Assert.Contains("RequestLoggingFilter", route.Filters);
@@ -128,7 +128,7 @@ public class CliFixtureTests
             }
             """);
 
-        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
 
         Assert.Contains("RequireApiKeyFilter<AdminPolicy>", route.Filters);
         Assert.Equal(RouteCatalog.PortabilityPartial, route.Portability);
@@ -167,7 +167,7 @@ public class CliFixtureTests
             }
             """");
 
-        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
 
         var filter = Assert.Single(route.Filters);
         Assert.Equal("RequireApiKeyFilter<AdminPolicy>", filter);
@@ -276,7 +276,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        var route = Assert.Single(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
         Assert.Equal("Things.GetThing", route.EndpointName);
         Assert.Equal("Get a generated thing", route.Summary);
         Assert.Equal("Generated.App.Features.Things.GetThing.Response", route.ReturnType);
@@ -343,7 +343,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
         Assert.Contains("Unsupported SliceFx route manifest schema '999'", exception.Message, StringComparison.Ordinal);
     }
 
@@ -440,7 +440,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
         Assert.Contains("Invalid SliceFx route manifest", exception.Message, StringComparison.Ordinal);
         Assert.Contains("expected 25 constructor arguments but found 17", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Rebuild the project", exception.Message, StringComparison.Ordinal);
@@ -466,7 +466,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        Assert.Empty(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile)));
+        Assert.Empty(RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
     }
 
     [Fact]
@@ -476,7 +476,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName));
 
         Assert.Empty(discovery.Routes);
         Assert.Empty(discovery.AggregatedSourceAssemblyNames);
@@ -489,7 +489,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName));
         var route = Assert.Single(discovery.Routes);
 
         Assert.Equal("Health.GetHealth", route.EndpointName);
@@ -593,7 +593,7 @@ public class CliFixtureTests
 
         await fixture.BuildAsync();
 
-        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile));
+        var discovery = RouteCatalog.DiscoverDetailed(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName));
         var route = Assert.Single(discovery.Routes);
         Assert.Equal("Shared.Body.Client.App.Contracts.CreateItemRequest", route.RequestType);
 
@@ -677,7 +677,7 @@ public class CliFixtureTests
 
         Assert.Contains("public partial class SliceApiClient", client);
         Assert.Contains("public SliceApiClient(HttpMessageHandler handler)", client);
-        Assert.Contains("public static SliceApiClient Create(IHttpClientFactory factory", client);
+        Assert.DoesNotContain("IHttpClientFactory", client);
         Assert.Contains("partial void OnRequestPreparing(HttpRequestMessage request)", client);
         Assert.Contains("_prepareRequest(__message)", client);
     }
@@ -2328,6 +2328,253 @@ public class CliFixtureTests
 
         // Verify generated client compiles cleanly via real SDK (includes SliceApiException, nullable refs, all usings)
         await fixture.BuildAsync();
+    }
+
+    [Fact]
+    public async Task Generated_csharp_client_compiles_against_minimal_runtime_sdk()
+    {
+        // The server uses non-nested Contracts types (shared-contracts pattern) so the generated
+        // client references fully-qualified names from a contracts namespace that the client fixture
+        // can reproduce locally without any server assembly reference.
+        using var serverFixture = CliProjectFixture.Create(
+            "minimal-sdk-server",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>MinimalSdkServer</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        // Non-nested Contracts types: the generator emits FQN references to these.
+        serverFixture.WriteFeature("Contracts/UserContracts.cs",
+            """
+            namespace MinimalSdkServer.Contracts;
+
+            public record CreateUserRequest(string Name);
+            public record CreateUserResponse(int Id, string Name);
+            """);
+        serverFixture.WriteFeature("Features/Users/CreateUser.cs",
+            """
+            using System.ComponentModel.DataAnnotations;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using MinimalSdkServer.Contracts;
+
+            namespace MinimalSdkServer.Features.Users;
+
+            [Feature("POST /users")]
+            public static class CreateUser
+            {
+                public static Task<CreateUserResponse> Handle(
+                    [Required] CreateUserRequest req, CancellationToken ct)
+                    => Task.FromResult(new CreateUserResponse(1, req.Name));
+            }
+            """);
+        await serverFixture.BuildAsync();
+
+        var generatedClientFile = Path.Combine(serverFixture.Directory.FullName, "SliceApiClient.g.cs");
+        var genExit = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", serverFixture.ProjectFile.FullName, "--output", generatedClientFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(0, genExit);
+
+        // Client fixture: bare Microsoft.NET.Sdk — no SliceFx.Core, no Microsoft.AspNetCore.App,
+        // no Microsoft.Extensions.Http. Reproduces the contracts types locally (the shared-contracts
+        // pattern). This is the load-bearing test: if the generator ever emits a type from
+        // Microsoft.Extensions.Http or the ASP.NET shared framework, this build will fail.
+        using var clientFixture = CliProjectFixture.Create(
+            "minimal-sdk-client",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>MinimalSdkClient</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        // Reproduce the same contracts types under the same FQN namespace so the generated
+        // client method signatures resolve without referencing the server assembly.
+        clientFixture.WriteFeature("Contracts/UserContracts.cs",
+            """
+            namespace MinimalSdkServer.Contracts;
+
+            public record CreateUserRequest(string Name);
+            public record CreateUserResponse(int Id, string Name);
+            """);
+
+        File.Copy(generatedClientFile, Path.Combine(clientFixture.Directory.FullName, "SliceApiClient.g.cs"));
+
+        await clientFixture.BuildAsync();
+    }
+
+    [Theory]
+    [InlineData("routes")]
+    public async Task Project_option_accepts_directory_path(string verb)
+    {
+        using var fixture = CliProjectFixture.Create(
+            "dir-path-test",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>DirPathTest</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Health/GetHealth.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace DirPathTest.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public record Response(string Status);
+                public static Task<Response> Handle(CancellationToken ct)
+                    => Task.FromResult(new Response("ok"));
+            }
+            """);
+
+        // Pass the directory, not the .csproj file — this is what the test exercises.
+        var exitCode = verb switch
+        {
+            "routes" => await ListRoutesCommand.Build()
+                .Parse(["--project", fixture.Directory.FullName])
+                .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken),
+            _ => throw new InvalidOperationException($"Unmapped verb: {verb}")
+        };
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void Project_option_directory_with_no_csproj_throws()
+    {
+        var emptyDir = Directory.CreateTempSubdirectory("slicefx-test-empty-").FullName;
+        try
+        {
+            var ex = Assert.Throws<CliException>(() => ProjectContextDiscovery.Discover(emptyDir));
+            Assert.Contains("No *.csproj found in", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(emptyDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Project_option_directory_with_multiple_csprojs_throws()
+    {
+        var dir = Directory.CreateTempSubdirectory("slicefx-test-multi-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "A.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(dir, "B.csproj"), "<Project />");
+            var ex = Assert.Throws<CliException>(() => ProjectContextDiscovery.Discover(dir));
+            Assert.Contains("Multiple *.csproj found", ex.Message);
+            Assert.Contains("Use --project to specify which one.", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveOutputFile_helper_handles_null_file_and_directory_inputs()
+    {
+        var defaultDir = new DirectoryInfo(Directory.CreateTempSubdirectory("slicefx-resolve-out-").FullName);
+        try
+        {
+            // null → default file in default directory
+            var result1 = SharedOptions.ResolveOutputFile(null, "out.json", defaultDir);
+            Assert.Equal(Path.Combine(defaultDir.FullName, "out.json"), result1);
+
+            // explicit file path → resolved to absolute
+            var explicitFile = Path.Combine(defaultDir.FullName, "custom.json");
+            var result2 = SharedOptions.ResolveOutputFile(explicitFile, "out.json", defaultDir);
+            Assert.Equal(Path.GetFullPath(explicitFile), result2);
+
+            // directory path → default file name inside that directory
+            var result3 = SharedOptions.ResolveOutputFile(defaultDir.FullName, "out.json", defaultDir);
+            Assert.Equal(Path.Combine(Path.GetFullPath(defaultDir.FullName), "out.json"), result3);
+
+            // relative file path → resolved to absolute
+            var cwd = Directory.GetCurrentDirectory();
+            var relative = "relative-output.json";
+            var result4 = SharedOptions.ResolveOutputFile(relative, "out.json", defaultDir);
+            Assert.Equal(Path.GetFullPath(relative, cwd), result4);
+        }
+        finally
+        {
+            defaultDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Output_option_accepts_directory_path_for_csharp_client()
+    {
+        using var fixture = CliProjectFixture.Create(
+            "output-dir-path-test",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>OutputDirPathTest</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Health/GetHealth.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace OutputDirPathTest.Features.Health;
+
+            [Feature("GET /health")]
+            public static class GetHealth
+            {
+                public record Response(string Status);
+                public static Task<Response> Handle(CancellationToken ct)
+                    => Task.FromResult(new Response("ok"));
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        // Pass the directory, not a file — the command should place SliceApiClient.g.cs inside it.
+        var outputDir = fixture.Directory.FullName;
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputDir, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        var expectedFile = Path.Combine(outputDir, "SliceApiClient.g.cs");
+        Assert.True(File.Exists(expectedFile), $"Expected generated file at {expectedFile}");
     }
 
     [Fact]
