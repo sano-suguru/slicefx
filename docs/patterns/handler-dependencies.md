@@ -1,6 +1,6 @@
 # Handler dependency and state patterns
 
-A Slice `Handle` method has no constructor injection (it is a static method). Every dependency arrives as a method parameter. That is fine for simple endpoints but starts to feel noisy once a complex business handler needs five or more dependencies.
+A Slice `Handle` method has no constructor injection (it is a static method). Every dependency arrives as a method parameter. See [why `Handle` and its containing class are static](../design-decisions.md#why-are-feature-classes-and-handle-methods-static). That is fine for simple endpoints but starts to feel noisy once a complex business handler needs five or more dependencies.
 
 Keep `Handle` stateless. If a feature needs state, caching, or coordination with an external resource, model that concern as a DI service and pass it to `Handle` like any other dependency. This keeps Slice's generated output as plain Minimal API registration while still letting you keep feature-local infrastructure in the same source file when that is clearer.
 

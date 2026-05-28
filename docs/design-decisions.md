@@ -37,6 +37,25 @@ Three reasons, in order of importance:
 
 Implementation lives in `src/SliceFx.SourceGenerator/`. The pipeline is incremental — see "Why incremental?" below.
 
+## Why are Feature classes and `Handle` methods static?
+
+**`Handle` must be `public static` — this is enforced.** The source generator emits your handler as a method-group delegate:
+
+```csharp
+// generated output (RegistrationEmitter.cs)
+app.MapMethods(
+    "/users",
+    new[] { "POST" },
+    new Func<Request, IUserStore, CancellationToken, Task<Response>>(
+        CreateUser.Handle))
+```
+
+A static method group converts to a delegate with no instance capture, no per-request allocation, and no boxing. (For `void`-returning handlers, the emitter uses `Action<...>` instead of `Func<...>`.) The trimmer can trace from the delegate back to the method statically, keeping AOT-published binaries small. Minimal API then binds each `Handle` parameter from DI, the route, the query string, or the request body automatically. A missing `Handle` is SLICE001, a `Handle` that is not `public static` is SLICE002, and multiple `Handle` methods are SLICE003 — all Errors at compile time.
+
+**The containing class should also be `public static` — this is conventional, not enforced.** Making the class static communicates that a feature carries no instance state (DI flows only through `Handle` parameters), prevents accidentally adding fields or constructors that would never be populated, and prevents inheritance — which conflicts with SliceFx's intent that each feature is a standalone, independently deployable unit. The CLI scaffolder (`slicefx new feature`) and every sample in the repository follow this pattern.
+
+It is not enforced by the generator because the compiler already catches the only real misuse: a `static` `Handle` method cannot read instance fields, so the worst a non-static feature class can do is accumulate harmless dead code.
+
 ## Why `IIncrementalGenerator`?
 
 The [`IIncrementalGenerator`](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview) API only avoids re-running work on every keystroke if the pipeline is wired with cacheable inputs. SliceFx does:

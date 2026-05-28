@@ -77,8 +77,8 @@ Diagnostic IDs are grouped into reserved ranges so new rules can be added withou
 <!-- diagnostics-reference:start -->
 | ID | Severity | Area | Meaning | Suggested fix |
 | --- | --- | --- | --- | --- |
-| `SLICE001` | Error | Core feature shape | Feature type has no `Handle` method. | Add exactly one `public static Handle(...)` method. |
-| `SLICE002` | Error | Core feature shape | `Handle` exists but is not public and static. | Make the handler `public static`. |
+| `SLICE001` | Error | Core feature shape | Feature type has no `Handle` method. | Add exactly one `public static Handle(...)` method. See [Why are Feature classes and `Handle` methods static?](design-decisions.md#why-are-feature-classes-and-handle-methods-static) |
+| `SLICE002` | Error | Core feature shape | `Handle` exists but is not public and static. | Make the handler `public static`. See [Why are Feature classes and `Handle` methods static?](design-decisions.md#why-are-feature-classes-and-handle-methods-static) |
 | `SLICE003` | Error | Core feature shape | Multiple `Handle` methods make the feature ambiguous. | Keep one handler method per feature type. |
 | `SLICE004` | Error | Routing | Route is not in `METHOD /path` form. | Use a supported HTTP method followed by an absolute route path. |
 | `SLICE005` | Error | Endpoint metadata | Two features produce the same endpoint name. | Rename one feature or set `FeatureAttribute.Name` / `FeatureAttribute.Tag`. |
