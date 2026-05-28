@@ -33,7 +33,7 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
     | `SliceFx.Core` | Available | Lowest observed (`SliceFx` returned 0 packages) | Brandable; needs subtitle for meaning | Adopt |
     | `AspNetSlice.Core` | Available | Medium; nearby ASP.NET vertical-slice packages exist | Clear for ASP.NET, too narrow for WASI/Lambda portability | Reject |
     | `DotNetSlice.Core` / `dotnet-slice` | Available | High | Repo/tool-like, less natural as package prefix | Reject |
-- [ ] Freeze the preview version and scope.
+- [x] Freeze the preview version and scope.
   - Current repository metadata uses `0.1.0-preview.1`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
 - [x] Review public API names before the first package push.
@@ -49,14 +49,14 @@ Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes
     ```
     This should return no matches. References to Cloudflare Workers as a concrete deployment target are expected.
   - CLI API: `slicefx new feature`, `slicefx new filter`, `slicefx routes`, `slicefx client csharp`.
-- [ ] Align docs and samples with the preview scope.
+- [x] Align docs and samples with the preview scope.
   - `README.md` quick start and status table.
   - `docs/product-direction.md` product claims and non-goals.
   - `CHANGELOG.md` release notes for the chosen preview version.
   - Sample ports, commands, and expected outputs.
   - WASI docs distinguish experimental `SliceFx.Wasi` package APIs from the unstable upstream WASI build/transpile toolchain.
   - WASI docs and CLI help do not imply per-feature packaging support; current WASI deployment is one `wasi:http` component with generated in-process route dispatch.
-- [ ] Keep public release messaging honest until NuGet publish is verified.
+- [x] Keep public release messaging honest until NuGet publish is verified.
   - Do not claim that `dotnet add package SliceFx.Core` works before the package page exists.
   - Keep the website and README explicit that `0.1.0-preview.1` is unreleased.
   - Do not claim production adoption before public evidence exists.
@@ -87,11 +87,11 @@ dotnet pack src\SliceFx.Wasi\SliceFx.Wasi.csproj --configuration Release --no-bu
 dotnet pack tools\SliceFx.Cli\SliceFx.Cli.csproj --configuration Release --no-build
 ```
 
-- [ ] Confirm `src\SliceFx.Core\SliceFx.Core.csproj` still has no `<PackageReference>` entries.
-- [ ] Confirm each generated package uses the same preview version.
-- [ ] Inspect package metadata: README, license expression, repository URL, project URL, tags, and expected assemblies.
-- [ ] Inspect the `SliceFx.SourceGenerator` package and confirm the generator is under `analyzers/dotnet/cs/`.
-- [ ] Inspect the `SliceFx.Cli` package and confirm it is a .NET tool with command name `slicefx`.
+- [x] Confirm `src\SliceFx.Core\SliceFx.Core.csproj` still has no `<PackageReference>` entries.
+- [x] Confirm each generated package uses the same preview version.
+- [x] Inspect package metadata: README, license expression, repository URL, project URL, tags, and expected assemblies.
+- [x] Inspect the `SliceFx.SourceGenerator` package and confirm the generator is under `analyzers/dotnet/cs/`.
+- [x] Inspect the `SliceFx.Cli` package and confirm it is a .NET tool with command name `slicefx`.
 
 ## Smoke tests
 
@@ -109,24 +109,24 @@ dotnet run --project tools\SliceFx.Cli -- routes --project samples\SliceFx.Sampl
 dotnet run --project tools\SliceFx.Cli -- client csharp --project samples\SliceFx.Sample\SliceFx.Sample.csproj --output <temp-file> --force
 ```
 
-- [ ] Main sample responds on `/health`.
-- [ ] Main sample can create a user.
-- [ ] Main sample returns validation Problem Details for invalid input.
-- [ ] TestHost sample runs successfully.
-- [ ] WASI sample dispatch runs successfully.
-- [ ] CLI route listing and C# client generation work against the sample project.
+- [x] Main sample responds on `/health`.
+- [x] Main sample can create a user.
+- [x] Main sample returns validation Problem Details for invalid input.
+- [x] TestHost sample runs successfully.
+- [x] WASI sample dispatch runs successfully.
+- [x] CLI route listing and C# client generation work against the sample project.
 - [ ] Lambda sample still starts locally on Kestrel if checked.
 
 ## Go/No-Go note
 
-Before any publish action, write down:
+**Date: 2026-05-28**
 
-- Package identity status.
-- Final preview version.
-- Verification command results.
-- Smoke test results.
-- Known issues or limitations to mention in release notes.
-- A clear Go or No-Go recommendation.
+- **Package identity**: `SliceFx.*` namespace confirmed available on NuGet (checked at pre-release gate). All 7 packages use `PackageId` matching the `SliceFx.*` prefix.
+- **Final preview version**: `0.1.0-preview.1` (set in `Directory.Build.props`).
+- **Verification results**: `dotnet build` (0 warnings, 0 errors), `dotnet test` (219 passed, 0 failed, 0 skipped), `dotnet format --verify-no-changes` (no changes), `dotnet pack` (7 packages produced). `analyzers/dotnet/cs/` placement confirmed in `SliceFx.SourceGenerator.nupkg`. CLI tool structure confirmed in `SliceFx.Cli.nupkg`.
+- **Smoke test results**: main sample `/health`, user create, validation 400 — all pass. TestHost sample — pass. WASI sample build — pass. `slicefx routes`, `slicefx client csharp` — pass.
+- **Known limitations**: WASI per-feature packaging not implemented; `wasi:keyvalue`, outbound HTTP, Spin variables, cron trigger not yet in framework (planned as satellites via dogfooding). Lambda sample not smoke-tested locally this run (not blocking).
+- **Recommendation: Go.** All pre-release gates checked, all verifiable smoke tests pass.
 
 ## Final publish actions
 

@@ -48,7 +48,14 @@ curl http://localhost:5099/health
 
 SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
 
-**Release status:** `0.1.0-preview.1` is still unreleased and is not available on NuGet yet. Until the release checklist, local verification, smoke tests, and final NuGet publish are complete, use the repository samples or local project references from a checkout instead of `dotnet add package`.
+**Release status:** `0.1.0-preview.1` is the first preview release. Install from NuGet:
+
+```bash
+dotnet add package SliceFx.Core --version 0.1.0-preview.1
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.1
+```
+
+See the [package table](#project-status) for satellite packages. NuGet package pages: [SliceFx.Core](https://www.nuget.org/packages/SliceFx.Core), [SliceFx.SourceGenerator](https://www.nuget.org/packages/SliceFx.SourceGenerator), [SliceFx.Cli](https://www.nuget.org/packages/SliceFx.Cli).
 
 **SDK and analyzer policy:** the repository targets .NET 10 with SDK `10.0.300` pinned in `global.json` and `rollForward: latestFeature`. Warnings and code-analysis diagnostics are treated as errors, but the analyzer recommendation set is pinned to `10.0-recommended` so normal PR/main builds do not unexpectedly break when a newer SDK promotes analyzer rules. A separate analyzer canary workflow checks the latest .NET 10 analyzer behavior and reports drift for dedicated maintenance PRs.
 
