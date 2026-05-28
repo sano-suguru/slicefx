@@ -19,6 +19,9 @@ The sample uses a **standalone** hosting model: the Blazor WASM client and the S
 
 ## Run locally
 
+> [!IMPORTANT]
+> Blazor WASM's **standalone hosting model** requires two terminals. For a single-process layout, see the **Hosted alternative** note in [Notes](#notes) below.
+
 **Terminal A — API server (port 5101):**
 
 ```bash
@@ -82,6 +85,24 @@ dotnet build samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client -p:RegenSl
 **`dotnet run` only, not `dotnet publish`.** `Microsoft.NET.Sdk.BlazorWebAssembly` enables `PublishTrimmed=true` by default. Trimming would strip the DataAnnotations validation reflection metadata and the JSON reflection used in `ReadFromJsonAsync<T>` and `SliceApiClient.SliceApiException` deserialization. Production trimming configuration is out of scope for this sample.
 
 **Hosted alternative.** If you want a single-process deployment where the server also serves the WASM static files, add `Microsoft.AspNetCore.Components.WebAssembly.Server` to the server project, add a project reference from server to client, and call `app.UseBlazorFrameworkFiles()` + `app.UseStaticFiles()` + `app.MapFallbackToFile("index.html")` in `Program.cs`. The CORS policy and separate client process are not needed in that configuration.
+
+## Troubleshooting
+
+**Browser console shows a CORS error.**
+The API server allows only `http://localhost:5102` as an allowed origin. If you changed the client port or started only one of the two processes, cross-origin requests will be blocked by the browser. Check that both Server and Client are running on their expected ports (5101 and 5102). See `Server/Program.cs` and the "Why CORS with `AllowAnyHeader`?" note above for the full policy.
+
+**`SliceApiClient.g.cs` is out of date after changing server routes or Contracts.**
+Build the server first, then regenerate:
+
+```bash
+dotnet build samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Server
+dotnet build samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client -p:RegenSliceClient=true
+```
+
+See the [Regenerate the typed client](#regenerate-the-typed-client) section above for the full two-step process and the direct CLI invocation.
+
+**Swapping `demo-token` for a real bearer token.**
+`Client/BearerTokenHandler.cs` is a `DelegatingHandler` stub that adds `Authorization: Bearer demo-token` to every request. Replace its `SendAsync` body with an MSAL `IConfidentialClientApplication` call, an `IdentityModel` token cache lookup, or any `HttpClient`-compatible token provider. The handler is already wired into the named `HttpClient` via `AddHttpMessageHandler<BearerTokenHandler>()` in `Client/Program.cs` — no further registration changes are needed.
 
 ## Further reading
 

@@ -243,6 +243,7 @@ The Slice route manifest is a separate build-time artifact for portability class
 | --- | --- |
 | Source generator and route manifest | [docs/source-generator.md](docs/source-generator.md) |
 | CLI commands | [docs/cli.md](docs/cli.md) |
+| Blazor WASM + generated typed client sample | [samples/SliceFx.BlazorSample/](samples/SliceFx.BlazorSample/README.md) |
 | OpenAPI integration | [docs/guides/openapi.md](docs/guides/openapi.md) |
 | Lambda hosting and function-per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | Lambda function-per-feature sample | [samples/SliceFx.LambdaFunctionPerFeatureSample/](samples/SliceFx.LambdaFunctionPerFeatureSample/README.md) |

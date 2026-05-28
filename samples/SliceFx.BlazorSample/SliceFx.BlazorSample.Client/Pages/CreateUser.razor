@@ -1,36 +1,38 @@
 @page "/"
 @inject SliceApiClient ApiClient
 
-<h1>Create User</h1>
+<main>
+    <h1>Create User</h1>
 
-@if (_created is not null)
-{
-    <p>
-        Created <strong>@_created.Name</strong> (<code>@_created.Email</code>)
-        with ID <code>@_created.Id</code> at @_created.CreatedAt.ToString("u").
-    </p>
-    <button @onclick="Reset">Create another</button>
-}
-else
-{
-    <EditForm EditContext="_editContext" OnValidSubmit="SubmitAsync">
-        <DataAnnotationsValidator />
-
-        <div>
-            <label for="name">Name</label>
-            <InputText id="name" @bind-Value="_model.Name" />
-            <ValidationMessage For="@(() => _model.Name)" />
+    @if (_created is not null)
+    {
+        <div class="success-card">
+            Created <strong>@_created.Name</strong> (<code>@_created.Email</code>)
+            with ID <code>@_created.Id</code> at @_created.CreatedAt.ToString("u").
         </div>
+        <button @onclick="Reset">Create another</button>
+    }
+    else
+    {
+        <EditForm EditContext="_editContext" OnValidSubmit="SubmitAsync">
+            <DataAnnotationsValidator />
 
-        <div>
-            <label for="email">Email</label>
-            <InputText id="email" @bind-Value="_model.Email" />
-            <ValidationMessage For="@(() => _model.Email)" />
-        </div>
+            <div class="field">
+                <label for="name">Name</label>
+                <InputText id="name" @bind-Value="_model.Name" />
+                <ValidationMessage For="@(() => _model.Name)" />
+            </div>
 
-        <button type="submit" disabled="@_submitting">@(_submitting ? "Creating…" : "Create")</button>
-    </EditForm>
-}
+            <div class="field">
+                <label for="email">Email</label>
+                <InputText id="email" @bind-Value="_model.Email" />
+                <ValidationMessage For="@(() => _model.Email)" />
+            </div>
+
+            <button type="submit" disabled="@_submitting">@(_submitting ? "Creating…" : "Create")</button>
+        </EditForm>
+    }
+</main>
 
 @code {
     private CreateUserRequest _model = new();
