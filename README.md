@@ -35,7 +35,7 @@ Existing ASP.NET Core apps do not need a rewrite. Start with one endpoint, keep 
 
 ### Latest benchmark results
 
-![Latest source generator benchmark results](docs/perf/latest.svg)
+![Latest source generator benchmark results](https://raw.githubusercontent.com/sano-suguru/slicefx/main/docs/perf/latest.svg)
 
 Each endpoint is a static feature file: request, response, validation, filters, and handler stay together. The source generator turns those features into ASP.NET registrations, route metadata for tooling, Lambda handlers, or wasi:http dispatch where the handler shape is portable.
 
