@@ -8,6 +8,14 @@ SliceFx is an experimental .NET web framework built on ASP.NET Core Minimal API 
 
 This is pre-1.0 experimental software. Source Generator / AOT, TestHost, Lambda (ASP.NET-hosted and function-per-feature NativeAOT), fluent validation, WASI, and CLI scaffolding are implemented experimentally, but preview packages should use `0.x` versions until the public API is intentionally stabilized. WASI publishing also depends on unstable upstream preview tooling; do not present componentize-dotnet, NativeAOT-LLVM, `jco`, `preview2-shim`, Wrangler, or Cloudflare runtime behavior as SliceFx-controlled guarantees. CI (`.github/workflows/ci.yml`) runs restore, Release build, tests, package verification, a `dotnet format SliceFx.slnx --verify-no-changes --severity info --exclude-diagnostics CS1591` gate, and a guard that fails if `src/SliceFx.Core/SliceFx.Core.csproj` gains a `<PackageReference>`. Other workflows: `pages.yml` publishes `docs/` to GitHub Pages; `perf.yml` runs nightly source-generator + runtime benchmarks and commits chart updates; `analyzer-canary.yml` reports drift against the latest .NET 10 analyzer set monthly without breaking the pinned baseline; `lambda-nativeaot-arm64.yml` packages the linux-arm64 Lambda NativeAOT fixture on a self-hosted ARM64 runner. Targets **.NET 10** (`Directory.Build.props` pins `<TargetFramework>net10.0</TargetFramework>` with `LangVersion=latest`; the source generator stays on `netstandard2.0` as Roslyn requires). SDK pinned via `global.json` to `10.0.300` (`rollForward: latestFeature`).
 
+## First-time setup
+
+After cloning, activate the pre-push format gate (mirrors CI):
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Commands
 
 ```bash

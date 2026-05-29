@@ -1,0 +1,3 @@
+#!/bin/sh
+# Mirrors the CI format gate. Run 'dotnet format SliceFx.slnx' to fix.
+dotnet format SliceFx.slnx --verify-no-changes --severity info --exclude-diagnostics CS1591
