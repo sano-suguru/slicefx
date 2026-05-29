@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.Wasi.KeyValue</RootNamespace>
+    <AssemblyName>SliceFx.Wasi.KeyValue</AssemblyName>
+    <PackageId>SliceFx.Wasi.KeyValue</PackageId>
+    <Description>IKeyValueStore abstraction and in-memory implementation for SliceFx WASI applications. Provides a portable interface over wasi:keyvalue/store@0.2.0-draft; the concrete Spin/host implementation is provided by the application using componentize-dotnet WIT bindings.</Description>
+    <PackageTags>slicefx;slice;wasi;keyvalue;kv;spin;fermyon;wasm;vertical-slice-architecture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SliceFx.Wasi\SliceFx.Wasi.csproj" />
+  </ItemGroup>
+
+</Project>

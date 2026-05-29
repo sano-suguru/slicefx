@@ -21,6 +21,7 @@
     <Project Path="src/SliceFx.SourceGenerator/SliceFx.SourceGenerator.csproj" />
     <Project Path="src/SliceFx.TestHost/SliceFx.TestHost.csproj" />
     <Project Path="src/SliceFx.Wasi/SliceFx.Wasi.csproj" />
+    <Project Path="src/SliceFx.Wasi.KeyValue/SliceFx.Wasi.KeyValue.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SliceFx.Benchmarks/SliceFx.Benchmarks.csproj" />
@@ -36,6 +37,8 @@
     <Project Path="tests/SliceFx.SourceGenerator.Tests/SliceFx.SourceGenerator.Tests.csproj" />
     <Project Path="tests/SliceFx.TestHost.Tests/SliceFx.TestHost.Tests.csproj" />
     <Project Path="tests/SliceFx.Wasi.Tests/SliceFx.Wasi.Tests.csproj" />
+    <Project Path="tests/SliceFx.Wasi.KeyValue.Tests/SliceFx.Wasi.KeyValue.Tests.csproj" />
+    <Project Path="tests/SliceFx.Wasi.IntegrationTests/SliceFx.Wasi.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/SliceFx.Cli/SliceFx.Cli.csproj" />
