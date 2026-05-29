@@ -4,7 +4,7 @@ SliceFx is pre-1.0 experimental software. Use `0.x` preview versions until the p
 
 This checklist is for deciding whether the repository is ready for a preview release. It intentionally separates pre-release preparation from the final publish actions.
 
-Current version: `0.1.0-preview.2` (published 2026-05-29). Initial publish was `0.1.0-preview.1` (2026-05-29).
+Current version: `0.1.0-preview.3` (published 2026-05-29). Previous: `0.1.0-preview.2` (2026-05-29). Initial publish was `0.1.0-preview.1` (2026-05-29).
 
 ## Repository readiness
 
@@ -34,7 +34,7 @@ Current version: `0.1.0-preview.2` (published 2026-05-29). Initial publish was `
     | `AspNetSlice.Core` | Available | Medium; nearby ASP.NET vertical-slice packages exist | Clear for ASP.NET, too narrow for WASI/Lambda portability | Reject |
     | `DotNetSlice.Core` / `dotnet-slice` | Available | High | Repo/tool-like, less natural as package prefix | Reject |
 - [x] Freeze the preview version and scope.
-  - Current repository metadata uses `0.1.0-preview.2`.
+  - Current repository metadata uses `0.1.0-preview.3`.
   - Preview scope should cover only the implemented experimental packages and documented limitations.
 - [x] Review public API names before the first package push.
   - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`ISliceValidator<T>`, `SliceValidationResult`).
@@ -121,7 +121,7 @@ dotnet run --project tools\SliceFx.Cli -- client csharp --project samples\SliceF
 
 **Date: 2026-05-28**
 
-- **Package identity**: `SliceFx.*` namespace confirmed available on NuGet (checked at pre-release gate). All 7 packages use `PackageId` matching the `SliceFx.*` prefix.
+- **Package identity**: `SliceFx.*` namespace confirmed available on NuGet (checked at pre-release gate). All 9 packages use `PackageId` matching the `SliceFx.*` prefix.
 - **Final preview version**: `0.1.0-preview.1` (set in `Directory.Build.props`).
 - **Verification results**: `dotnet build` (0 warnings, 0 errors), `dotnet test` (219 passed, 0 failed, 0 skipped), `dotnet format --verify-no-changes` (no changes), `dotnet pack` (7 packages produced). `analyzers/dotnet/cs/` placement confirmed in `SliceFx.SourceGenerator.nupkg`. CLI tool structure confirmed in `SliceFx.Cli.nupkg`.
 - **Smoke test results**: main sample `/health`, user create, validation 400 — all pass. TestHost sample — pass. WASI sample build — pass. `slicefx routes`, `slicefx client csharp` — pass.
