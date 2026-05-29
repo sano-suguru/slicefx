@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "slicefx.cli": {
-      "version": "0.1.0-preview.1",
+      "version": "0.1.0-preview.2",
       "commands": [
         "slicefx"
       ],

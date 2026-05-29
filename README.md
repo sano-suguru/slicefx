@@ -48,11 +48,11 @@ curl http://localhost:5099/health
 
 SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
 
-**Release status:** `0.1.0-preview.1` is the first preview release. Install from NuGet:
+**Release status:** `0.1.0-preview.2` is the latest preview release. Install from NuGet:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.1
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.1
+dotnet add package SliceFx.Core --version 0.1.0-preview.2
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.2
 ```
 
 See the [package table](#project-status) for satellite packages. NuGet package pages: [SliceFx.Core](https://www.nuget.org/packages/SliceFx.Core), [SliceFx.SourceGenerator](https://www.nuget.org/packages/SliceFx.SourceGenerator), [SliceFx.Cli](https://www.nuget.org/packages/SliceFx.Cli).
@@ -76,8 +76,8 @@ All adapters are opt-in. Reference only the packages you need; the source genera
 Add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.1
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.1
+dotnet add package SliceFx.Core --version 0.1.0-preview.2
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.2
 ```
 
 ## Hello, SliceFx
