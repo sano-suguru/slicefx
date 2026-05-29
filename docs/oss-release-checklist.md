@@ -132,10 +132,10 @@ dotnet run --project tools\SliceFx.Cli -- client csharp --project samples\SliceF
 
 Do these only after the pre-release gates are complete and the Go/No-Go note says Go.
 
-- [ ] Run final CI from the actual Git repository.
-- [ ] Create a GitHub release with the same version as the packages.
-- [ ] Publish packages to NuGet after release notes are final.
-- [ ] Verify the published package pages.
+- [x] Run final CI from the actual Git repository.
+- [x] Create a GitHub release with the same version as the packages.
+- [x] Publish packages to NuGet after release notes are final.
+- [x] Verify the published package pages.
 
 ## GitHub Pages
 
