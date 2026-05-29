@@ -4,12 +4,6 @@ All notable changes to SliceFx will be documented in this file.
 
 This project follows semantic versioning once stable packages are published. Before then, `0.x` and preview versions may change APIs while the framework is experimental.
 
-## 0.1.0-preview.2 - 2026-05-29
-
-### Fixed
-
-- README on NuGet package pages: corrected stale "unreleased" status text and fixed benchmark SVG to use an absolute URL.
-
 ## 0.1.0-preview.1 - 2026-05-29
 
 Initial experimental release of the SliceFx framework.
