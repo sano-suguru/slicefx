@@ -73,7 +73,12 @@ All adapters are opt-in. Reference only the packages you need; the source genera
 | `SliceFx.Wasi` | ASP.NET-independent wasi:http dispatch. |
 | `SliceFx.Cli` | Scaffolding, route inspection, AWS SAM manifest/package helpers, and typed client generation. |
 
-After the first preview is published, minimal ASP.NET Core apps will add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version. Those package install commands are intentionally omitted until the NuGet package pages exist.
+Add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version:
+
+```bash
+dotnet add package SliceFx.Core --version 0.1.0-preview.1
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.1
+```
 
 ## Hello, SliceFx
 

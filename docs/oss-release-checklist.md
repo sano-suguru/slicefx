@@ -4,7 +4,7 @@ SliceFx is pre-1.0 experimental software. Use `0.x` preview versions until the p
 
 This checklist is for deciding whether the repository is ready for a preview release. It intentionally separates pre-release preparation from the final publish actions.
 
-Current Go/No-Go: **No-Go** until local verification, smoke tests, release notes, and NuGet publish verification are complete.
+Current Go/No-Go: **Go** — `0.1.0-preview.1` published to NuGet on 2026-05-29.
 
 ## Repository readiness
 
