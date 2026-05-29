@@ -1,0 +1,45 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write  # Required for NuGet Trusted Publishing (OIDC)
+
+jobs:
+  publish:
+    name: Pack and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SliceFx.slnx
+
+      - name: Build
+        run: dotnet build SliceFx.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Pack
+        run: |
+          dotnet pack src/SliceFx.Core/SliceFx.Core.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.SourceGenerator/SliceFx.SourceGenerator.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.Lambda/SliceFx.Lambda.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.Lambda.FunctionPerFeature/SliceFx.Lambda.FunctionPerFeature.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.TestHost/SliceFx.TestHost.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.Wasi/SliceFx.Wasi.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.Wasi.KeyValue/SliceFx.Wasi.KeyValue.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build --output ./nupkg
+
+      - name: Publish to NuGet (Trusted Publishing)
+        run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
