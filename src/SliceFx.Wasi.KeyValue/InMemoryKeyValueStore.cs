@@ -13,7 +13,7 @@ public sealed class InMemoryKeyValueStore : IKeyValueStore
     public ValueTask<byte[]?> GetBytesAsync(string key, CancellationToken ct = default)
     {
         _store.TryGetValue(key, out var value);
-        return ValueTask.FromResult<byte[]?>(value);
+        return ValueTask.FromResult(value);
     }
 
     /// <inheritdoc/>
