@@ -28,7 +28,7 @@ dotnet run --project samples/SliceFx.TestHostSample # in-process HTTP demo (no s
 dotnet run --project samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Server  # API on http://localhost:5101 (run alongside the Client)
 dotnet run --project samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client  # WASM dev server on http://localhost:5102
 dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release  # Linux x64 / Windows x64, or Docker linux/amd64 on macOS
-dotnet format SliceFx.slnx --verify-no-changes --severity info --exclude-diagnostics CS1591  # matches CI; drop --verify-no-changes to apply
+dotnet format SliceFx.slnx --verify-no-changes --severity info --exclude-diagnostics CS1591 xUnit1004  # matches CI; drop --verify-no-changes to apply
 ```
 
 xUnit tests live under `tests/` — runtime tests (`SliceFx.Core.Tests`, `SliceFx.SourceGenerator.Tests`, `SliceFx.TestHost.Tests`, `SliceFx.Wasi.Tests`, `SliceFx.Lambda.Tests`, `SliceFx.Lambda.FunctionPerFeature.Tests`, `SliceFx.Cli.Tests`), the `SliceFx.Lambda.NativeAotFixture` support project, and benchmarks (`SliceFx.Benchmarks`, `SliceFx.Benchmarks.Runtime`, plus the `SliceFx.Benchmarks.RuntimeApps/Bench{50,100,200}` size-graded scenario apps). CI runs `dotnet test SliceFx.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test SliceFx.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):

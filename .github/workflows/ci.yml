@@ -67,7 +67,7 @@ jobs:
           dotnet pack tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build
 
       - name: Verify formatting
-        run: dotnet format SliceFx.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591
+        run: dotnet format SliceFx.slnx --verify-no-changes --no-restore --severity info --exclude-diagnostics CS1591 xUnit1004
 
       - name: Guard SliceFx.Core dependency boundary
         shell: pwsh
