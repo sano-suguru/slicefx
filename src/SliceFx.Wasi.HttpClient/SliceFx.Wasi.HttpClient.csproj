@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.Wasi.HttpClient</RootNamespace>
+    <AssemblyName>SliceFx.Wasi.HttpClient</AssemblyName>
+    <PackageId>SliceFx.Wasi.HttpClient</PackageId>
+    <Description>IWasiHttpClient abstraction and in-memory test double for SliceFx WASI applications. Provides a portable interface over wasi:http/outgoing-handler@0.2.0; the concrete WIT-bound implementation is provided by the application using componentize-dotnet bindings.</Description>
+    <PackageTags>slicefx;slice;wasi;http;httpclient;spin;fermyon;wasm;vertical-slice-architecture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SliceFx.Wasi\SliceFx.Wasi.csproj" />
+  </ItemGroup>
+
+</Project>

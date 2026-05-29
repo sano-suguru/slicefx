@@ -64,6 +64,7 @@ jobs:
           dotnet pack src/SliceFx.TestHost/SliceFx.TestHost.csproj --configuration Release --no-build
           dotnet pack src/SliceFx.Wasi/SliceFx.Wasi.csproj --configuration Release --no-build
           dotnet pack src/SliceFx.Wasi.KeyValue/SliceFx.Wasi.KeyValue.csproj --configuration Release --no-build
+          dotnet pack src/SliceFx.Wasi.HttpClient/SliceFx.Wasi.HttpClient.csproj --configuration Release --no-build
           dotnet pack tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build
 
       - name: Verify formatting

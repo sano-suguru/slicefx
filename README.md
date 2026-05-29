@@ -71,6 +71,8 @@ All adapters are opt-in. Reference only the packages you need; the source genera
 | `SliceFx.Lambda.FunctionPerFeature` | Experimental HTTP API v2 function-per-feature Lambda handlers. |
 | `SliceFx.TestHost` | In-process test host helpers. |
 | `SliceFx.Wasi` | ASP.NET-independent wasi:http dispatch. |
+| `SliceFx.Wasi.KeyValue` | `IKeyValueStore` abstraction and in-memory test double for WASI features. |
+| `SliceFx.Wasi.HttpClient` | `IWasiHttpClient` abstraction and in-memory test double for outgoing HTTP in WASI features. |
 | `SliceFx.Cli` | Scaffolding, route inspection, AWS SAM manifest/package helpers, and typed client generation. |
 
 Add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version:

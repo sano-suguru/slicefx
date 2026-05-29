@@ -39,4 +39,17 @@ public sealed class SpinRoundTripTests
         var response = await http.GetAsync("/api/items", TestContext.Current.CancellationToken);
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
     }
+
+    [Fact(Skip = "Requires Spin with outgoing HTTP: set SPIN_ENDPOINT env var and run 'spin up'")]
+    public async Task FeedRefresh_OutgoingHttp_ReturnsOk()
+    {
+        if (_endpoint is null)
+        {
+            return;
+        }
+
+        using var http = new HttpClient { BaseAddress = new Uri(_endpoint) };
+        var response = await http.PostAsync("/api/feeds/refresh", null, TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+    }
 }
