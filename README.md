@@ -48,11 +48,11 @@ curl http://localhost:5099/health
 
 SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
 
-**Release status:** `0.1.0-preview.3` is the latest preview release. Install from NuGet:
+**Release status:** `0.1.0-preview.4` is the latest preview release. Install from NuGet:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.3
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.3
+dotnet add package SliceFx.Core --version 0.1.0-preview.4
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.4
 ```
 
 See the [package table](#project-status) for satellite packages. NuGet package pages: [SliceFx.Core](https://www.nuget.org/packages/SliceFx.Core), [SliceFx.SourceGenerator](https://www.nuget.org/packages/SliceFx.SourceGenerator), [SliceFx.Cli](https://www.nuget.org/packages/SliceFx.Cli).
@@ -73,13 +73,14 @@ All adapters are opt-in. Reference only the packages you need; the source genera
 | `SliceFx.Wasi` | ASP.NET-independent wasi:http dispatch. |
 | `SliceFx.Wasi.KeyValue` | `IKeyValueStore` abstraction and in-memory test double for WASI features. |
 | `SliceFx.Wasi.HttpClient` | `IWasiHttpClient` abstraction and in-memory test double for outgoing HTTP in WASI features. |
+| `SliceFx.Wasi.Spin` | `ISpinCronHandler` abstraction, `SpinCronDispatcher`, and recording test double for Spin cron trigger integration in WASI features. |
 | `SliceFx.Cli` | Scaffolding, route inspection, AWS SAM manifest/package helpers, and typed client generation. |
 
 Add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.3
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.3
+dotnet add package SliceFx.Core --version 0.1.0-preview.4
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.4
 ```
 
 ## Hello, SliceFx

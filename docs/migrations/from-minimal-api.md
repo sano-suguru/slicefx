@@ -2,7 +2,7 @@
 
 SliceFx is designed to sit beside standard ASP.NET Core Minimal APIs. You can migrate one endpoint at a time, keep the rest of the app unchanged, and stop the migration if the feature shape does not pay for itself.
 
-> **Preview status:** `0.1.0-preview.3` is available on NuGet. This is pre-1.0 experimental software — APIs may change before a stable release.
+> **Preview status:** `0.1.0-preview.4` is available on NuGet. This is pre-1.0 experimental software — APIs may change before a stable release.
 
 ## When this is a good fit
 
@@ -17,8 +17,8 @@ Keep your existing builder style. `CreateSlimBuilder` is used in samples because
 Add the packages:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.3
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.3
+dotnet add package SliceFx.Core --version 0.1.0-preview.4
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.4
 ```
 
 Then add a global using for the generated namespace:

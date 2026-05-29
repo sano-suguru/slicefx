@@ -2,7 +2,7 @@
 
 Controller migration should be selective and staged. SliceFx can run in the same ASP.NET Core app as MVC controllers, so you can move one action into one feature file, compare behavior, and leave controller-heavy areas alone.
 
-> **Preview status:** `0.1.0-preview.3` is available on NuGet. This is pre-1.0 experimental software — APIs may change before a stable release.
+> **Preview status:** `0.1.0-preview.4` is available on NuGet. This is pre-1.0 experimental software — APIs may change before a stable release.
 
 ## When this is a good fit
 

@@ -2,7 +2,7 @@
 
 This document defines the **objective gate values** for deciding whether SliceFx is ready to adopt in production. These are readiness targets, not a claim that SliceFx is production-ready today.
 
-Current public status: `0.1.0-preview.3` is published on NuGet (2026-05-29). No production adoption is claimed yet.
+Current public status: `0.1.0-preview.4` is published on NuGet (2026-05-29). No production adoption is claimed yet.
 
 ## Strength-preservation invariants
 

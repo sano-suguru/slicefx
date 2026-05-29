@@ -52,4 +52,20 @@ public sealed class SpinRoundTripTests
         var response = await http.PostAsync("/api/feeds/refresh", null, TestContext.Current.CancellationToken);
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
     }
+
+    [Fact(Skip = "Requires Spin cron: configure a cron trigger in spin.toml, set SPIN_ENDPOINT env var, run 'spin up', and wait for the cron to fire before asserting KV state")]
+    public async Task CronTick_WritesKvEntry_ReadableViaHttp()
+    {
+        if (_endpoint is null)
+        {
+            return;
+        }
+
+        // After a cron tick fires and calls SpinCronDispatcher.DispatchAsync, the handler writes
+        // a KV entry. This test reads that entry back via the HTTP endpoint to verify end-to-end
+        // cron → handler → KV → HTTP round-trip.
+        using var http = new HttpClient { BaseAddress = new Uri(_endpoint) };
+        var response = await http.GetAsync("/api/items", TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+    }
 }

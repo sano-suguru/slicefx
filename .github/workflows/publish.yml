@@ -39,6 +39,7 @@ jobs:
           dotnet pack src/SliceFx.Wasi/SliceFx.Wasi.csproj --configuration Release --no-build --output ./nupkg
           dotnet pack src/SliceFx.Wasi.KeyValue/SliceFx.Wasi.KeyValue.csproj --configuration Release --no-build --output ./nupkg
           dotnet pack src/SliceFx.Wasi.HttpClient/SliceFx.Wasi.HttpClient.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/SliceFx.Wasi.Spin/SliceFx.Wasi.Spin.csproj --configuration Release --no-build --output ./nupkg
           dotnet pack tools/SliceFx.Cli/SliceFx.Cli.csproj --configuration Release --no-build --output ./nupkg
 
       - name: Get temporary NuGet API key (Trusted Publishing OIDC)

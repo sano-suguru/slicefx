@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SliceFx.Wasi.HttpClient;
@@ -21,7 +22,7 @@ public static class WasiHostBuilderHttpClientExtensions
     /// <summary>
     /// Registers <typeparamref name="TClient"/> as the singleton <see cref="IWasiHttpClient"/> for the WASI application.
     /// </summary>
-    public static WasiHostBuilder AddWasiHttpClient<TClient>(this WasiHostBuilder builder)
+    public static WasiHostBuilder AddWasiHttpClient<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TClient>(this WasiHostBuilder builder)
         where TClient : class, IWasiHttpClient
     {
         ArgumentNullException.ThrowIfNull(builder);

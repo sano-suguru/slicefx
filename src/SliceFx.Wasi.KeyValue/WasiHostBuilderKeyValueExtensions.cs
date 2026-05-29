@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SliceFx.Wasi.KeyValue;
@@ -21,7 +22,7 @@ public static class WasiHostBuilderKeyValueExtensions
     /// <summary>
     /// Registers <typeparamref name="TStore"/> as the singleton <see cref="IKeyValueStore"/> for the WASI application.
     /// </summary>
-    public static WasiHostBuilder AddKeyValueStore<TStore>(this WasiHostBuilder builder)
+    public static WasiHostBuilder AddKeyValueStore<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>(this WasiHostBuilder builder)
         where TStore : class, IKeyValueStore
     {
         ArgumentNullException.ThrowIfNull(builder);

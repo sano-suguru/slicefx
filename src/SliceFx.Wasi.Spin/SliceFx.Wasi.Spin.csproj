@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SliceFx.Wasi.Spin</RootNamespace>
+    <AssemblyName>SliceFx.Wasi.Spin</AssemblyName>
+    <PackageId>SliceFx.Wasi.Spin</PackageId>
+    <Description>ISpinCronHandler abstraction, SpinCronDispatcher, and recording test double for Spin cron trigger integration in SliceFx WASI applications. Provides a portable interface over Spin cron triggers; the cron export wiring is provided by the application.</Description>
+    <PackageTags>slicefx;slice;wasi;spin;cron;trigger;fermyon;wasm;vertical-slice-architecture</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SliceFx.Wasi\SliceFx.Wasi.csproj" />
+  </ItemGroup>
+
+</Project>
