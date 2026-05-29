@@ -8,7 +8,7 @@ public sealed class RecordingSpinCronHandlerTests
     public async Task OnTickAsync_SingleInvocation_RecordsContext()
     {
         var handler = new RecordingSpinCronHandler();
-        var context = new SpinCronContext(FixedFireTime, "test");
+        var context = new SpinCronContext(FixedFireTime);
 
         await handler.OnTickAsync(context, TestContext.Current.CancellationToken);
 

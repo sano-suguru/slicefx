@@ -161,6 +161,25 @@ slicefx package aws-lambda --mode function-per-feature --rid linux-x64
 
 See `samples/SliceFx.LambdaFunctionPerFeatureSample/` for the full Program.cs + per-feature startup shape (default Kestrel port 5000). The `tests/SliceFx.Lambda.NativeAotFixture` project is a build-time fixture used by NativeAOT packaging tests, not a runnable app.
 
+### SliceFx.Wasi.Spin (`src/SliceFx.Wasi.Spin/`)
+
+Spin-specific WASI satellite (experimental). Provides `ISpinCronHandler` / `SpinCronDispatcher` for Spin cron triggers and `ISpinVariables` for reading Spin application variables. Both are registered via `WasiHostBuilderSpinExtensions` — pure manual DI, no source-generator involvement.
+
+**Cron triggers:** Implement `ISpinCronHandler` and register it with `builder.AddSpinCronHandler(...)`. From the WIT-bound cron export entry point, call `await SpinCronDispatcher.DispatchAsync(app, context, ct)`. `SpinCronContext` carries only `FireTime` (`spin:cron@3.0.0` WIT has no metadata field). Use `RecordingSpinCronHandler` in tests. Cron expressions must be **6 fields** `{sec} {min} {hour} {dom} {month} {dow}` — 7-field expressions cause a `ParseSchedule` error at runtime. `async func` exports fail component encoding in componentize-dotnet 0.7.0-preview; declare the WIT cron export as `func` (sync) and call the async handler synchronously (`.GetAwaiter().GetResult()`) inside the entry point. The world-level `handle-cron-event` export is wired differently from `wasi:http/incoming-handler` — it uses the `IProxyWorld` pattern, not `IIncomingHandler`.
+
+**Spin variables:** Implement `ISpinVariables` and register it with `builder.AddSpinVariables(...)`. The interface surface is async (`ValueTask<string?> GetAsync(string name, CancellationToken ct = default)`), matching the repo's convention of async-surface over synchronous WIT host calls. On Fermyon Cloud / Spin, implement using the WIT-generated free function — componentize-dotnet emits it on a `*Interop` static class (e.g. `VariablesInterop.Get` for `fermyon:spin/variables@2.0.0`); the generated `IVariables` type carries only the `Error` shape. Wrap the synchronous call with `ValueTask.FromResult(...)`. Implementations should be fail-closed: undefined or unresolvable → `null`. Use `InMemorySpinVariables` in tests.
+
+**WASI constraints relevant to Spin implementations:** `System.Security.Cryptography` is unavailable in NativeAOT-LLVM WASI builds (including `CryptographicOperations.FixedTimeEquals`); use a manual XOR-accumulation loop for constant-time comparison.
+
+```csharp
+var builder = WasiHost.CreateBuilder();
+builder.AddSpinCronHandler<MyCronHandler>();     // cron trigger handler
+builder.AddSpinVariables<MySpinVariablesImpl>(); // Spin variables (fail-closed)
+var app = builder.Build();
+// In the WIT cron export entry point:
+SpinCronDispatcher.DispatchAsync(app, context, ct).GetAwaiter().GetResult();
+```
+
 ### SliceFx.TestHost (`src/SliceFx.TestHost/`)
 
 Creates an in-process test server via `WebApplicationFactory<TEntryPoint>`. The optional

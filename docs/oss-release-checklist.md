@@ -4,7 +4,7 @@ SliceFx is pre-1.0 experimental software. Use `0.x` preview versions until the p
 
 This checklist is for deciding whether the repository is ready for a preview release. It intentionally separates pre-release preparation from the final publish actions.
 
-Current version: `0.1.0-preview.4` (published 2026-05-29). Previous: `0.1.0-preview.4` (2026-05-29). Initial publish was `0.1.0-preview.1` (2026-05-29).
+Current version: `0.1.0-preview.5` (2026-05-30). Previous: `0.1.0-preview.4` (2026-05-29). Initial publish was `0.1.0-preview.1` (2026-05-29).
 
 ## Repository readiness
 
@@ -84,6 +84,9 @@ dotnet pack src\SliceFx.Lambda\SliceFx.Lambda.csproj --configuration Release --n
 dotnet pack src\SliceFx.Lambda.FunctionPerFeature\SliceFx.Lambda.FunctionPerFeature.csproj --configuration Release --no-build
 dotnet pack src\SliceFx.TestHost\SliceFx.TestHost.csproj --configuration Release --no-build
 dotnet pack src\SliceFx.Wasi\SliceFx.Wasi.csproj --configuration Release --no-build
+dotnet pack src\SliceFx.Wasi.KeyValue\SliceFx.Wasi.KeyValue.csproj --configuration Release --no-build
+dotnet pack src\SliceFx.Wasi.HttpClient\SliceFx.Wasi.HttpClient.csproj --configuration Release --no-build
+dotnet pack src\SliceFx.Wasi.Spin\SliceFx.Wasi.Spin.csproj --configuration Release --no-build
 dotnet pack tools\SliceFx.Cli\SliceFx.Cli.csproj --configuration Release --no-build
 ```
 

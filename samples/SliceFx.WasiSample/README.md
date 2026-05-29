@@ -122,6 +122,7 @@ When reporting issues, include the command that failed, the pinned dependency ve
 - WASI DataAnnotations validation is source-generated for `RequiredAttribute`, `StringLengthAttribute`, `MinLengthAttribute`, `MaxLengthAttribute`, numeric `RangeAttribute`, `EmailAddressAttribute`, `UrlAttribute`, and `RegularExpressionAttribute`. Support is shape-conditional: `StringLengthAttribute` applies only to `string` properties, `RangeAttribute` only to numeric types (`int`, `long`, `double`, `float`, `decimal`), and any attribute with a resource or localized error message counts as unsupported. Other validation rules — including `IValidatableObject`, type-level attributes, and supported attribute types in unsupported shapes — cause the route to be excluded (SLICE022 diagnostic). Excluded routes are absent from the WASI route table; there is no per-request reflection fallback.
 - .NET NativeAOT imports `wasi:sockets/tcp` and `wasi:sockets/udp` at the WASM ABI level even when unused. The Cloudflare transpile pipeline stubs these with `stubs/tcp.js` and `stubs/udp.js`; Spin ignores unused socket imports natively.
 - All upstream WASI build/transpile dependencies are pre-release or tightly version-pinned for reproducibility. The NuGet experimental feed is configured via `RestoreAdditionalProjectSources` inside the csproj.
+- `System.Security.Cryptography` is unavailable in NativeAOT-LLVM WASI builds (the namespace is entirely absent). Use a manual XOR-accumulation loop for constant-time comparisons (see `docs/patterns/platform-abstraction.md`).
 
 ## Source map
 

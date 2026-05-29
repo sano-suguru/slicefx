@@ -109,3 +109,27 @@ public static class DeleteProduct
 ```
 
 This feature is excluded from WASI route tables (`SLICE020`) and function-per-feature Lambda, but it is a full Minimal API endpoint on the ASP.NET and hosted Lambda path. Mixing `portable` and `aspnet-only` features in the same project is the expected pattern, not an error condition.
+
+## WASI implementation notes
+
+These constraints affect all implementations that target NativeAOT-LLVM WASI (via componentize-dotnet):
+
+**WIT-generated bindings:** componentize-dotnet emits WIT-bound free functions on `*Interop` static classes. For example, `fermyon:spin/variables@2.0.0` generates `VariablesInterop.Get(string name)` — not an instance method. The generated `IVariables` type carries only the `Error` shape and is not the call entry point. Satellite libraries (`SliceFx.Wasi.Spin`, `SliceFx.Wasi.KeyValue`) expose pure-interface abstractions over these; the concrete WIT-bound implementation lives in the application and is wired via DI.
+
+**Async surface over sync WIT:** WIT host calls are synchronous, but satellite interfaces use `ValueTask`-returning methods to match the repo's async convention and remain compatible with future async providers. Wrap synchronous WIT calls with `ValueTask.FromResult(...)` in application implementations.
+
+**`System.Security.Cryptography` is not available** in NativeAOT-LLVM WASI builds. This includes `CryptographicOperations.FixedTimeEquals`, `HMACSHA256`, and all classes in the `System.Security.Cryptography` namespace. For constant-time comparisons (e.g. token authentication), use a manual XOR-accumulation loop:</p>
+
+```csharp
+// Constant-time string comparison without System.Security.Cryptography
+static bool SafeEquals(string? a, string? b)
+{
+    if (a is null || b is null) return false;
+    var ab = System.Text.Encoding.UTF8.GetBytes(a);
+    var bb = System.Text.Encoding.UTF8.GetBytes(b);
+    if (ab.Length != bb.Length) return false;
+    var diff = 0;
+    for (var i = 0; i < ab.Length; i++) diff |= ab[i] ^ bb[i];
+    return diff == 0;
+}
+```

@@ -12,7 +12,7 @@ namespace SliceFx.Wasi.Spin;
 public interface ISpinCronHandler
 {
     /// <summary>Handles a single Spin cron trigger invocation.</summary>
-    /// <param name="context">Context describing the cron trigger invocation, including fire time and optional metadata.</param>
+    /// <param name="context">Context describing the cron trigger invocation, including fire time.</param>
     /// <param name="ct">Cancellation token.</param>
     ValueTask OnTickAsync(SpinCronContext context, CancellationToken ct = default);
 }

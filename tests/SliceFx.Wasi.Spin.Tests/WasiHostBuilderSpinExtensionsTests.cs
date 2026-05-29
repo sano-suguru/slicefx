@@ -46,4 +46,47 @@ public sealed class WasiHostBuilderSpinExtensionsTests
         var builder = WasiHost.CreateBuilder();
         Assert.Throws<ArgumentNullException>(() => builder.AddSpinCronHandler(null!));
     }
+
+    [Fact]
+    public void AddSpinVariables_Instance_RegistersAsSingleton()
+    {
+        var builder = WasiHost.CreateBuilder();
+        var variables = new InMemorySpinVariables();
+        builder.AddSpinVariables(variables);
+        var app = builder.Build();
+        var resolved = app.Services.GetRequiredService<ISpinVariables>();
+        Assert.Same(variables, resolved);
+    }
+
+    [Fact]
+    public void AddSpinVariables_Generic_RegistersAsSingleton()
+    {
+        var builder = WasiHost.CreateBuilder();
+        builder.AddSpinVariables<InMemorySpinVariables>();
+        var app = builder.Build();
+        var resolved = app.Services.GetRequiredService<ISpinVariables>();
+        Assert.IsType<InMemorySpinVariables>(resolved);
+    }
+
+    [Fact]
+    public void AddSpinVariables_ReturnsSameBuilderForChaining()
+    {
+        var builder = WasiHost.CreateBuilder();
+        var returned = builder.AddSpinVariables(new InMemorySpinVariables());
+        Assert.Same(builder, returned);
+    }
+
+    [Fact]
+    public void AddSpinVariables_NullBuilder_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            WasiHostBuilderSpinExtensions.AddSpinVariables(null!, new InMemorySpinVariables()));
+    }
+
+    [Fact]
+    public void AddSpinVariables_NullVariables_Throws()
+    {
+        var builder = WasiHost.CreateBuilder();
+        Assert.Throws<ArgumentNullException>(() => builder.AddSpinVariables(null!));
+    }
 }
