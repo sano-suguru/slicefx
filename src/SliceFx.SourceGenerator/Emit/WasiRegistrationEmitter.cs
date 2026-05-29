@@ -274,6 +274,8 @@ internal static class WasiRegistrationEmitter
         }
 
         // 2. Route / query / DI param bindings
+        // Track non-nullable route params whose out var has type T? — needs ! in the call site (step 3).
+        var nonNullableRouteParams = new HashSet<string>();
         foreach (var p in @params)
         {
             if (p == bodyParam)
@@ -295,6 +297,10 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine($"                    if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");
                 sb.AppendLine($"                        .TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
                 sb.AppendLine($"                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
+                if (!p.IsNullable)
+                {
+                    nonNullableRouteParams.Add(p.Name);
+                }
             }
             else if (binding.Source == HandlerParameterBindingSource.Query)
             {
@@ -335,6 +341,7 @@ internal static class WasiRegistrationEmitter
         }
 
         // 3. Build call args
+        // Non-nullable route params carry type T? from TryGetFromRoute — add ! to suppress CS8604.
         var argList = new List<string>(@params.Length);
         foreach (var p in @params)
         {
@@ -344,7 +351,7 @@ internal static class WasiRegistrationEmitter
             }
             else
             {
-                argList.Add(p.Name);
+                argList.Add(nonNullableRouteParams.Contains(p.Name) ? p.Name + "!" : p.Name);
             }
         }
 
