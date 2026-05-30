@@ -129,6 +129,22 @@ internal static partial class GenerateOpenApiCommand
             : [.. routes
                 .Where(static route => route.Portability != RouteCatalog.PortabilityAspNetOnly)
             ];
+
+        // Exclude routes whose return type is an untyped server-side transport (WasiResponse) — they carry no
+        // meaningful wire schema and would produce misleading OpenAPI response definitions.
+        var skippedWasiResponse = included
+            .Where(static r => ClientGenerationHelpers.IsNonClientReturnType(
+                ClientGenerationHelpers.UnwrapReturnType(r.ReturnType)))
+            .ToArray();
+        if (skippedWasiResponse.Length > 0)
+        {
+            included = [.. included.Except(skippedWasiResponse)];
+            foreach (var s in skippedWasiResponse)
+            {
+                Console.WriteLine($"// skipped (untyped WasiResponse): {s.EndpointName}");
+            }
+        }
+
         if (included.Length == 0)
         {
             throw new CliException("No portable or partial Slice routes found for OpenAPI manifest projection.");

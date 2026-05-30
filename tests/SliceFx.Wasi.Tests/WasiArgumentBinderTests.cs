@@ -84,13 +84,16 @@ public sealed class WasiArgumentBinderTests
     }
 
     [Fact]
-    public void BindFromQuery_treats_empty_nullable_value_as_bound_default()
+    public void BindFromQuery_treats_empty_nullable_value_as_missing()
     {
+        // An empty query value for a nullable value-type (e.g. int?) is treated as Missing so that the
+        // handler receives null — the same as if the parameter were absent. This matches the corrected
+        // client-generation behaviour that omits null nullable params rather than emitting "name=".
         var ctx = CreateContext("?page=");
 
         var result = WasiArgumentBinder.BindFromQuery<int?>(ctx, "page");
 
-        Assert.Equal(WasiArgumentBindingStatus.Bound, result.Status);
+        Assert.Equal(WasiArgumentBindingStatus.Missing, result.Status);
         Assert.Null(result.Value);
     }
 

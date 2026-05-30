@@ -93,7 +93,17 @@ public static class WasiArgumentBinder
                     continue;
                 }
 
-                return TryConvertValue(Uri.UnescapeDataString(pair[(eq + 1)..]), out T? value)
+                var raw = Uri.UnescapeDataString(pair[(eq + 1)..]);
+
+                // An empty value for a nullable value-type (e.g. int?) is treated as Missing rather than
+                // Bound(null): the client should omit null params entirely instead of emitting "name=".
+                // string? is a reference type and intentionally stays Bound("") — empty string is valid.
+                if (raw.Length == 0 && Nullable.GetUnderlyingType(typeof(T)) is not null)
+                {
+                    return new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Missing, default);
+                }
+
+                return TryConvertValue(raw, out T? value)
                     ? new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Bound, value)
                     : new WasiArgumentBindingResult<T>(WasiArgumentBindingStatus.Invalid, default);
             }

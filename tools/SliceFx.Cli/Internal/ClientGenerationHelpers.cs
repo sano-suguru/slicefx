@@ -125,6 +125,18 @@ internal static partial class ClientGenerationHelpers
         return normalized;
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> when the <em>unwrapped</em> return type cannot be represented as a
+    /// typed client method — e.g. <c>WasiResponse</c> is a server-side transport record, not a wire payload.
+    /// </summary>
+    /// <remarks>
+    /// Uses the short name (last dot-separated component) so that fully-qualified types such as
+    /// <c>SliceFx.Wasi.WasiResponse</c> are matched while namespace prefixes like
+    /// <c>MyApp.WasiResponseApp.Features.Foo.Response</c> are not.
+    /// </remarks>
+    internal static bool IsNonClientReturnType(string unwrappedReturnType)
+        => ShortName(StripGlobal(unwrappedReturnType)) == "WasiResponse";
+
     internal static string StripGlobal(string type)
         => type.StartsWith("global::", StringComparison.Ordinal) ? type["global::".Length..] : type;
 

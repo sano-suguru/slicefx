@@ -86,8 +86,18 @@ internal static partial class GenerateCSharpClientCommand
 
         var discovery = RouteCatalog.DiscoverDetailed(ctx);
         RouteCatalog.WriteAggregatedRouteNotice(discovery);
-        var routes = discovery.Routes
+        var portable = discovery.Routes
             .Where(static route => route.Portability != RouteCatalog.PortabilityAspNetOnly)
+            .ToArray();
+        foreach (var s in portable.Where(static r => ClientGenerationHelpers.IsNonClientReturnType(
+            ClientGenerationHelpers.UnwrapReturnType(r.ReturnType))))
+        {
+            Console.WriteLine($"// skipped (untyped WasiResponse): {s.EndpointName}");
+        }
+
+        var routes = portable
+            .Where(static route => !ClientGenerationHelpers.IsNonClientReturnType(
+                ClientGenerationHelpers.UnwrapReturnType(route.ReturnType)))
             .ToArray();
 
         if (routes.Length == 0)
@@ -481,6 +491,13 @@ internal static partial class GenerateCSharpClientCommand
                 sb.AppendLine(CultureInfo.InvariantCulture, $"                    __query.Add(\"{parameter.Name}=\" + {outerClassName}.FormatRouteValue(__value));");
                 sb.AppendLine("                }");
                 sb.AppendLine("            }");
+            }
+            else if (parameter.IsNullable)
+            {
+                // Null nullable params are omitted from the query string rather than emitted as "name="
+                // (which the WASI binder would see as Bound("") and could cause silent empty results).
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            if ({parameter.Name} is not null)");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"                __query.Add(\"{parameter.Name}=\" + {outerClassName}.FormatRouteValue({parameter.Name}));");
             }
             else
             {

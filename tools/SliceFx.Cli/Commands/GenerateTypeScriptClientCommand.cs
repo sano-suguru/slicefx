@@ -64,8 +64,18 @@ internal static partial class GenerateTypeScriptClientCommand
 
         var discovery = RouteCatalog.DiscoverDetailed(ctx);
         RouteCatalog.WriteAggregatedRouteNotice(discovery);
-        var routes = discovery.Routes
+        var portable = discovery.Routes
             .Where(static route => route.Portability != RouteCatalog.PortabilityAspNetOnly)
+            .ToArray();
+        foreach (var s in portable.Where(static r => ClientGenerationHelpers.IsNonClientReturnType(
+            ClientGenerationHelpers.UnwrapReturnType(r.ReturnType))))
+        {
+            Console.WriteLine($"// skipped (untyped WasiResponse): {s.EndpointName}");
+        }
+
+        var routes = portable
+            .Where(static route => !ClientGenerationHelpers.IsNonClientReturnType(
+                ClientGenerationHelpers.UnwrapReturnType(route.ReturnType)))
             .ToArray();
 
         if (routes.Length == 0)

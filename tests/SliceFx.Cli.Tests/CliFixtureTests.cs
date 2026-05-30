@@ -3186,6 +3186,149 @@ public class CliFixtureTests
         return (process.ExitCode, await stdoutTask, await stderrTask);
     }
 
+    [Fact]
+    public async Task Csharp_client_skips_WasiResponse_returning_routes_and_emits_typed_routes()
+    {
+        // gap (a): routes returning WasiResponse must be excluded from generated clients;
+        // routes returning a POCO must still be included.
+        using var fixture = CliProjectFixture.Create(
+            "transport-routes-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>TransportRoutesApp</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Wasi", "SliceFx.Wasi.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        // Feature 1: returns WasiResponse (server-side transport) — must be skipped by client generation
+        fixture.WriteFeature(
+            "Features/Items/DeleteItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace TransportRoutesApp.Features.Items;
+
+            [Feature("DELETE /items/{id}")]
+            public static class DeleteItem
+            {
+                public static Task<WasiResponse> Handle(string id, CancellationToken ct)
+                    => Task.FromResult(SliceResult.NoContent());
+            }
+            """);
+
+        // Feature 2: returns a POCO — must be included
+        fixture.WriteFeature(
+            "Features/Items/GetItems.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace TransportRoutesApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class GetItems
+            {
+                public static Task<Response> Handle(CancellationToken ct)
+                    => Task.FromResult(new Response([]));
+
+                public sealed record Response(string[] Items);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+
+        // WasiResponse (server-side transport) route must be entirely absent from the client
+        Assert.DoesNotContain("DeleteItemAsync", client);
+        // WasiResponse must not appear as a method return type; the namespace is absent so "WasiResponse"
+        // in the output would indicate a leaked type reference.
+        Assert.DoesNotContain("Task<WasiResponse>", client);
+
+        // POCO route must be present
+        Assert.Contains("GetItemsAsync", client);
+        Assert.Contains("GetItems.Response", client);
+    }
+
+    [Fact]
+    public async Task Csharp_client_omits_null_nullable_scalar_query_param_from_query_string()
+    {
+        // gap (b): when a nullable scalar query param is null, the client must NOT emit "name=" (empty).
+        using var fixture = CliProjectFixture.Create(
+            "nullable-query-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>NullableQueryApp</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        fixture.WriteFeature(
+            "Features/Items/GetItems.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using Microsoft.AspNetCore.Mvc;
+
+            namespace NullableQueryApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class GetItems
+            {
+                public static Task<Response> Handle(
+                    [FromQuery] int? page,
+                    [FromQuery] string? q,
+                    CancellationToken ct)
+                    => Task.FromResult(new Response([]));
+
+                public sealed record Response(string[] Items);
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+
+        // Nullable value-type (int?) must emit a null guard before the query add.
+        Assert.Contains("if (page is not null)", client);
+        // Nullable reference (string?) must also emit a null guard.
+        Assert.Contains("if (q is not null)", client);
+        // The params should appear inside the null-guard block (indented), not as bare top-level adds.
+        // Verify the guard + add pattern is present (the add is inside the if):
+        Assert.Contains("if (page is not null)\n                __query.Add(\"page=\" + ", client);
+        Assert.Contains("if (q is not null)\n                __query.Add(\"q=\" + ", client);
+    }
+
     private sealed class StubHttpHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;
