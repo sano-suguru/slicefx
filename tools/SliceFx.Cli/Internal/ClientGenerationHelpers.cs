@@ -23,12 +23,54 @@ internal static partial class ClientGenerationHelpers
     internal static string UnwrapReturnType(string returnType)
     {
         returnType = RouteCatalog.NormalizeWhitespace(returnType);
-        return TryUnwrapGeneric(returnType, "Task", out var taskType) ||
-               TryUnwrapGeneric(returnType, "System.Threading.Tasks.Task", out taskType) ||
-               TryUnwrapGeneric(returnType, "ValueTask", out taskType) ||
-               TryUnwrapGeneric(returnType, "System.Threading.Tasks.ValueTask", out taskType)
-            ? taskType
-            : returnType is "Task" or "System.Threading.Tasks.Task" or "ValueTask" or "System.Threading.Tasks.ValueTask" ? "void" : returnType;
+
+        // Step 1: Strip the async wrapper (Task<T> / ValueTask<T>).
+        if (TryUnwrapGeneric(returnType, "Task", out var inner) ||
+            TryUnwrapGeneric(returnType, "System.Threading.Tasks.Task", out inner) ||
+            TryUnwrapGeneric(returnType, "ValueTask", out inner) ||
+            TryUnwrapGeneric(returnType, "System.Threading.Tasks.ValueTask", out inner))
+        {
+            returnType = inner;
+        }
+        else if (returnType is "Task" or "System.Threading.Tasks.Task" or "ValueTask" or "System.Threading.Tasks.ValueTask")
+        {
+            return "void";
+        }
+
+        // Step 2: Unwrap SliceResult<T> → T, or map non-generic SliceResult → "void".
+        // The manifest stores global::-qualified FQNs; hand-authored source may use bare names.
+        // StripGlobal normalises global::SliceFx.SliceResult<...> to SliceFx.SliceResult<...>.
+        return UnwrapSliceResultType(returnType);
+    }
+
+    /// <summary>
+    /// Strips the <c>SliceResult&lt;T&gt;</c> wrapper (returning <c>T</c>) or maps the non-generic
+    /// <c>SliceResult</c> to <c>"void"</c>. Returns <paramref name="type"/> unchanged for all other types.
+    /// </summary>
+    /// <remarks>
+    /// Handles the qualification forms the manifest emits (<c>global::SliceFx.SliceResult&lt;T&gt;</c>),
+    /// namespace-qualified hand-authored forms (<c>SliceFx.SliceResult&lt;T&gt;</c>), and bare unqualified
+    /// forms (<c>SliceResult&lt;T&gt;</c>) — mirroring how <see cref="UnwrapReturnType"/> handles
+    /// both <c>Task</c> and <c>System.Threading.Tasks.Task</c>.
+    /// </remarks>
+    private static string UnwrapSliceResultType(string type)
+    {
+        var stripped = StripGlobal(type);  // "global::SliceFx.SliceResult<T>" → "SliceFx.SliceResult<T>"
+
+        // Generic SliceResult<T> → T: try most-specific qualifier first, then bare name.
+        if (TryUnwrapGeneric(stripped, "SliceFx.SliceResult", out var payload) ||
+            TryUnwrapGeneric(stripped, "SliceResult", out payload))
+        {
+            return payload;
+        }
+
+        // Non-generic SliceResult (no body) → void.
+        if (stripped is "SliceFx.SliceResult" or "SliceResult")
+        {
+            return "void";
+        }
+
+        return type;
     }
 
     internal static bool TryUnwrapGeneric(string type, string wrapper, out string inner)

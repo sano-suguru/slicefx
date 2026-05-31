@@ -591,6 +591,182 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public async Task Generator_emits_typed_wasi_dispatch_for_SliceResultOfT_features()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using System.Text;
+            using System.Text.Json.Serialization;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace SliceResultApp
+            {
+                public sealed record GetItemResponse(string Id, string Name);
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(global::SliceResultApp.GetItemResponse))]
+                [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+                public partial class WasiJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+
+                public static class RuntimeHarness
+                {
+                    public static async Task<string> DispatchFoundAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "GET", "/items/abc", new Dictionary<string, string>(), null, null));
+                        return Format(response);
+                    }
+
+                    public static async Task<string> DispatchNotFoundAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "GET", "/items/missing", new Dictionary<string, string>(), null, null));
+                        return Format(response);
+                    }
+
+                    private static string Format(WasiResponse r)
+                        => r.Status.ToString() + "|"
+                            + (r.Headers.TryGetValue("Content-Type", out var ct) ? ct : "")
+                            + "|"
+                            + Encoding.UTF8.GetString(r.Body);
+                }
+            }
+
+            namespace SliceResultApp.Features.Items
+            {
+                [Feature("GET /items/{id}")]
+                public static class GetItem
+                {
+                    public static Task<global::SliceFx.SliceResult<SliceResultApp.GetItemResponse>> Handle(
+                        string id, CancellationToken ct)
+                    {
+                        if (id == "missing")
+                            return Task.FromResult(global::SliceFx.SliceResult<SliceResultApp.GetItemResponse>.NotFound($"Item '{id}' not found."));
+                        return Task.FromResult(global::SliceFx.SliceResult<SliceResultApp.GetItemResponse>.Ok(new SliceResultApp.GetItemResponse(id, "Test")));
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("SliceResultApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+        var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+
+        // No errors in generator or compilation
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+        // Emitter wires ToWasiResponse with __JsonTypeInfo<payload>
+        Assert.Contains("ToWasiResponse", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("__JsonTypeInfo<global::SliceResultApp.GetItemResponse>", wasiSource, StringComparison.Ordinal);
+        // Manifest records the payload type (GetItemResponse), NOT the SliceResult<T> wrapper
+        Assert.Contains("GetItemResponse", manifestSource, StringComparison.Ordinal);
+
+        // Runtime dispatch: success and not-found
+        using var assemblyStream = CompileGeneratedAssembly(compilation);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harness = assembly.GetType("SliceResultApp.RuntimeHarness", throwOnError: true)!;
+        var found = await (Task<string>)harness.GetMethod("DispatchFoundAsync")!.Invoke(null, null)!;
+        var notFound = await (Task<string>)harness.GetMethod("DispatchNotFoundAsync")!.Invoke(null, null)!;
+
+        Assert.StartsWith("200|application/json|", found, StringComparison.Ordinal);
+        Assert.Contains("\"id\":\"abc\"", found, StringComparison.Ordinal);
+        Assert.StartsWith("404|application/problem+json|", notFound, StringComparison.Ordinal);
+        Assert.Contains("missing", notFound, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generator_emits_typed_wasi_dispatch_for_non_generic_SliceResult_features()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace NonGenericSliceResultApp
+            {
+                public static class RuntimeHarness
+                {
+                    public static async Task<string> DispatchDeleteAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "DELETE", "/items/42", new Dictionary<string, string>(), null, null));
+                        return Format(response);
+                    }
+
+                    public static async Task<string> DispatchUnauthorizedAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "DELETE", "/items/no-auth", new Dictionary<string, string>(), null, null));
+                        return Format(response);
+                    }
+
+                    private static string Format(WasiResponse r)
+                        => r.Status.ToString() + "|"
+                            + (r.Headers.TryGetValue("Content-Type", out var ct) ? ct : "")
+                            + "|"
+                            + Encoding.UTF8.GetString(r.Body);
+                }
+            }
+
+            namespace NonGenericSliceResultApp.Features.Items
+            {
+                [Feature("DELETE /items/{id}")]
+                public static class DeleteItem
+                {
+                    public static Task<global::SliceFx.SliceResult> Handle(string id, CancellationToken ct)
+                    {
+                        if (id == "no-auth")
+                            return Task.FromResult(global::SliceFx.SliceResult.Unauthorized());
+                        return Task.FromResult(global::SliceFx.SliceResult.NoContent());
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("NonGenericSliceResultApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        // No errors — including no SLICE021 (non-generic SliceResult has no JSON root to check)
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+        // Emitter wires ToWasiResponse() with no args (no JsonTypeInfo needed)
+        Assert.Contains("ToWasiResponse()", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("__JsonTypeInfo<", wasiSource, StringComparison.Ordinal);
+
+        // Runtime dispatch: 204 on success, 401 on auth failure
+        using var assemblyStream = CompileGeneratedAssembly(compilation);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harness = assembly.GetType("NonGenericSliceResultApp.RuntimeHarness", throwOnError: true)!;
+        var deleteResult = await (Task<string>)harness.GetMethod("DispatchDeleteAsync")!.Invoke(null, null)!;
+        var unauthResult = await (Task<string>)harness.GetMethod("DispatchUnauthorizedAsync")!.Invoke(null, null)!;
+
+        Assert.StartsWith("204||", deleteResult, StringComparison.Ordinal);
+        Assert.StartsWith("401|application/problem+json|", unauthResult, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_escapes_control_characters_in_wasi_string_literals()
     {
         var source = """
@@ -602,7 +778,7 @@ public class SourceGeneratorCompileTests
             [Feature("GET /control\0")]
             public static class GetControl
             {
-                public static WasiResponse Handle() => SliceResult.NoContent();
+                public static WasiResponse Handle() => global::SliceFx.Wasi.SliceResult.NoContent();
             }
             """;
 
@@ -631,7 +807,7 @@ public class SourceGeneratorCompileTests
             [Feature("GET /users/{Id:guid}")]
             public static class GetUser
             {
-                public static WasiResponse Handle(Guid id) => SliceResult.NoContent();
+                public static WasiResponse Handle(Guid id) => global::SliceFx.Wasi.SliceResult.NoContent();
             }
             """;
 
@@ -661,7 +837,7 @@ public class SourceGeneratorCompileTests
             public static class ListItems
             {
                 public static WasiResponse Handle(int page, int? size, string? filter)
-                    => SliceResult.NoContent();
+                    => global::SliceFx.Wasi.SliceResult.NoContent();
             }
             """;
 
@@ -725,7 +901,7 @@ public class SourceGeneratorCompileTests
                         [FromBody] Payload payload,
                         [FromServices]
                         WasiBindingApp.Clock clock)
-                        => SliceResult.NoContent();
+                        => global::SliceFx.Wasi.SliceResult.NoContent();
                 }
             }
             """;

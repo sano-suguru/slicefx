@@ -214,7 +214,17 @@ internal static class JsonContextPlanner
         if (responseType is not null
             && !IsPassthroughResponseType(target, responseType))
         {
-            roots.Add(new JsonRootType(responseType));
+            // Unwrap SliceResult<T> to T so T is the JSON root, not the wrapper struct.
+            // Non-generic SliceResult (no body) registers no root, avoiding a spurious SLICE021
+            // exclusion for features that only return status codes.
+            if (SourceGenerationHelpers.IsSliceResultOfTType(responseType))
+            {
+                roots.Add(new JsonRootType(SourceGenerationHelpers.GetSliceResultPayloadType(responseType)));
+            }
+            else if (!SourceGenerationHelpers.IsSliceResultNonGenericType(responseType))
+            {
+                roots.Add(new JsonRootType(responseType));
+            }
         }
 
         return roots.ToImmutable();

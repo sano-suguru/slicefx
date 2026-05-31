@@ -3222,7 +3222,7 @@ public class CliFixtureTests
             public static class DeleteItem
             {
                 public static Task<WasiResponse> Handle(string id, CancellationToken ct)
-                    => Task.FromResult(SliceResult.NoContent());
+                    => Task.FromResult(global::SliceFx.Wasi.SliceResult.NoContent());
             }
             """);
 
@@ -3265,6 +3265,91 @@ public class CliFixtureTests
         // POCO route must be present
         Assert.Contains("GetItemsAsync", client);
         Assert.Contains("GetItems.Response", client);
+    }
+
+    [Fact]
+    public async Task Csharp_client_generates_typed_method_for_SliceResultOfT_routes_and_void_for_non_generic()
+    {
+        // SliceResult<T>-returning routes must produce Task<T> methods (not Task<SliceResult<T>>).
+        // Non-generic SliceResult routes must produce void (Task) methods, not Task<WasiResponse>.
+        // Also verifies that namespace-qualified "SliceFx.SliceResult<T>" unwraps correctly (#2/#11).
+        using var fixture = CliProjectFixture.Create(
+            "slice-result-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>SliceResultClientApp</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Wasi", "SliceFx.Wasi.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        // Feature 1: returns SliceResult<T> with namespace-qualified form — must produce Task<GetItemResponse>
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace SliceResultClientApp.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public sealed record GetItemResponse(string Id, string Name);
+
+                public static Task<SliceFx.SliceResult<GetItemResponse>> Handle(string id, CancellationToken ct)
+                    => Task.FromResult(SliceFx.SliceResult<GetItemResponse>.Ok(new GetItemResponse(id, "Test")));
+            }
+            """);
+
+        // Feature 2: returns non-generic SliceResult — must produce Task (void), not Task<WasiResponse>
+        fixture.WriteFeature(
+            "Features/Items/DeleteItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace SliceResultClientApp.Features.Items;
+
+            [Feature("DELETE /items/{id}")]
+            public static class DeleteItem
+            {
+                public static Task<SliceFx.SliceResult> Handle(string id, CancellationToken ct)
+                    => Task.FromResult(SliceFx.SliceResult.NoContent());
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+
+        // SliceResult<T> route: typed Task<GetItemResponse> must appear
+        Assert.Contains("GetItemAsync", client);
+        Assert.Contains("GetItem.GetItemResponse", client);
+
+        // Non-generic SliceResult route: void Task must appear (no return type, just await)
+        Assert.Contains("DeleteItemAsync", client);
+        Assert.Contains("async Task DeleteItemAsync", client);
+
+        // The SliceResult<T> / SliceResult wrapper must NOT appear as a return type (only the payload must)
+        Assert.DoesNotContain("Task<SliceResult<", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task<SliceFx.SliceResult", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task<WasiResponse>", client, StringComparison.Ordinal);
     }
 
     [Fact]
