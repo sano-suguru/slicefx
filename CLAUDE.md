@@ -120,7 +120,37 @@ ASP.NET-independent WASI satellite (experimental). Bypasses Kestrel entirely; th
 
 **WASI publish:** `samples/SliceFx.WasiSample` publishes through [componentize-dotnet](https://github.com/bytecodealliance/componentize-dotnet) (NativeAOT-LLVM + WASI Preview 2 Component Model): `dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release`. The component exports `wasi:http/incoming-handler@0.2.0` — the standard WASI HTTP interface. With the current NativeAOT-LLVM preview packages, native publish is supported from Linux x64 or Windows x64 hosts; macOS should publish through a Linux x64 Docker container such as `docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work mcr.microsoft.com/dotnet/sdk:10.0 dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release`. The CopyWasiWasmComponent target copies the generated component to `samples/SliceFx.WasiSample/dist/slice-wasi-sample.wasm`. For Cloudflare Workers: `samples/SliceFx.WasiSample/dist` uses `@bytecodealliance/jco` to transpile the component and `shim.mjs` to bridge Cloudflare's `fetch(Request)` to the wasi:http handler (`npm ci` in the checked-in sample, then `npm run transpile`; scaffolds without a lockfile use `npm install` first). For Fermyon Cloud / Spin: deploy `spin.toml` + `dist/slice-wasi-sample.wasm` directly — Spin natively understands `wasi:http/incoming-handler`. Treat SliceFx.Wasi APIs as experimental and the build/transpile/deploy toolchain as unstable upstream preview tooling.
 
-WASI features should return `WasiResponse`, `SliceResult`, a POCO, `Task<T>`, or `ValueTask<T>`. Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE020 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE021. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, `MinLength`, `MaxLength`, numeric `Range`, `EmailAddress`, `Url`, and `RegularExpression` rules (shape-conditional: `StringLength` for `string` only, `Range` for numeric types only, and any supported attribute with a resource/localized error message is treated as unsupported); routes that need reflection-bound validation — including `IValidatableObject`, type-level attributes, custom `ValidationAttribute`, and supported attribute types used in unsupported shapes — are excluded from the WASI route table with SLICE022. There is no per-request reflection fallback in the WASI path. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
+WASI features should return `SliceResult<T>`, `SliceResult`, a POCO, `Task<T>`, or `ValueTask<T>`. `WasiResponse` is also accepted as a raw escape hatch for streaming or custom serialization. Features returning `IResult`/`Task<IResult>` are excluded from WASI routes automatically (SLICE020 info diagnostic). Body-binding routes must provide `WasiJsonContext`; routes without it are excluded with SLICE021 — for `SliceResult<T>`, the JSON context needs to register `T` (the payload type), not the wrapper struct.
+
+**Host-neutral typed result** (preview.7+): `SliceResult<T>` (`SliceFx.Core`, namespace `SliceFx`) lets a feature express a typed success body **and** an error path from a single `Handle` return type, without giving up typed-client generation. The source generator detects this type, registers `T` as the JSON root (not the wrapper), and emits `result.ToWasiResponse(__JsonTypeInfo<T>())`. `SliceResult` (non-generic) handles status-only success (204 No Content); the generated C# client emits `Task` (void) for these routes. Factory methods: `Ok(T value)`, `Created(T value, string location)`, `NoContent()`, `NotFound(string? detail)`, `Unauthorized(string? detail)`, `BadRequest(string? detail)`, `Problem(int status, string title, string? detail)`.
+
+```csharp
+// Typed body + error path — client generates Task<GetItemResponse> GetItemAsync(string id)
+[Feature("GET /items/{id}")]
+public static class GetItem
+{
+    public static async Task<SliceResult<GetItemResponse>> Handle(string id, IKeyValueStore kv, CancellationToken ct)
+    {
+        var item = await kv.GetJsonAsync($"item:{id}", ctx.InboxItem, ct);
+        if (item is null) return SliceResult<GetItemResponse>.NotFound($"Item '{id}' not found.");
+        return SliceResult<GetItemResponse>.Ok(new GetItemResponse(item));
+    }
+}
+
+// Status-only (204) — client generates Task DeleteItemAsync(string id)
+[Feature("DELETE /items/{id}")]
+public static class DeleteItem
+{
+    public static async Task<SliceResult> Handle(string id, IKeyValueStore kv, CancellationToken ct)
+    {
+        if (!await kv.ExistsAsync($"item:{id}", ct)) return SliceResult.NotFound();
+        await kv.DeleteAsync($"item:{id}", ct);
+        return SliceResult.NoContent();
+    }
+}
+```
+
+**Naming caution**: `SliceFx.SliceResult` (arity 0, non-generic struct, Core) and `SliceFx.Wasi.SliceResult` (arity 0, static factory class, Wasi) have the same simple name and arity. In files that use the non-generic `SliceResult` struct, remove `using SliceFx.Wasi;` to avoid CS0104. The generic `SliceResult<T>` (arity 1) coexists with `SliceFx.Wasi.SliceResult` without ambiguity. WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, `MinLength`, `MaxLength`, numeric `Range`, `EmailAddress`, `Url`, and `RegularExpression` rules (shape-conditional: `StringLength` for `string` only, `Range` for numeric types only, and any supported attribute with a resource/localized error message is treated as unsupported); routes that need reflection-bound validation — including `IValidatableObject`, type-level attributes, custom `ValidationAttribute`, and supported attribute types used in unsupported shapes — are excluded from the WASI route table with SLICE022. There is no per-request reflection fallback in the WASI path. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
 
 ```csharp
 var builder = WasiHost.CreateBuilder();

@@ -201,14 +201,15 @@ For more detail see [ASP.NET features and escape hatches](docs/guides/aspnet-fea
 | Function-per-feature Lambda handlers | Experimental HTTP API v2 NativeAOT binary-per-feature packaging |
 | TestHost helper | Experimental |
 | WASI adapter | Experimental single-component in-process wasi:http dispatch; per-feature WASM packaging is not implemented |
+| `SliceResult<T>` / `SliceResult` typed WASI results | Implemented — host-neutral result structs in `SliceFx.Core`; source generator + CLI client generator unwrap to the payload type |
 
-The C# typed client reuses C# request/response types rather than generating DTO copies. Use nested feature DTOs when the client can reference the feature assembly; use non-nested DTOs in a shared contracts project when Blazor or another .NET client should reference contracts without referencing server features. The TypeScript client emits interfaces from built metadata.
+The C# typed client reuses C# request/response types rather than generating DTO copies. Use nested feature DTOs when the client can reference the feature assembly; use non-nested DTOs in a shared contracts project when Blazor or another .NET client should reference contracts without referencing server features. The TypeScript client emits interfaces from built metadata. Routes returning `SliceResult<T>` generate `Task<T>` methods; routes returning the non-generic `SliceResult` generate `Task` (void) methods.
 
 ## Adoption evidence
 
 | Evidence type | Current public count | Notes |
 | --- | ---: | --- |
-| Production adoption | 1 | Maintainer dogfooding: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) running on Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) since preview.5. |
+| Production adoption | 1 | Maintainer dogfooding: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) running on Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) since preview.5. All 8 routes use `SliceResult<T>` / `SliceResult` (preview.7); `SliceApiClient.g.cs` is fully generated. |
 | Published personal dogfooding logs | 0 | A published write-up is planned; the dogfooding itself is live. |
 
 ## Portability
