@@ -48,11 +48,11 @@ curl http://localhost:5099/health
 
 SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
 
-**Release status:** `0.1.0-preview.5` is the latest preview release. Install from NuGet:
+**Release status:** `0.1.0-preview.6` is the latest preview release. Install from NuGet:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.5
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.5
+dotnet add package SliceFx.Core --version 0.1.0-preview.6
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.6
 ```
 
 See the [package table](#project-status) for satellite packages. NuGet package pages: [SliceFx.Core](https://www.nuget.org/packages/SliceFx.Core), [SliceFx.SourceGenerator](https://www.nuget.org/packages/SliceFx.SourceGenerator), [SliceFx.Cli](https://www.nuget.org/packages/SliceFx.Cli).
@@ -79,8 +79,8 @@ All adapters are opt-in. Reference only the packages you need; the source genera
 Add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.5
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.5
+dotnet add package SliceFx.Core --version 0.1.0-preview.6
+dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.6
 ```
 
 ## Hello, SliceFx
@@ -208,8 +208,8 @@ The C# typed client reuses C# request/response types rather than generating DTO 
 
 | Evidence type | Current public count | Notes |
 | --- | ---: | --- |
-| Production adoption | 0 | No production users are claimed before a published package exists. |
-| Published personal dogfooding logs | 0 | A maintainer dogfooding write-up should be published before claiming real-world adoption. |
+| Production adoption | 1 | Maintainer dogfooding: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) running on Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) since preview.5. |
+| Published personal dogfooding logs | 0 | A published write-up is planned; the dogfooding itself is live. |
 
 ## Portability
 
