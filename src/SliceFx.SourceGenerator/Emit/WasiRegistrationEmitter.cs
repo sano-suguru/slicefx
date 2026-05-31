@@ -377,13 +377,34 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine($"                    var __result = {callExpr};");
             }
 
-            if (IsWasiResponseType(SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn)))
+            var awaitedType = SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn);
+            if (IsWasiResponseType(awaitedType))
             {
+                // WasiResponse pass-through (raw escape hatch)
                 sb.AppendLine($"                    return __result;");
+            }
+            else if (SourceGenerationHelpers.IsSliceResultNonGenericType(awaitedType))
+            {
+                // Non-generic SliceResult (status-only, no body) — no JsonTypeInfo needed
+                sb.AppendLine($"                    return __result.ToWasiResponse();");
+            }
+            else if (SourceGenerationHelpers.IsSliceResultOfTType(awaitedType))
+            {
+                // Generic SliceResult<T> (typed body + variable status) — requires context.
+                // awaitedType is non-null here: IsSliceResultOfTType checks for null first.
+                var payloadType = SourceGenerationHelpers.GetSliceResultPayloadType(awaitedType!);
+                if (wasiJsonContextFqn is not null)
+                {
+                    sb.AppendLine($"                    return __result.ToWasiResponse(__JsonTypeInfo<{payloadType}>());");
+                }
+                else
+                {
+                    sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.Ok(__result);");
+                }
             }
             else
             {
-                var resultType = SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn);
+                var resultType = awaitedType;
                 if (wasiJsonContextFqn is not null)
                 {
                     sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>());");

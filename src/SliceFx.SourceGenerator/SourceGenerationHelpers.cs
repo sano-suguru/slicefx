@@ -185,6 +185,36 @@ internal static class SourceGenerationHelpers
     public static bool IsWasiResponseType(string? typeFqn)
         => typeFqn == "global::SliceFx.Wasi.WasiResponse";
 
+    // Prefix for global::SliceFx.SliceResult<T> (generic, arity 1)
+    private const string SliceResultOfTPrefix = "global::SliceFx.SliceResult<";
+
+    // Exact FQN for global::SliceFx.SliceResult (non-generic, arity 0)
+    private const string SliceResultNonGenericFqn = "global::SliceFx.SliceResult";
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="typeFqn"/> is the generic
+    /// <c>global::SliceFx.SliceResult&lt;T&gt;</c> (arity 1).
+    /// </summary>
+    public static bool IsSliceResultOfTType(string? typeFqn)
+        => typeFqn is not null
+           && typeFqn.StartsWith(SliceResultOfTPrefix, StringComparison.Ordinal)
+           && typeFqn.EndsWith(">", StringComparison.Ordinal)
+           && !typeFqn.StartsWith(SliceResultNonGenericFqn + ".", StringComparison.Ordinal); // guard sub-types
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="typeFqn"/> is the non-generic
+    /// <c>global::SliceFx.SliceResult</c> (arity 0).
+    /// </summary>
+    public static bool IsSliceResultNonGenericType(string? typeFqn)
+        => typeFqn == SliceResultNonGenericFqn;
+
+    /// <summary>
+    /// Extracts the payload type <c>T</c> from <c>global::SliceFx.SliceResult&lt;T&gt;</c>.
+    /// Call only when <see cref="IsSliceResultOfTType"/> returns <c>true</c>.
+    /// </summary>
+    public static string GetSliceResultPayloadType(string typeFqn)
+        => GetSingleGenericArgument(typeFqn, SliceResultOfTPrefix);
+
     public static string BindingSourceName(HandlerParameterBindingSource source)
     {
         if (source == HandlerParameterBindingSource.Route)
