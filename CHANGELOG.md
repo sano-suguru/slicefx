@@ -4,6 +4,25 @@ All notable changes to SliceFx will be documented in this file.
 
 This project follows semantic versioning once stable packages are published. Before then, `0.x` and preview versions may change APIs while the framework is experimental.
 
+## 0.1.0-preview.7 - 2026-06-01
+
+### Added
+
+- `SliceResult<T>` (generic readonly struct, `SliceFx.Core`) — host-neutral typed result combining
+  a typed response body with a variable HTTP status code. WASI `Handle` methods can now return
+  `Task<SliceResult<TResponse>>` to express a 200 typed body **or** a 404/401/400 problem path from
+  the same method. The source generator detects this return type, wires JSON dispatch automatically
+  via `__JsonTypeInfo<T>()`, and the CLI client generator unwraps it to `Task<TResponse>`. (Fixes #5)
+- `SliceResult` (non-generic readonly struct, `SliceFx.Core`) — status-only result for features
+  whose success path carries no body (204 No Content). The generated C# client emits `Task` (void),
+  avoiding a throw on empty-body deserialization. Both structs live in the `SliceFx` namespace with
+  factory methods `Ok`, `Created`, `NoContent`, `NotFound`, `Unauthorized`, `BadRequest`, `Problem`.
+- `SliceResultExtensions.ToWasiResponse<T>` / `ToWasiResponse` in `SliceFx.Wasi` — translates the
+  new Core result structs to `WasiResponse` using the existing AOT-safe factory methods. `WasiResponse`-
+  returning features remain supported as a raw escape hatch.
+- `SliceFx.Wasi` now declares a dependency on `SliceFx.Core`; users referencing `SliceFx.Wasi`
+  receive `SliceFx.Core` transitively.
+
 ## 0.1.0-preview.6 - 2026-05-31
 
 ### Fixed
