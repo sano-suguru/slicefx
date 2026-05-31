@@ -4,6 +4,21 @@ All notable changes to SliceFx will be documented in this file.
 
 This project follows semantic versioning once stable packages are published. Before then, `0.x` and preview versions may change APIs while the framework is experimental.
 
+## 0.1.0-preview.6 - 2026-05-31
+
+### Fixed
+
+- `slicefx client csharp`, `client typescript`, `openapi`: routes returning `WasiResponse` (a
+  server-side transport record) no longer generate broken/uncompilable client methods. These routes
+  are now excluded with a `// skipped (untyped WasiResponse): <name>` notice. Portability
+  classification (`portable`) is unchanged. (Fixes #3)
+- `slicefx client csharp`: null nullable scalar query parameters are now omitted from the generated
+  query string (`if (param is not null)`) instead of being emitted as `"name="`. TypeScript client
+  already had this guard. (Fixes #4)
+- `WasiArgumentBinder.BindFromQuery<T>`: empty raw value for a nullable value-type (e.g. `int?`)
+  now returns `Missing` instead of `Bound(null)`, aligning with the corrected client behaviour.
+  `string?` is unaffected — empty string is a valid value for string parameters. (Fixes #4)
+
 ## 0.1.0-preview.5 - 2026-05-30
 
 ### Added
