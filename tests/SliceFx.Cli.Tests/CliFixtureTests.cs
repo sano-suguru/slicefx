@@ -3222,7 +3222,7 @@ public class CliFixtureTests
             public static class DeleteItem
             {
                 public static Task<WasiResponse> Handle(string id, CancellationToken ct)
-                    => Task.FromResult(global::SliceFx.Wasi.SliceResult.NoContent());
+                    => Task.FromResult(global::SliceFx.Wasi.WasiResults.NoContent());
             }
             """);
 

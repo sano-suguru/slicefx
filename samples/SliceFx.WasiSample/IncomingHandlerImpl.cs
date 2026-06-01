@@ -41,12 +41,12 @@ public class IncomingHandlerImpl : IIncomingHandler
         }
         catch (RequestBodyTooLargeException)
         {
-            workerResp = SliceResult.Problem(413, "Payload Too Large", $"Request body exceeds {MaxRequestBodyBytes} bytes.");
+            workerResp = WasiResults.Problem(413, "Payload Too Large", $"Request body exceeds {MaxRequestBodyBytes} bytes.");
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(ex.ToString());
-            workerResp = SliceResult.Problem(500, "Internal Server Error", "An unexpected error occurred.");
+            workerResp = WasiResults.Problem(500, "Internal Server Error", "An unexpected error occurred.");
         }
 
         SendResponse(responseOut, workerResp);

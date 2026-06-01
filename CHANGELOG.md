@@ -4,6 +4,15 @@ All notable changes to SliceFx will be documented in this file.
 
 This project follows semantic versioning once stable packages are published. Before then, `0.x` and preview versions may change APIs while the framework is experimental.
 
+## 0.1.0-preview.8 - 2026-06-01
+
+### Changed
+
+- `SliceFx.Wasi.SliceResult` (static factory class) renamed to `SliceFx.Wasi.WasiResults`,
+  resolving a CS0104 name clash with the `SliceFx.SliceResult` Core struct added in preview.7.
+  Factory calls become `WasiResults.Ok(...)`, `WasiResults.Problem(...)`, etc. Feature handles
+  returning the `SliceResult<T>` / `SliceResult` Core structs are unaffected.
+
 ## 0.1.0-preview.7 - 2026-06-01
 
 ### Added

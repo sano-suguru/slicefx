@@ -6,7 +6,7 @@ namespace SliceFx.Wasi.Tests;
 
 /// <summary>
 /// Tests for <see cref="SliceResultExtensions"/> — translation of host-neutral
-/// <see cref="SliceResult{T}"/> / <see cref="SliceFx.SliceResult"/> to <see cref="WasiResponse"/>.
+/// <see cref="SliceResult{T}"/> / <see cref="SliceResult"/> to <see cref="WasiResponse"/>.
 /// </summary>
 public sealed class SliceResultExtensionsTests
 {
@@ -111,7 +111,7 @@ public sealed class SliceResultExtensionsTests
     [Fact]
     public void NonGeneric_NoContent_produces_204_empty_body()
     {
-        var result = SliceFx.SliceResult.NoContent();
+        var result = SliceResult.NoContent();
 
         var response = result.ToWasiResponse();
 
@@ -122,7 +122,7 @@ public sealed class SliceResultExtensionsTests
     [Fact]
     public void NonGeneric_Ok_produces_200_empty_body()
     {
-        var result = SliceFx.SliceResult.Ok();
+        var result = SliceResult.Ok();
 
         var response = result.ToWasiResponse();
 
@@ -133,7 +133,7 @@ public sealed class SliceResultExtensionsTests
     [Fact]
     public void NonGeneric_Created_produces_201_location_empty_body()
     {
-        var result = SliceFx.SliceResult.Created("/items/99");
+        var result = SliceResult.Created("/items/99");
 
         var response = result.ToWasiResponse();
 
@@ -145,7 +145,7 @@ public sealed class SliceResultExtensionsTests
     [Fact]
     public void NonGeneric_NotFound_produces_404_problem_json()
     {
-        var result = SliceFx.SliceResult.NotFound("Resource missing.");
+        var result = SliceResult.NotFound("Resource missing.");
 
         var response = result.ToWasiResponse();
 
@@ -159,7 +159,7 @@ public sealed class SliceResultExtensionsTests
     [Fact]
     public void NonGeneric_Unauthorized_produces_401_problem_json()
     {
-        var result = SliceFx.SliceResult.Unauthorized();
+        var result = SliceResult.Unauthorized();
 
         var response = result.ToWasiResponse();
 
@@ -170,7 +170,7 @@ public sealed class SliceResultExtensionsTests
     [Fact]
     public void NonGeneric_Problem_produces_custom_status_problem_json()
     {
-        var result = SliceFx.SliceResult.Problem(409, "Conflict", "Item already exists.");
+        var result = SliceResult.Problem(409, "Conflict", "Item already exists.");
 
         var response = result.ToWasiResponse();
 

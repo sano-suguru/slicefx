@@ -35,8 +35,8 @@ For generated non-ASP.NET paths such as WASI and function-per-feature Lambda, a 
 typed return value of `null` is still a JSON value: the response is
 `200 application/json` with body `null`. If `null` means "not found" or "no
 content", return an explicit platform-specific result instead. In WASI, use
-`WasiResponse` helpers such as `SliceResult.NotFound()` or
-`SliceResult.NoContent()`. In function-per-feature Lambda, return
+`WasiResponse` helpers such as `WasiResults.NotFound()` or
+`WasiResults.NoContent()`. In function-per-feature Lambda, return
 `APIGatewayHttpApiV2ProxyResponse` directly.
 
 See `samples/SliceFx.Sample/Features/Users/CreateUser.cs`.

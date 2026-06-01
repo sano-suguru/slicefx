@@ -778,7 +778,7 @@ public class SourceGeneratorCompileTests
             [Feature("GET /control\0")]
             public static class GetControl
             {
-                public static WasiResponse Handle() => global::SliceFx.Wasi.SliceResult.NoContent();
+                public static WasiResponse Handle() => global::SliceFx.Wasi.WasiResults.NoContent();
             }
             """;
 
@@ -807,7 +807,7 @@ public class SourceGeneratorCompileTests
             [Feature("GET /users/{Id:guid}")]
             public static class GetUser
             {
-                public static WasiResponse Handle(Guid id) => global::SliceFx.Wasi.SliceResult.NoContent();
+                public static WasiResponse Handle(Guid id) => global::SliceFx.Wasi.WasiResults.NoContent();
             }
             """;
 
@@ -837,7 +837,7 @@ public class SourceGeneratorCompileTests
             public static class ListItems
             {
                 public static WasiResponse Handle(int page, int? size, string? filter)
-                    => global::SliceFx.Wasi.SliceResult.NoContent();
+                    => global::SliceFx.Wasi.WasiResults.NoContent();
             }
             """;
 
@@ -901,7 +901,7 @@ public class SourceGeneratorCompileTests
                         [FromBody] Payload payload,
                         [FromServices]
                         WasiBindingApp.Clock clock)
-                        => global::SliceFx.Wasi.SliceResult.NoContent();
+                        => global::SliceFx.Wasi.WasiResults.NoContent();
                 }
             }
             """;

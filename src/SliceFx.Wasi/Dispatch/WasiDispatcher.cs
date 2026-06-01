@@ -42,6 +42,6 @@ internal sealed class WasiDispatcher
             return await route.Invoker!(ctx).ConfigureAwait(false);
         }
 
-        return SliceResult.Problem(404, "Not Found", $"No route matched {method} {request.Path}");
+        return WasiResults.Problem(404, "Not Found", $"No route matched {method} {request.Path}");
     }
 }

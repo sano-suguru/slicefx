@@ -4,11 +4,11 @@ namespace SliceFx.Wasi;
 
 /// <summary>
 /// Extension methods that translate <see cref="SliceResult{T}"/> and
-/// <see cref="SliceFx.SliceResult"/> values to <see cref="WasiResponse"/> instances.
+/// <see cref="SliceResult"/> values to <see cref="WasiResponse"/> instances.
 /// </summary>
 /// <remarks>
 /// These methods are used by the source-generated WASI dispatch table.
-/// They delegate to existing <see cref="SliceResult"/> static factory methods for serialization,
+/// They delegate to <see cref="WasiResults"/> static factory methods for serialization,
 /// keeping all JSON logic inside <c>SliceFx.Wasi</c>.
 /// </remarks>
 public static class SliceResultExtensions
@@ -27,43 +27,43 @@ public static class SliceResultExtensions
     {
         if (!result.IsSuccess)
         {
-            return SliceResult.Problem(result.Status, result.ProblemTitle!, result.ProblemDetail);
+            return WasiResults.Problem(result.Status, result.ProblemTitle!, result.ProblemDetail);
         }
 
         if (!result.HasBody)
         {
             // 204 No Content (or other no-body success, e.g. triggered from NoContent())
-            return SliceResult.NoContent();
+            return WasiResults.NoContent();
         }
 
         if (result.Location is not null)
         {
             // 201 Created with body — Location is always status 201 (SliceResult.Created hardcodes 201)
-            return SliceResult.Created(result.Location, result.Value!, jsonTypeInfo);
+            return WasiResults.Created(result.Location, result.Value!, jsonTypeInfo);
         }
 
         // 200 OK or other status with JSON body
-        return SliceResult.Json(result.Status, result.Value!, jsonTypeInfo);
+        return WasiResults.Json(result.Status, result.Value!, jsonTypeInfo);
     }
 
     /// <summary>
-    /// Translates a non-generic (status-only) <see cref="SliceFx.SliceResult"/> to a
+    /// Translates a non-generic (status-only) <see cref="SliceResult"/> to a
     /// <see cref="WasiResponse"/>. No <c>JsonTypeInfo</c> is needed because success responses
     /// carry no body.
     /// </summary>
     /// <param name="result">The result to translate.</param>
     /// <returns>A <see cref="WasiResponse"/> that represents the result.</returns>
-    public static WasiResponse ToWasiResponse(this SliceFx.SliceResult result)
+    public static WasiResponse ToWasiResponse(this SliceResult result)
     {
         if (!result.IsSuccess)
         {
-            return SliceResult.Problem(result.Status, result.ProblemTitle!, result.ProblemDetail);
+            return WasiResults.Problem(result.Status, result.ProblemTitle!, result.ProblemDetail);
         }
 
         if (result.Location is not null)
         {
             // 201 Created, no body
-            return SliceResult.Created(result.Location);
+            return WasiResults.Created(result.Location);
         }
 
         // 200 OK or 204 No Content — both are body-less in the non-generic case

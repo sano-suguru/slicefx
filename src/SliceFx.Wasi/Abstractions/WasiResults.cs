@@ -8,7 +8,7 @@ namespace SliceFx.Wasi;
 /// <summary>
 /// Factory methods for common <see cref="WasiResponse"/> values used by Slice WASI features.
 /// </summary>
-public static partial class SliceResult
+public static partial class WasiResults
 {
     private static readonly IReadOnlyDictionary<string, string> s_jsonHeaders =
         new Dictionary<string, string>(StringComparer.Ordinal) { ["Content-Type"] = "application/json" };

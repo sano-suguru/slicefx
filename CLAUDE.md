@@ -150,8 +150,6 @@ public static class DeleteItem
 }
 ```
 
-**Naming caution**: `SliceFx.SliceResult` (arity 0, non-generic struct, Core) and `SliceFx.Wasi.SliceResult` (arity 0, static factory class, Wasi) have the same simple name and arity. In files that use the non-generic `SliceResult` struct, remove `using SliceFx.Wasi;` to avoid CS0104. The generic `SliceResult<T>` (arity 1) coexists with `SliceFx.Wasi.SliceResult` without ambiguity.
-
 WASI DataAnnotations validation is source-generated for supported `Required`, `StringLength`, `MinLength`, `MaxLength`, numeric `Range`, `EmailAddress`, `Url`, and `RegularExpression` rules (shape-conditional: `StringLength` for `string` only, `Range` for numeric types only, and any supported attribute with a resource/localized error message is treated as unsupported); routes that need reflection-bound validation — including `IValidatableObject`, type-level attributes, custom `ValidationAttribute`, and supported attribute types used in unsupported shapes — are excluded from the WASI route table with SLICE022. There is no per-request reflection fallback in the WASI path. `[Filter<T>]` endpoint filters are not executed in the WASI path (they require ASP.NET's `IEndpointFilter` pipeline); `ISliceValidator<T>` implementations are discovered and run by generated WASI dispatch.
 
 ```csharp
@@ -269,7 +267,7 @@ src/SliceFx.Lambda/         # AWS Lambda hosting adapter over Amazon.Lambda.AspN
 src/SliceFx.Lambda.FunctionPerFeature/ # per-feature NativeAOT Lambda packaging (custom runtime)
 src/SliceFx.TestHost/       # in-process test host wrapper over Microsoft.AspNetCore.Mvc.Testing
 src/SliceFx.Wasi/           # WASI / wasi:http adapter (ASP.NET-independent)
-                          # WasiHost, WasiApp, WasiRouteTable, WasiResponse, SliceResult
+                          # WasiHost, WasiApp, WasiRouteTable, WasiResponse, WasiResults
 tools/SliceFx.Cli/          # .NET tool: slicefx new|routes|client|manifest|package|openapi
 tools/gen-bench-features.py # generator for the Bench50/100/200 benchmark scenario apps
 tests/                    # xUnit runtime tests + benchmarks + NativeAOT fixture:

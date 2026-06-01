@@ -4,12 +4,12 @@ using System.Text.Json.Serialization;
 
 namespace SliceFx.Wasi.Tests;
 
-public sealed class SliceResultTests
+public sealed class WasiResultsTests
 {
     [Fact]
     public void Ok_returns_empty_body()
     {
-        var response = SliceResult.Ok();
+        var response = WasiResults.Ok();
 
         Assert.Equal(200, response.Status);
         Assert.False(response.Headers.ContainsKey("Content-Type"));
@@ -19,7 +19,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Ok_with_null_value_serializes_json_null()
     {
-        var response = SliceResult.Ok(null);
+        var response = WasiResults.Ok(null);
 
         Assert.Equal(200, response.Status);
         Assert.Equal("application/json", response.Headers["Content-Type"]);
@@ -29,7 +29,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Ok_with_json_type_info_serializes_null_as_json_null()
     {
-        var response = SliceResult.Ok(null!, SliceResultTestJsonContext.Default.String);
+        var response = WasiResults.Ok(null!, SliceResultTestJsonContext.Default.String);
 
         Assert.Equal(200, response.Status);
         Assert.Equal("application/json", response.Headers["Content-Type"]);
@@ -39,7 +39,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Created_returns_location_with_empty_body()
     {
-        var response = SliceResult.Created("/users/1");
+        var response = WasiResults.Created("/users/1");
 
         Assert.Equal(201, response.Status);
         Assert.Equal("/users/1", response.Headers["Location"]);
@@ -50,7 +50,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Created_with_null_value_serializes_json_null()
     {
-        var response = SliceResult.Created("/users/1", null);
+        var response = WasiResults.Created("/users/1", null);
 
         Assert.Equal(201, response.Status);
         Assert.Equal("/users/1", response.Headers["Location"]);
@@ -61,7 +61,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Created_with_json_type_info_serializes_null_as_json_null()
     {
-        var response = SliceResult.Created("/users/1", null!, SliceResultTestJsonContext.Default.String);
+        var response = WasiResults.Created("/users/1", null!, SliceResultTestJsonContext.Default.String);
 
         Assert.Equal(201, response.Status);
         Assert.Equal("/users/1", response.Headers["Location"]);
@@ -72,7 +72,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Json_serializes_null_as_json_null()
     {
-        var response = SliceResult.Json(202, null);
+        var response = WasiResults.Json(202, null);
 
         Assert.Equal(202, response.Status);
         Assert.Equal("application/json", response.Headers["Content-Type"]);
@@ -82,7 +82,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Json_with_json_type_info_serializes_null_as_json_null()
     {
-        var response = SliceResult.Json(202, null!, SliceResultTestJsonContext.Default.String);
+        var response = WasiResults.Json(202, null!, SliceResultTestJsonContext.Default.String);
 
         Assert.Equal(202, response.Status);
         Assert.Equal("application/json", response.Headers["Content-Type"]);
@@ -92,7 +92,7 @@ public sealed class SliceResultTests
     [Fact]
     public void Problem_returns_camel_case_problem_details()
     {
-        var response = SliceResult.Problem(404, "Not Found", "Missing");
+        var response = WasiResults.Problem(404, "Not Found", "Missing");
 
         Assert.Equal(404, response.Status);
         Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
@@ -106,7 +106,7 @@ public sealed class SliceResultTests
     [Fact]
     public void ValidationProblem_returns_camel_case_problem_details_without_changing_error_keys()
     {
-        var response = SliceResult.ValidationProblem(
+        var response = WasiResults.ValidationProblem(
             new Dictionary<string, string[]> { ["Name"] = ["Name is required."] });
 
         Assert.Equal(400, response.Status);
