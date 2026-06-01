@@ -91,6 +91,8 @@ GET /products/{id:guid}   portable   GetProduct
 
 This means the same feature can run on ASP.NET with in-memory storage during development, Lambda with DynamoDB in staging, and WASI with a stub in tests — without any code changes to the feature file itself.
 
+Note: `portable` describes the handler's entry/exit *shape*, not a runtime guarantee — actual cross-host execution depends on the DI implementation you supply for each target, and WASI route-table membership is computed separately. See [Why are some features classified `aspnet-only`?](../design-decisions.md#why-are-some-features-classified-aspnet-only-and-excluded-from-wasi).
+
 ## Platform-specific features
 
 When a feature needs a platform-specific capability with no portable equivalent (for example, Workers Durable Objects or Lambda-specific invocation context), model it as an `aspnet-only` or WASI-only feature by using the appropriate return type. Use DI to keep the platform-specific logic out of the feature file itself:
@@ -118,7 +120,7 @@ These constraints affect all implementations that target NativeAOT-LLVM WASI (vi
 
 **Async surface over sync WIT:** WIT host calls are synchronous, but satellite interfaces use `ValueTask`-returning methods to match the repo's async convention and remain compatible with future async providers. Wrap synchronous WIT calls with `ValueTask.FromResult(...)` in application implementations.
 
-**`System.Security.Cryptography` is not available** in NativeAOT-LLVM WASI builds. This includes `CryptographicOperations.FixedTimeEquals`, `HMACSHA256`, and all classes in the `System.Security.Cryptography` namespace. For constant-time comparisons (e.g. token authentication), use a manual XOR-accumulation loop:</p>
+**`System.Security.Cryptography` is not available** in NativeAOT-LLVM WASI builds. This includes `CryptographicOperations.FixedTimeEquals`, `HMACSHA256`, and all classes in the `System.Security.Cryptography` namespace. For constant-time comparisons (e.g. token authentication), use a manual XOR-accumulation loop:
 
 ```csharp
 // Constant-time string comparison without System.Security.Cryptography
