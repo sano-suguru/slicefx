@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload BenchmarkDotNet artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: |
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload BenchmarkDotNet artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-benchmark-results
           path: BenchmarkDotNet.Artifacts.Runtime/
@@ -183,7 +183,7 @@ jobs:
           --commit-sha "${{ steps.runtime-chart-meta.outputs.short_sha }}"
 
       - name: Upload runtime chart artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-chart
           path: |
