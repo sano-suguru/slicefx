@@ -31,15 +31,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload BenchmarkDotNet artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: |
@@ -122,10 +122,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
 
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload BenchmarkDotNet artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-benchmark-results
           path: BenchmarkDotNet.Artifacts.Runtime/
@@ -155,7 +155,7 @@ jobs:
         run: bash tests/SliceFx.Benchmarks/check-gates.sh tests/SliceFx.Benchmarks.Runtime/runtime-gates.json BenchmarkDotNet.Artifacts.Runtime/results
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -183,7 +183,7 @@ jobs:
           --commit-sha "${{ steps.runtime-chart-meta.outputs.short_sha }}"
 
       - name: Upload runtime chart artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-chart
           path: |
