@@ -248,9 +248,9 @@ internal static class WasiRegistrationEmitter
             sb.AppendLine("                    }");
             sb.AppendLine("                    catch (global::System.Text.Json.JsonException)");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
+            sb.AppendLine("                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
             sb.AppendLine("                    }");
-            sb.AppendLine($"                    if ({bodyReadName} is null) return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", \"Request body is required.\");");
+            sb.AppendLine($"                    if ({bodyReadName} is null) return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", \"Request body is required.\");");
             if (bodyReadName != bodyTargetName)
             {
                 sb.AppendLine($"                    var {bodyTargetName} = {bodyReadName}.Value;");
@@ -259,7 +259,7 @@ internal static class WasiRegistrationEmitter
             if (bodyValidation is not null)
             {
                 sb.AppendLine($"                    var __daErrors = {ValidationMethodName(f, bodyValidation.Value)}({bodyParam.Name});");
-                sb.AppendLine($"                    if (__daErrors is not null) return global::SliceFx.Wasi.SliceResult.ValidationProblem(__daErrors);");
+                sb.AppendLine($"                    if (__daErrors is not null) return global::SliceFx.Wasi.WasiResults.ValidationProblem(__daErrors);");
             }
 
             if (HasValidatorForParameter(bodyParam, validators))
@@ -268,7 +268,7 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine("                    if (__validator is not null)");
                 sb.AppendLine("                    {");
                 sb.AppendLine($"                        var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken);");
-                sb.AppendLine($"                        if (!__vr.IsValid) return global::SliceFx.Wasi.SliceResult.ValidationProblem(__vr.Errors!);");
+                sb.AppendLine($"                        if (!__vr.IsValid) return global::SliceFx.Wasi.WasiResults.ValidationProblem(__vr.Errors!);");
                 sb.AppendLine("                    }");
             }
         }
@@ -296,7 +296,7 @@ internal static class WasiRegistrationEmitter
             {
                 sb.AppendLine($"                    if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");
                 sb.AppendLine($"                        .TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
-                sb.AppendLine($"                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
+                sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
                 if (!p.IsNullable)
                 {
                     nonNullableRouteParams.Add(p.Name);
@@ -308,11 +308,11 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine($"                    var {bindingVariable} = global::SliceFx.Wasi.Binding.WasiArgumentBinder");
                 sb.AppendLine($"                        .BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
                 sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
-                sb.AppendLine($"                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
+                sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
                 if (!p.IsNullable)
                 {
                     sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
-                    sb.AppendLine($"                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
+                    sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
                 }
                 sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
             }
@@ -322,11 +322,11 @@ internal static class WasiRegistrationEmitter
                 sb.AppendLine($"                    var {bindingVariable} = global::SliceFx.Wasi.Binding.WasiArgumentBinder");
                 sb.AppendLine($"                        .BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
                 sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
-                sb.AppendLine($"                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
+                sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
                 if (!p.IsNullable)
                 {
                     sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
-                    sb.AppendLine($"                        return global::SliceFx.Wasi.SliceResult.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
+                    sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
                 }
                 sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
             }
@@ -359,12 +359,12 @@ internal static class WasiRegistrationEmitter
         if (f.ReturnTypeFqn == "void")
         {
             sb.AppendLine($"                    {callExpr};");
-            sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.NoContent();");
+            sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.NoContent();");
         }
         else if (SourceGenerationHelpers.IsNonGenericAwaitable(f.ReturnTypeFqn))
         {
             sb.AppendLine($"                    await {callExpr};");
-            sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.NoContent();");
+            sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.NoContent();");
         }
         else
         {
@@ -399,7 +399,7 @@ internal static class WasiRegistrationEmitter
                 }
                 else
                 {
-                    sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.Ok(__result);");
+                    sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.Ok(__result);");
                 }
             }
             else
@@ -407,11 +407,11 @@ internal static class WasiRegistrationEmitter
                 var resultType = awaitedType;
                 if (wasiJsonContextFqn is not null)
                 {
-                    sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>());");
+                    sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>());");
                 }
                 else
                 {
-                    sb.AppendLine($"                    return global::SliceFx.Wasi.SliceResult.Ok(__result);");
+                    sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.Ok(__result);");
                 }
             }
         }

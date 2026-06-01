@@ -39,14 +39,6 @@ namespace SliceFx;
 /// For features whose success path has no body (204 No Content etc.), use the non-generic
 /// <see cref="SliceResult"/> struct instead.
 /// </para>
-/// <para>
-/// <strong>Naming caution:</strong> <c>SliceFx.SliceResult&lt;T&gt;</c> (this type, arity 1) and
-/// <c>SliceFx.Wasi.SliceResult</c> (a static factory class, arity 0) coexist by arity distinction
-/// and can appear in the same file without ambiguity. However, the non-generic
-/// <see cref="SliceResult"/> struct (arity 0, in this namespace) conflicts with
-/// <c>SliceFx.Wasi.SliceResult</c> when both namespaces are imported. See <see cref="SliceResult"/>
-/// for details.
-/// </para>
 /// </remarks>
 public readonly struct SliceResult<T>
 {
@@ -152,22 +144,6 @@ public readonly struct SliceResult<T>
 /// </para>
 /// <para>
 /// For features that return a typed body on success, use <see cref="SliceResult{T}"/> instead.
-/// </para>
-/// <para>
-/// <strong>Naming caution (CS0104):</strong> <c>SliceFx.SliceResult</c> (this struct, arity 0)
-/// has the same simple name and arity as <c>SliceFx.Wasi.SliceResult</c> (a static factory class).
-/// Having both <c>using SliceFx;</c> and <c>using SliceFx.Wasi;</c> in the same file and then
-/// writing bare <c>SliceResult</c> causes a CS0104 ambiguity error. To avoid the conflict:
-/// </para>
-/// <list type="bullet">
-///   <item>In files that use the non-generic <see cref="SliceResult"/> struct, remove
-///   <c>using SliceFx.Wasi;</c>.</item>
-///   <item>If both types are genuinely needed, qualify one:
-///   <c>global::SliceFx.Wasi.SliceResult.Problem(...)</c>.</item>
-/// </list>
-/// <para>
-/// The generic <c>SliceResult&lt;T&gt;</c> (arity 1) does NOT conflict with
-/// <c>SliceFx.Wasi.SliceResult</c> (arity 0) — C# resolves by arity.
 /// </para>
 /// </remarks>
 public readonly struct SliceResult

@@ -39,7 +39,7 @@ Current version: `0.1.0-preview.5` (2026-05-30). Previous: `0.1.0-preview.4` (20
 - [x] Review public API names before the first package push.
   - Core runtime: `[Feature]`, `[Filter<T>]`, validation types (`ISliceValidator<T>`, `SliceValidationResult`).
   - Generated API (emitted by the `SliceFx.SourceGenerator` package): `AddSlice`, `MapSlices`, route manifest (`GetSliceRoutesGenerated`), cross-assembly module helpers, WASI registrations (`AddSlice(WasiHostBuilder)`, `RegisterWasiRoutes`).
-  - WASI API: `WasiHost`, `WasiApp`, `WasiRequest`, `WasiResponse`, `SliceResult`, `WasiRouteTable`.
+  - WASI API: `WasiHost`, `WasiApp`, `WasiRequest`, `WasiResponse`, `WasiResults`, `WasiRouteTable`.
   - Naming decision: keep `SliceFx.Wasi` namespace APIs / `Wasi*` types as the preview public API because the adapter targets any `wasi:http` host. `SliceFx.Workers` / `Worker*` would overfit the API to Cloudflare Workers, which is only one deployment target.
   - Before release, confirm no stale generic Workers naming remains outside this checklist:
     ```pwsh

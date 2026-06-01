@@ -35,7 +35,7 @@ These ideas are useful references, not the public authoring model. SliceFx shoul
 - **Small routing surface.** Keep feature registration mechanical and easy to inspect. Avoid a second fluent router unless it solves a clear .NET-specific problem.
 - **Runtime portability.** Treat WASI/fetch-style dispatch as the lightweight runtime proving ground. A portable feature should not need ASP.NET-only response types.
 - **Middleware at the edge of the feature.** Keep using endpoint filters instead of inventing a mediator pipeline. WASI can support only the filter concepts that make sense without ASP.NET.
-- **Simple request/response primitives.** `WasiRequest`, `WasiResponse`, `SliceResult`, POCOs, `Task<T>`, and `ValueTask<T>` should remain the portable path.
+- **Simple request/response primitives.** `WasiRequest`, `WasiResponse`, `WasiResults`, POCOs, `Task<T>`, and `ValueTask<T>` should remain the portable path.
 - **Typed clients from routes.** Server route metadata should turn into client entrypoints. SliceFx should answer that in .NET by generating C# typed clients for Blazor/.NET consumers, and later TypeScript clients for browser/edge consumers.
 
 ## Per-feature deployment references
@@ -128,11 +128,11 @@ public static class GetUser
 }
 ```
 
-For WASI-specific responses, use `SliceResult` or `WasiResponse`. The generator currently excludes ASP.NET-specific `IResult` features from WASI route tables with `SLICE020`.
+For WASI-specific responses, use `WasiResults` or `WasiResponse`. The generator currently excludes ASP.NET-specific `IResult` features from WASI route tables with `SLICE020`.
 
 ## WASI/fetch-style direction
 
-`SliceFx.Wasi` is the active experiment for a lightweight wasi:http runtime. Its minimal dispatch surface is `WasiRequest` in and `WasiResponse` out, with `SliceResult` helpers for common responses. The route table should stay generated and deterministic; ASP.NET endpoint filters should not be assumed to run in the WASI path.
+`SliceFx.Wasi` is the active experiment for a lightweight wasi:http runtime. Its minimal dispatch surface is `WasiRequest` in and `WasiResponse` out, with `WasiResults` helpers for common responses. The route table should stay generated and deterministic; ASP.NET endpoint filters should not be assumed to run in the WASI path.
 
 Near-term WASI work should focus on better manifest-driven compatibility reporting and source-generated JSON/validation coverage before introducing another public routing API.
 
