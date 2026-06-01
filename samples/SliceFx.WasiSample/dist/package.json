@@ -11,7 +11,7 @@
     "deploy": "wrangler deploy --config wrangler.deploy.toml"
   },
   "dependencies": {
-    "@bytecodealliance/preview2-shim": "0.17.9"
+    "@bytecodealliance/preview2-shim": "0.18.0"
   },
   "devDependencies": {
     "@bytecodealliance/jco": "1.19.0",
