@@ -21,10 +21,10 @@ This sample publishes one WASM component containing the generated route table fo
 | --- | --- |
 | `BytecodeAlliance.Componentize.DotNet.Wasm.SDK` | `0.7.0-preview00010` |
 | `runtime.<host>.microsoft.dotnet.ilcompiler.llvm` | `10.0.0-alpha.1.25162.1` |
-| `@bytecodealliance/jco` | `1.19.0` |
-| `@bytecodealliance/preview2-shim` | `0.17.9` |
+| `@bytecodealliance/jco` | `1.20.0` |
+| `@bytecodealliance/preview2-shim` | `0.18.1` |
 | `binaryen` | `129.0.0` |
-| `wrangler` | `4.93.1` |
+| `wrangler` | `4.95.0` |
 
 ## Build the WASM component
 
