@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Pinned tsc used by TS client type-check tests
+  - package-ecosystem: npm
+    directory: /eng/typescript-typecheck
+    schedule:
+      interval: weekly
+
+  # WASI sample: jco / preview2-shim / wrangler (upstream unstable toolchain — review bumps carefully)
+  - package-ecosystem: npm
+    directory: /samples/SliceFx.WasiSample/dist
+    schedule:
+      interval: weekly
