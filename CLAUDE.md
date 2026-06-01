@@ -131,7 +131,7 @@ public static class GetItem
 {
     public static async Task<SliceResult<GetItemResponse>> Handle(string id, IKeyValueStore kv, CancellationToken ct)
     {
-        var item = await kv.GetJsonAsync($"item:{id}", ctx.InboxItem, ct);
+        var item = await kv.GetJsonAsync($"item:{id}", InboxJsonContext.Default.InboxItem, ct);
         if (item is null) return SliceResult<GetItemResponse>.NotFound($"Item '{id}' not found.");
         return SliceResult<GetItemResponse>.Ok(new GetItemResponse(item));
     }
