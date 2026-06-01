@@ -39,7 +39,7 @@ jobs:
           global-json-file: global.json
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -155,7 +155,7 @@ jobs:
         run: bash tests/SliceFx.Benchmarks/check-gates.sh tests/SliceFx.Benchmarks.Runtime/runtime-gates.json BenchmarkDotNet.Artifacts.Runtime/results
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
