@@ -8,7 +8,7 @@ namespace SliceFx.Wasi.Spin;
 /// componentize-dotnet emits it on a <c>*Interop</c> static class (e.g. <c>VariablesInterop.Get</c>);
 /// the generated <c>IVariables</c> type carries only the <c>Error</c> shape. The underlying WIT
 /// call is synchronous — wrap it with <c>ValueTask.FromResult(...)</c>, mirroring how
-/// <c>IKeyValueStore</c> fronts the synchronous Spin KV host calls. Implementations are
+/// <c>IKeyValueStore</c> fronts the synchronous WASI key-value (<c>wasi:keyvalue</c>) host calls. Implementations are
 /// fail-closed: undefined variable or provider error → <c>null</c>.
 /// Use <see cref="InMemorySpinVariables"/> in unit tests.
 /// </remarks>
