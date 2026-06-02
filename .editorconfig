@@ -16,17 +16,23 @@ dotnet_analyzer_diagnostic.category-Style.severity = warning
 
 dotnet_diagnostic.IDE0005.severity = warning
 dotnet_diagnostic.IDE0055.severity = warning
+# IDE0046: ternary-expression simplification — multi-branch if/return reads more clearly; suppress for readability.
 dotnet_diagnostic.IDE0046.severity = none
+# IDE0058: unused expression value — fluent builder chains (AddSlice, MapSlices, sb.AppendLine) are intentionally discard-style.
 dotnet_diagnostic.IDE0058.severity = none
 dotnet_diagnostic.IDE0060.severity = warning
+# IDE0130: namespace/folder mismatch — WIT bindings use versioned namespaces (v0_2_0) and SliceFx emits into the SliceFx namespace by design.
 dotnet_diagnostic.IDE0130.severity = none
 dotnet_diagnostic.IDE0161.severity = warning
+# IDE0290: prefer primary constructor — intentionally not enforced; primary constructors are welcome but not required.
 dotnet_diagnostic.IDE0290.severity = none
 dotnet_diagnostic.IDE0300.severity = warning
 dotnet_diagnostic.IDE0301.severity = warning
 dotnet_diagnostic.IDE0305.severity = warning
 dotnet_diagnostic.IDE0306.severity = warning
+# CA1515: make application types internal — SliceFx.Core and satellite packages expose a public API surface; internal-ize is incorrect for library projects.
 dotnet_diagnostic.CA1515.severity = none
+# CA1852: seal internal types — source-generated partials, WIT-binding types, and test doubles require inheritance; sealing by default is not appropriate here.
 dotnet_diagnostic.CA1852.severity = none
 
 dotnet_style_prefer_collection_expression = when_types_loosely_match:warning

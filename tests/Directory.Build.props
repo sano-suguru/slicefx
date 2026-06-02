@@ -1,0 +1,18 @@
+<Project>
+  <!-- Inherit root props (TFM, Nullable, LangVersion, TreatWarningsAsErrors, Version, etc.).
+       MSBuild stops at the nearest Directory.Build.props, so we must import the root explicitly. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)../Directory.Build.props')" />
+
+  <PropertyGroup>
+    <!-- CS1591: XML doc comments are not required for test/benchmark/fixture projects.
+         Note: GenerateDocumentationFile remains true (inherited from root) because IDE0005
+         (remove unnecessary usings) requires it — setting it to false would disable IDE0005
+         analysis and cause an EnableGenerateDocumentationFile build error (roslyn#41640). -->
+    <!-- CA1707: xUnit test method names use underscores by convention (e.g. Method_Should_DoX);
+         suppress across all test projects rather than repeating the NoWarn in each csproj.
+         Also applied to non-test support projects (NativeAotFixture, TestApp, SliceApp) under
+         this directory — they don't use underscore names, so the suppression is harmless. -->
+    <NoWarn>$(NoWarn);CS1591;CA1707</NoWarn>
+  </PropertyGroup>
+</Project>

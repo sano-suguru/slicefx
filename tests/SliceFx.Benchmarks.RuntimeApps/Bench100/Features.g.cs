@@ -2,6 +2,8 @@
 // SliceFx runtime benchmark feature fixtures.
 // Regenerate: python3 tools/gen-bench-features.py
 
+// CS1591: XML doc comments are not required for auto-generated benchmark fixture code.
+// CA1707: benchmark feature method names use underscores by convention; these are generated identifiers.
 #pragma warning disable CS1591
 #pragma warning disable CA1707
 #nullable enable

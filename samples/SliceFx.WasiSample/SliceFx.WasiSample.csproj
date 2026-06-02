@@ -18,6 +18,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <SelfContained>true</SelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- CS1591: XML doc comments are not required for WASI sample entry-point and WIT bridge code. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json;https://api.nuget.org/v3/index.json</RestoreAdditionalProjectSources>
   </PropertyGroup>
