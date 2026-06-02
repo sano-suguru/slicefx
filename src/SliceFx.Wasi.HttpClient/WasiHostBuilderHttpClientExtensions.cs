@@ -22,6 +22,13 @@ public static class WasiHostBuilderHttpClientExtensions
     /// <summary>
     /// Registers <typeparamref name="TClient"/> as the singleton <see cref="IWasiHttpClient"/> for the WASI application.
     /// </summary>
+    /// <remarks>
+    /// This overload uses reflection-based constructor activation and is not NativeAOT/trim-safe.
+    /// In NativeAOT or trim-enabled builds (e.g. WASI publish), prefer the instance overload:
+    /// <c>builder.AddWasiHttpClient(new TClient(...))</c>.
+    /// </remarks>
+    [RequiresUnreferencedCode("Uses reflection to activate TClient. Use the instance overload in trim/NativeAOT builds.")]
+    [RequiresDynamicCode("Uses dynamic code to activate TClient. Use the instance overload in NativeAOT builds.")]
     public static WasiHostBuilder AddWasiHttpClient<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TClient>(this WasiHostBuilder builder)
         where TClient : class, IWasiHttpClient
     {
