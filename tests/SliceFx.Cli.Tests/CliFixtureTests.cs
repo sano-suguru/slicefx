@@ -443,7 +443,7 @@ public class CliFixtureTests
 
         var exception = Assert.Throws<CliException>(() => RouteCatalog.Discover(ProjectContextDiscovery.Discover(fixture.ProjectFile.FullName)));
         Assert.Contains("Invalid SliceFx route manifest", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("expected 25 constructor arguments but found 17", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("expected 26 constructor arguments but found 17", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Rebuild the project", exception.Message, StringComparison.Ordinal);
     }
 

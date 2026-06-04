@@ -73,13 +73,28 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Diagnostic reported when a feature's [Filter&lt;T&gt;] declarations place filters in an order
+    /// Diagnostic reported when a feature's filter declarations place filters in an order
     /// that contradicts a [FilterOrderHint(After = typeof(...))] declared on one of the filters.
     /// </summary>
     public static readonly DiagnosticDescriptor FilterOrderViolation = new(
         "SLICE007",
         "Filter order violates declared hint",
-        "Feature '{0}': filter '{1}' is annotated [FilterOrderHint(After = typeof({2}))] but is declared before it. Reorder the [Filter<T>] attributes so '{1}' follows '{2}'.",
+        "Feature '{0}': filter '{1}' is annotated [FilterOrderHint(After = typeof({2}))] but is declared before it. Reorder the filter attributes so '{1}' follows '{2}'.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// Diagnostic reported when a [FilterOrderHint] references a filter from the other execution
+    /// layer — a neutral filter (<c>ISliceFilter</c> / <c>[SliceFilter&lt;T&gt;]</c>) hinting at
+    /// an ASP.NET filter (<c>IEndpointFilter</c> / <c>[Filter&lt;T&gt;]</c>), or vice versa. The
+    /// two layers execute at different points in the pipeline and ordering between them is not
+    /// enforceable; the hint is ignored.
+    /// </summary>
+    public static readonly DiagnosticDescriptor CrossLayerFilterOrderHint = new(
+        "SLICE008",
+        "Cross-layer FilterOrderHint has no effect",
+        "Feature '{0}': [FilterOrderHint(After = typeof({2}))] on '{1}' crosses filter layers — neutral filters ([SliceFilter<T>]) and ASP.NET filters ([Filter<T>]) execute in separate pipeline stages. The hint is ignored; use hints only within the same layer.",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);

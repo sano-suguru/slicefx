@@ -9,6 +9,7 @@ SLICE004 | Slice | Error | InvalidRouteFormat
 SLICE005 | Slice | Error | DuplicateEndpointName
 SLICE006 | Slice | Info | TagInferenceFallback
 SLICE007 | Slice | Warning | FilterOrderViolation
+SLICE008 | Slice | Warning | CrossLayerFilterOrderHint
 SLICE010 | Slice | Error | UnsupportedValidationForAspNet
 SLICE011 | Slice | Error | InvalidSliceValidator
 SLICE012 | Slice | Error | DuplicateSliceValidator

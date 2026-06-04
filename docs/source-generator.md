@@ -83,7 +83,8 @@ Diagnostic IDs are grouped into reserved ranges so new rules can be added withou
 | `SLICE004` | Error | Routing | Route is not in `METHOD /path` form. | Use a supported HTTP method followed by an absolute route path. |
 | `SLICE005` | Error | Endpoint metadata | Two features produce the same endpoint name. | Rename one feature or set `FeatureAttribute.Name` / `FeatureAttribute.Tag`. |
 | `SLICE006` | Info | Endpoint metadata | Tag inference could not find a `.Features.` namespace segment. | Move the feature under a `.Features.<Tag>` namespace or set `FeatureAttribute.Tag`. |
-| `SLICE007` | Warning | Filters | `[FilterOrderHint]` conflicts with the declared `[Filter<T>]` order. | Reorder filter attributes so hinted dependencies run first. |
+| `SLICE007` | Warning | Filters | `[FilterOrderHint]` conflicts with the declared filter order within a layer. | Reorder filter attributes so hinted dependencies run first. |
+| `SLICE008` | Warning | Filters | `[FilterOrderHint]` references a filter from the opposite execution layer — neutral (`[SliceFilter<T>]`) and ASP.NET (`[Filter<T>]`) filters run in separate stages and cannot be ordered relative to each other. | Remove the cross-layer hint; use hints only within the same filter type. |
 | `SLICE010` | Error | Validation | ASP.NET generated registrations would need reflection-bound DataAnnotations validation. | Use supported generated validation attributes or move the rule to `ISliceValidator<T>`. |
 | `SLICE011` | Error | Validation | `ISliceValidator<T>` implementation cannot be generated safely. | Make the validator a closed, constructible implementation for a concrete request type. |
 | `SLICE012` | Error | Validation | More than one `ISliceValidator<T>` targets the same request. | Combine the rules into one validator for that request type. |

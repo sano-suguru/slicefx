@@ -471,7 +471,9 @@ internal sealed record SliceRouteInfo(
     string? WasiDispatchReason = null,
     bool HasGeneratedMetadata = false,
     string? SourceAssemblyName = null,
-    string[]? ValidatorTypes = null)
+    string[]? ValidatorTypes = null,
+    // arg index 25 (tail-appended to SliceFeatureRouteAttribute)
+    string[]? SliceFilters = null)
 {
     internal string FeatureType => $"{Namespace}.{FeatureName}";
 

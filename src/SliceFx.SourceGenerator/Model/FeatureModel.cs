@@ -17,14 +17,16 @@ internal sealed record FeatureModel(
     bool ReturnsAspNetResult,
     // Serialised as "b64(typeFqn)|b64(name)|kind|nullable|b64(bindingSource)|b64(bindingName)|valueKind[|b64(bindingKeyLiteral)]" so the record uses primitive equality.
     string SerializedParams,
-    // Serialised as "fqn1;fqn2" — order is declaration order.
+    // Serialised as "fqn1;fqn2" — order is declaration order. ASP.NET IEndpointFilter types only.
     string SerializedFilterFqns,
+    // Serialised as "fqn1;fqn2" — order is declaration order. ISliceFilter (host-neutral) types only.
+    string SerializedSliceFilterFqns,
     // Serialised as one validation rule per line: "parameterIndex|parameterType|property|rule|arg1|arg2".
     string SerializedValidationRules,
     bool RequiresReflectionValidation,
     // Serialised as one unsupported validation attribute per line.
     string SerializedUnsupportedValidationAttributes,
-    // Serialised as "filterFqn|afterFqn;filterFqn|afterFqn" — one entry per FilterOrderHint(After=...) on a filter.
+    // Serialised as "filterFqn|afterFqn;filterFqn|afterFqn" — one entry per FilterOrderHint(After=...) on a filter (either layer).
     string SerializedFilterOrderHints,
     string? LambdaStartupTypeFqn,
     string FeatureLocationFilePath,
@@ -70,9 +72,10 @@ internal sealed record FeatureModel(
     }
 
     /// <summary>
-    /// Deserializes the endpoint filter type names referenced by the feature.
+    /// Deserializes the ASP.NET endpoint filter type names (<c>IEndpointFilter</c>) referenced
+    /// by the feature.
     /// </summary>
-    /// <returns>The fully qualified endpoint filter type names.</returns>
+    /// <returns>The fully qualified ASP.NET endpoint filter type names.</returns>
     public ImmutableArray<string> GetFilterFqns()
     {
         if (string.IsNullOrEmpty(SerializedFilterFqns))
@@ -81,6 +84,22 @@ internal sealed record FeatureModel(
         }
 
         var parts = SerializedFilterFqns.Split(';');
+        return ImmutableArray.Create(parts);
+    }
+
+    /// <summary>
+    /// Deserializes the host-neutral filter type names (<c>ISliceFilter</c>) referenced by the
+    /// feature.
+    /// </summary>
+    /// <returns>The fully qualified neutral filter type names.</returns>
+    public ImmutableArray<string> GetSliceFilterFqns()
+    {
+        if (string.IsNullOrEmpty(SerializedSliceFilterFqns))
+        {
+            return [];
+        }
+
+        var parts = SerializedSliceFilterFqns.Split(';');
         return ImmutableArray.Create(parts);
     }
 
@@ -99,13 +118,16 @@ internal sealed record FeatureModel(
         var builder = ImmutableArray.CreateBuilder<FilterOrderHintEntry>(entries.Length);
         foreach (var entry in entries)
         {
-            var sep = entry.IndexOf('|');
-            if (sep <= 0 || sep >= entry.Length - 1)
+            // Format (new): "filterFqn|afterFqn|sourceLayer"  (sourceLayer = "S" or "A")
+            // Format (old): "filterFqn|afterFqn"  (legacy, treated as ASP.NET layer "A")
+            var parts = entry.Split('|');
+            if (parts.Length < 2 || parts[0].Length == 0 || parts[1].Length == 0)
             {
                 continue;
             }
 
-            builder.Add(new FilterOrderHintEntry(entry.Substring(0, sep), entry.Substring(sep + 1)));
+            var layer = parts.Length >= 3 ? parts[2] : "A";
+            builder.Add(new FilterOrderHintEntry(parts[0], parts[1], layer));
         }
 
         return builder.ToImmutable();
@@ -224,7 +246,17 @@ internal sealed record FeatureModel(
             FeatureLocationEndCharacter);
 }
 
-internal readonly record struct FilterOrderHintEntry(string FilterFqn, string AfterFqn);
+/// <summary>
+/// Represents a single [FilterOrderHint(After=...)] entry collected from a filter type.
+/// </summary>
+/// <param name="FilterFqn">The FQN of the annotated filter.</param>
+/// <param name="AfterFqn">The FQN of the filter that must precede <see cref="FilterFqn"/>.</param>
+/// <param name="SourceLayer">
+/// "S" = the annotated filter is a neutral filter (<c>ISliceFilter</c>);
+/// "A" = it is an ASP.NET filter (<c>IEndpointFilter</c>).
+/// Empty string for legacy entries that pre-date layer tracking.
+/// </param>
+internal readonly record struct FilterOrderHintEntry(string FilterFqn, string AfterFqn, string SourceLayer = "");
 
 internal readonly record struct ValidationParameterModel(
     int Index,

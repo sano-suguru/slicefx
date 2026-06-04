@@ -1963,7 +1963,8 @@ public class SourceGeneratorCompileTests
         Assert.Contains("string? LambdaFunctionPerFeatureStatus", manifestSource, StringComparison.Ordinal);
         Assert.Contains("string? LambdaFunctionPerFeatureArtifactId", manifestSource, StringComparison.Ordinal);
         Assert.Contains("string? WasiDispatchStatus", manifestSource, StringComparison.Ordinal);
-        Assert.Contains("\"1\",\"eligible\",null,null,null,null,null,null)]", compactManifestSource, StringComparison.Ordinal);
+        // 26 args: [..., manifestSchemaVersion="1", wasiStatus="eligible", ..., lambdaRuntimeIdentifier=null, serializedSliceFilterTypes=null]
+        Assert.Contains("\"1\",\"eligible\",null,null,null,null,null,null,null)]", compactManifestSource, StringComparison.Ordinal);
         Assert.Contains("\"1\",true,\"portable\",null,\"eligible\",null,null,null,null,null,null,null,null,null,null,null,global::System.Array.Empty<string>())", compactManifestSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"shared\"", compactManifestSource, StringComparison.Ordinal);
     }
@@ -3553,6 +3554,7 @@ public class SourceGeneratorCompileTests
             new DiagnosticCatalogEntry("SLICE005", "DuplicateEndpointName", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE006", "TagInferenceFallback", "Slice", DiagnosticSeverity.Info),
             new DiagnosticCatalogEntry("SLICE007", "FilterOrderViolation", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE008", "CrossLayerFilterOrderHint", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE010", "UnsupportedValidationForAspNet", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE011", "InvalidSliceValidator", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE012", "DuplicateSliceValidator", "Slice", DiagnosticSeverity.Error),
@@ -4024,6 +4026,406 @@ public class SourceGeneratorCompileTests
         public int MemoryLimitInMB => 128;
 
         public TimeSpan RemainingTime => TimeSpan.FromSeconds(10);
+    }
+
+    // ── [SliceFilter<T>] neutral filter tests ────────────────────────────────────
+
+    [Fact]
+    public void Generator_discovers_SliceFilter_attribute_and_emits_InvokeSliceFilter_in_aspnet_registrations()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace NeutralFilterApp.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            [SliceFilter<ApiKeyFilter>]
+            public static class GetItem
+            {
+                public static string Handle(string id) => id;
+            }
+
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                {
+                    if (!context.Headers.ContainsKey("X-Api-Key"))
+                        return ValueTask.FromResult(SliceFilterResult.ShortCircuit(SliceResult.Unauthorized()));
+                    return next(context);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("NeutralFilterApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var aspNetSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+
+        // No errors
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+
+        // Neutral filter registered as scoped
+        Assert.Contains("services.AddScoped<global::NeutralFilterApp.Features.Items.ApiKeyFilter>", aspNetSource, StringComparison.Ordinal);
+        // ASP.NET bridge emitted
+        Assert.Contains("__InvokeSliceFilter<global::NeutralFilterApp.Features.Items.ApiKeyFilter>", aspNetSource, StringComparison.Ordinal);
+        // Bridge helper methods emitted
+        Assert.Contains("__InvokeSliceFilter<TFilter>", aspNetSource, StringComparison.Ordinal);
+        Assert.Contains("__BuildSliceFilterContext", aspNetSource, StringComparison.Ordinal);
+        Assert.Contains("__SliceResultToIResult", aspNetSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_neutral_filter_before_validation_factory_in_aspnet_registrations()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.ComponentModel.DataAnnotations;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace OrderedFilterApp.Features.Items;
+
+            [Feature("POST /items")]
+            [SliceFilter<ApiKeyFilter>]
+            public static class CreateItem
+            {
+                public record Request([Required] string Name);
+                public static string Handle(Request req) => req.Name;
+            }
+
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("OrderedFilterApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var aspNetSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+
+        // Neutral filter AddEndpointFilter call must appear BEFORE AddEndpointFilterFactory (validation)
+        var sliceFilterPos = aspNetSource.IndexOf("__InvokeSliceFilter<", StringComparison.Ordinal);
+        var validationFactoryPos = aspNetSource.IndexOf("AddEndpointFilterFactory(", StringComparison.Ordinal);
+        Assert.True(sliceFilterPos > 0 && sliceFilterPos < validationFactoryPos,
+            "Neutral filter should be emitted before the validation factory");
+    }
+
+    [Fact]
+    public void Generator_classifies_neutral_filter_only_feature_as_portable()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace PortabilityApp.Features.Items;
+
+            [Feature("DELETE /items/{id}")]
+            [SliceFilter<ApiKeyFilter>]
+            public static class DeleteItem
+            {
+                public static void Handle(string id) { }
+            }
+
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("PortabilityApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        // Neutral filter only → portable
+        Assert.Contains("\"portable\"", manifestSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"partial\"", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_classifies_mixed_neutral_and_aspnet_filter_feature_as_partial()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace PartialPortabilityApp.Features.Items;
+
+            [Feature("DELETE /items/{id}")]
+            [SliceFilter<ApiKeyFilter>]
+            [Filter<LoggingFilter>]
+            public static class DeleteItem
+            {
+                public static void Handle(string id) { }
+            }
+
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    => next(context);
+            }
+
+            public sealed class LoggingFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("PartialPortabilityApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var manifestSource = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        // ASP.NET filter coexists → partial
+        Assert.Contains("\"partial\"", manifestSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_WASI_filter_chain_for_neutral_filter_feature()
+    {
+        // Use a void-returning handler so no WasiJsonContext is needed (avoids SLICE021 exclusion).
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiFilterApp.Features.Items;
+
+            [Feature("DELETE /items/{id}")]
+            [SliceFilter<ApiKeyFilter>]
+            public static class DeleteItem
+            {
+                public static void Handle(string id) { }
+            }
+
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiFilterApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        // Filter resolved from DI
+        Assert.Contains("GetRequiredService<global::WasiFilterApp.Features.Items.ApiKeyFilter>", wasiSource, StringComparison.Ordinal);
+        // Filter context built
+        Assert.Contains("SliceFilterContext", wasiSource, StringComparison.Ordinal);
+        // Filter invoked
+        Assert.Contains("__sliceFilter0.InvokeAsync", wasiSource, StringComparison.Ordinal);
+        // Short-circuit decode
+        Assert.Contains("IsShortCircuit", wasiSource, StringComparison.Ordinal);
+        // Handler core as delegate
+        Assert.Contains("__handlerCore", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_no_filter_chain_for_feature_with_no_neutral_filters()
+    {
+        var source = """
+            using System.Threading;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace NoFilterApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class ListItems
+            {
+                public static string Handle() => "ok";
+            }
+            """;
+
+        var compilation = CreateHostCompilation("NoFilterApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        // No filter chain emitted (zero cost invariant)
+        Assert.DoesNotContain("__sliceFilter", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("__handlerCore", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsShortCircuit", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE008_for_cross_layer_FilterOrderHint()
+    {
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace CrossLayerHintApp.Features.Items;
+
+            [Feature("GET /items")]
+            [SliceFilter<ApiKeyFilter>]
+            [Filter<LoggingFilter>]
+            public static class ListItems
+            {
+                public static string Handle() => "ok";
+            }
+
+            // ApiKeyFilter (neutral) has a hint pointing to LoggingFilter (ASP.NET) — cross-layer
+            [FilterOrderHint(After = typeof(LoggingFilter))]
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    => next(context);
+            }
+
+            public sealed class LoggingFilter : IEndpointFilter
+            {
+                public ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("CrossLayerHintApp", source);
+        GeneratorDriver driver = CreateDriver();
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        var diagnostic = Assert.Single(generatorDiagnostics.Where(static d => d.Id == "SLICE008"));
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Contains("ApiKeyFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("LoggingFilter", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generated_wasi_routes_execute_neutral_filter_short_circuit_before_validation()
+    {
+        // This test verifies that a neutral filter (API key check) short-circuits with 401
+        // BEFORE body validation runs (which would return 400 for a missing required field).
+        var source = """
+            using System;
+            using System.Collections.Generic;
+            using System.ComponentModel.DataAnnotations;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiFilterDispatchApp
+            {
+                public static class RuntimeHarness
+                {
+                    // Request with no API key and invalid body → should get 401 (filter short-circuits first)
+                    public static async Task<string> DispatchNoKeyAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        // PascalCase JSON key; empty string fails MinLength(1)
+                        var body = Encoding.UTF8.GetBytes("{\"Name\":\"\"}");
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "POST", "/items",
+                            new Dictionary<string, string>(), null, body));
+                        return Format(response);
+                    }
+
+                    // Request with valid API key and valid body → should get 200
+                    public static async Task<string> DispatchWithKeyAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        // PascalCase JSON key; "Alice" satisfies [Required, MinLength(1)]
+                        var body = Encoding.UTF8.GetBytes("{\"Name\":\"Alice\"}");
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "POST", "/items",
+                            new Dictionary<string, string> { ["X-Api-Key"] = "secret" }, null, body));
+                        return Format(response);
+                    }
+
+                    private static string Format(WasiResponse r)
+                        => r.Status + "|" + Encoding.UTF8.GetString(r.Body);
+                }
+            }
+
+            namespace WasiFilterDispatchApp.Features.Items
+            {
+                [Feature("POST /items")]
+                [SliceFilter<ApiKeyFilter>]
+                public static class CreateItem
+                {
+                    public record Request([Required, MinLength(1)] string Name);
+                    public static Task<string> Handle(Request req, CancellationToken ct) =>
+                        Task.FromResult(req.Name);
+                }
+            }
+
+            namespace WasiFilterDispatchApp
+            {
+                [SliceFx.SliceJsonContext(SliceFx.SliceJsonTarget.Wasi)]
+                [System.Text.Json.Serialization.JsonSerializable(
+                    typeof(WasiFilterDispatchApp.Features.Items.CreateItem.Request))]
+                public partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
+
+                public sealed class ApiKeyFilter : ISliceFilter
+                {
+                    public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    {
+                        if (!context.Headers.ContainsKey("X-Api-Key"))
+                            return ValueTask.FromResult(SliceFilterResult.ShortCircuit(SliceResult.Unauthorized("Missing API key.")));
+                        return next(context);
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiFilterDispatchApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+
+        using var assemblyStream = CompileGeneratedAssembly(compilation);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harness = assembly.GetType("WasiFilterDispatchApp.RuntimeHarness", throwOnError: true)!;
+
+        // No key + invalid body → 401 (filter short-circuits before body validation sees empty name)
+        var noKey = await (Task<string>)harness.GetMethod("DispatchNoKeyAsync")!.Invoke(null, null)!;
+        Assert.StartsWith("401|", noKey, StringComparison.Ordinal);
+
+        // Valid key + valid body → 200
+        var withKey = await (Task<string>)harness.GetMethod("DispatchWithKeyAsync")!.Invoke(null, null)!;
+        Assert.StartsWith("200|", withKey, StringComparison.Ordinal);
+        Assert.Contains("Alice", withKey, StringComparison.Ordinal);
     }
 
     private sealed class SourceGeneratorTestLambdaLogger : ILambdaLogger

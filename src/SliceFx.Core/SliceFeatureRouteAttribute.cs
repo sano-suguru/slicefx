@@ -34,7 +34,9 @@ public sealed class SliceFeatureRouteAttribute : Attribute
         string? lambdaFunctionPerFeatureArtifactLayout,
         string? lambdaFunctionPerFeatureArtifactCodeUri,
         string? lambdaFunctionPerFeatureBootstrapMode,
-        string? lambdaFunctionPerFeatureRuntimeIdentifier)
+        string? lambdaFunctionPerFeatureRuntimeIdentifier,
+        // arg index 25 (tail-appended — do NOT insert before this)
+        string? serializedSliceFilterTypes = null)
     {
         EndpointName = endpointName;
         FeatureType = featureType;
@@ -61,6 +63,7 @@ public sealed class SliceFeatureRouteAttribute : Attribute
         LambdaFunctionPerFeatureArtifactCodeUri = lambdaFunctionPerFeatureArtifactCodeUri;
         LambdaFunctionPerFeatureBootstrapMode = lambdaFunctionPerFeatureBootstrapMode;
         LambdaFunctionPerFeatureRuntimeIdentifier = lambdaFunctionPerFeatureRuntimeIdentifier;
+        SerializedSliceFilterTypes = serializedSliceFilterTypes;
     }
 
     /// <summary>
@@ -187,4 +190,11 @@ public sealed class SliceFeatureRouteAttribute : Attribute
     /// Gets the Lambda artifact runtime identifier when known.
     /// </summary>
     public string? LambdaFunctionPerFeatureRuntimeIdentifier { get; }
+
+    /// <summary>
+    /// Gets newline-separated neutral filter (<c>ISliceFilter</c>) type names declared via
+    /// <c>[SliceFilter&lt;T&gt;]</c> on the feature. These filters run on both the ASP.NET
+    /// and WASI dispatch paths.
+    /// </summary>
+    public string? SerializedSliceFilterTypes { get; }
 }

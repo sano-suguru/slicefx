@@ -82,7 +82,7 @@ internal static class RouteManifestEmitter
             var feature = route.Feature;
 
             sb.AppendLine(
-                $"[assembly: global::SliceFx.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.ReturnTypeFqn))}, {CSharpLiteral.String(route.Portability)}, {CSharpNullableStringLiteral(route.PortabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))}, {CSharpNullableStringLiteral(route.LambdaStatus)}, {CSharpNullableStringLiteral(route.LambdaReason)}, {CSharpNullableStringLiteral(route.LambdaHandlerAssembly)}, {CSharpNullableStringLiteral(route.LambdaHandlerType)}, {CSharpNullableStringLiteral(route.LambdaHandlerMethod)}, {CSharpLiteral.String(SourceGenerationHelpers.ManifestSchemaVersion)}, {CSharpNullableStringLiteral(route.WasiStatus)}, {CSharpNullableStringLiteral(route.WasiReason)}, {CSharpNullableStringLiteral(route.LambdaArtifactId)}, {CSharpNullableStringLiteral(route.LambdaArtifactLayout)}, {CSharpNullableStringLiteral(route.LambdaArtifactCodeUri)}, {CSharpNullableStringLiteral(route.LambdaBootstrapMode)}, {CSharpNullableStringLiteral(route.LambdaRuntimeIdentifier)})]");
+                $"[assembly: global::SliceFx.SliceFeatureRouteAttribute({CSharpLiteral.String(feature.EndpointName)}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.FullyQualifiedTypeName))}, {CSharpLiteral.String(feature.HttpMethod)}, {CSharpLiteral.String(feature.Pattern)}, {CSharpLiteral.String(feature.Tag)}, {CSharpNullableStringLiteral(feature.Summary)}, {CSharpNullableStringLiteral(FindRequestType(feature))}, {CSharpLiteral.String(SourceGenerationHelpers.TrimGlobalAlias(feature.ReturnTypeFqn))}, {CSharpLiteral.String(route.Portability)}, {CSharpNullableStringLiteral(route.PortabilityReason)}, {CSharpNullableStringLiteral(SerializeFilterTypes(feature))}, {CSharpNullableStringLiteral(SerializeParameters(feature))}, {CSharpNullableStringLiteral(route.LambdaStatus)}, {CSharpNullableStringLiteral(route.LambdaReason)}, {CSharpNullableStringLiteral(route.LambdaHandlerAssembly)}, {CSharpNullableStringLiteral(route.LambdaHandlerType)}, {CSharpNullableStringLiteral(route.LambdaHandlerMethod)}, {CSharpLiteral.String(SourceGenerationHelpers.ManifestSchemaVersion)}, {CSharpNullableStringLiteral(route.WasiStatus)}, {CSharpNullableStringLiteral(route.WasiReason)}, {CSharpNullableStringLiteral(route.LambdaArtifactId)}, {CSharpNullableStringLiteral(route.LambdaArtifactLayout)}, {CSharpNullableStringLiteral(route.LambdaArtifactCodeUri)}, {CSharpNullableStringLiteral(route.LambdaBootstrapMode)}, {CSharpNullableStringLiteral(route.LambdaRuntimeIdentifier)}, {CSharpNullableStringLiteral(SerializeSliceFilterTypes(feature))})]");
         }
     }
 
@@ -242,12 +242,65 @@ internal static class RouteManifestEmitter
             return (SourceGenerationHelpers.PortabilityPartial, "DataAnnotations validation requires reflection in the WASI path");
         }
 
+        // ASP.NET-only endpoint filters ([Filter<T>]) do not run on the WASI path.
         if (!feature.GetFilterFqns().IsEmpty)
         {
             return (SourceGenerationHelpers.PortabilityPartial, "endpoint filters do not run in the WASI path");
         }
 
+        // Neutral filters ([SliceFilter<T>]) run on both paths, but only if the feature is not
+        // already excluded from the WASI route table for other structural reasons.
+        // WasiRegistrationEmitter.GetSkipReason covers IResult returns (already handled above),
+        // reflection validation (already handled), and unsupported parameter shapes (SLICE023).
+        // We mirror that check here so portability is accurate when filters are the only difference.
+        if (!feature.GetSliceFilterFqns().IsEmpty)
+        {
+            // If the feature would be excluded from the WASI table for structural reasons
+            // unrelated to filters (e.g., unsupported parameter binding — SLICE023), it is
+            // still partial rather than portable, because the filter would never actually run.
+            var skipReason = GetWasiStructuralSkipReason(feature);
+            if (skipReason is not null)
+            {
+                return (SourceGenerationHelpers.PortabilityPartial, skipReason);
+            }
+        }
+
         return (SourceGenerationHelpers.PortabilityPortable, null);
+    }
+
+    /// <summary>
+    /// Returns the structural skip reason for a feature on the WASI path, excluding reasons
+    /// already captured by <see cref="FeatureModel.ReturnsAspNetResult"/> and
+    /// <see cref="FeatureModel.RequiresReflectionValidation"/> (handled above in the caller).
+    /// Mirrors the relevant subset of <c>WasiRegistrationEmitter.GetSkipReason</c>.
+    /// </summary>
+    private static string? GetWasiStructuralSkipReason(FeatureModel feature)
+    {
+        var bodyCount = 0;
+        foreach (var p in feature.GetParams())
+        {
+            if (p.TypeFqn == "global::System.Threading.CancellationToken")
+            {
+                continue;
+            }
+
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.HttpMethod, feature.Pattern);
+            if (binding.Source == HandlerParameterBindingSource.Body)
+            {
+                bodyCount++;
+                if (bodyCount > 1)
+                {
+                    return "feature has multiple body parameters (SLICE023)";
+                }
+            }
+
+            if (binding.Source == HandlerParameterBindingSource.Unsupported)
+            {
+                return binding.UnsupportedReason ?? "parameter binding is unsupported (SLICE023)";
+            }
+        }
+
+        return null;
     }
 
     private static LambdaFunctionPerFeatureEligibility GetEmittedLambdaMetadata(
@@ -311,6 +364,14 @@ internal static class RouteManifestEmitter
     private static string? SerializeFilterTypes(FeatureModel feature)
     {
         var filters = feature.GetFilterFqns();
+        return filters.IsEmpty
+            ? null
+            : string.Join("\n", filters.Select(static f => SourceGenerationHelpers.TrimGlobalAlias(f)));
+    }
+
+    private static string? SerializeSliceFilterTypes(FeatureModel feature)
+    {
+        var filters = feature.GetSliceFilterFqns();
         return filters.IsEmpty
             ? null
             : string.Join("\n", filters.Select(static f => SourceGenerationHelpers.TrimGlobalAlias(f)));

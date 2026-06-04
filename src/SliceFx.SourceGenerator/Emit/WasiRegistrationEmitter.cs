@@ -58,7 +58,7 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("    public static global::SliceFx.Wasi.WasiHostBuilder AddSliceWasiRoutes(");
         sb.AppendLine("        global::SliceFx.Wasi.WasiHostBuilder builder)");
         sb.AppendLine("    {");
-        EmitWasiServiceRegistrations(sb, validators);
+        EmitWasiServiceRegistrations(sb, validators, features);
         sb.AppendLine("        builder.AddRoutes(RegisterWasiRoutes);");
         sb.AppendLine("        return builder;");
         sb.AppendLine("    }");
@@ -208,11 +208,28 @@ internal static class WasiRegistrationEmitter
         return null;
     }
 
-    private static void EmitWasiServiceRegistrations(StringBuilder sb, ImmutableArray<ValidatorModel> validators)
+    private static void EmitWasiServiceRegistrations(
+        StringBuilder sb,
+        ImmutableArray<ValidatorModel> validators,
+        ImmutableArray<FeatureModel> features)
     {
         foreach (var validator in validators)
         {
             sb.AppendLine($"        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<global::SliceFx.ISliceValidator<{validator.RequestTypeFqn}>, {validator.ImplementationTypeFqn}>(builder.Services);");
+        }
+
+        // Register neutral filter types (ISliceFilter) as scoped — must be done on the WASI path
+        // because the WASI invoker resolves them via ctx.Services.GetRequiredService<T>().
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var feature in features)
+        {
+            foreach (var ft in feature.GetSliceFilterFqns())
+            {
+                if (seen.Add(ft))
+                {
+                    sb.AppendLine($"        global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<{ft}>(builder.Services);");
+                }
+            }
         }
     }
 
@@ -223,9 +240,19 @@ internal static class WasiRegistrationEmitter
         string? wasiJsonContextFqn)
     {
         var @params = f.GetParams();
-
         var bodyParam = FindBodyParam(f);
         var bodyValidation = bodyParam is null ? null : FindValidationParameter(f, @params.IndexOf(bodyParam));
+        var sliceFilters = f.GetSliceFilterFqns();
+
+        // When neutral filters are present the handler body is wrapped in a SliceFilterDelegate
+        // local variable (__handlerCore) so the filter chain can intercept it. When no neutral
+        // filters are present we emit the same code as before — zero overhead, no branching at runtime.
+        var hasFilters = !sliceFilters.IsEmpty;
+        // Suffix appended to every WasiResponse return inside the handler core when filters are present.
+        var wrap = hasFilters ? ".ToSliceFilterResult()" : "";
+        // Body indent: 20 spaces for no-filter case (inside return async ctx =>),
+        //              24 spaces for filter case (inside __handlerCore = async __ => { ... }).
+        var ind = hasFilters ? "                        " : "                    ";
 
         sb.AppendLine($"        table.Add(");
         sb.AppendLine($"            {Str(f.HttpMethod)},");
@@ -235,41 +262,65 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine($"                return async ctx =>");
         sb.AppendLine($"                {{");
 
+        if (hasFilters)
+        {
+            // Resolve neutral filter instances (scoped, per-request via ctx.Services).
+            for (var i = 0; i < sliceFilters.Length; i++)
+            {
+                sb.AppendLine($"                    var __sliceFilter{i} = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{sliceFilters[i]}>(ctx.Services);");
+            }
+
+            // Build neutral filter context from the WASI invoker context.
+            sb.AppendLine("                    var __sliceFilterCtx = new global::SliceFx.SliceFilterContext(");
+            sb.AppendLine("                        ctx.Request.Method,");
+            sb.AppendLine("                        ctx.Request.Path,");
+            sb.AppendLine("                        ctx.Request.Headers,");
+            sb.AppendLine("                        ctx.RouteValues,");
+            sb.AppendLine("                        ctx.Services,");
+            sb.AppendLine("                        ctx.CancellationToken);");
+            sb.AppendLine();
+
+            // Begin handler-core delegate. It captures the outer `ctx` for body binding;
+            // the SliceFilterContext parameter (__) is unused inside the WASI handler.
+            sb.AppendLine("                    global::SliceFx.SliceFilterDelegate __handlerCore = async __ =>");
+            sb.AppendLine("                    {");
+        }
+
         // 1. Body binding + null check + DataAnnotations
         if (bodyParam is not null)
         {
             var bodyTargetName = bodyParam.Name;
             var bodyReadName = bodyParam.IsValueType && !bodyParam.IsNullable ? "__" + bodyParam.Name + "Body" : bodyParam.Name;
-            sb.AppendLine($"                    {bodyParam.TypeFqn}? {bodyReadName};");
-            sb.AppendLine("                    try");
-            sb.AppendLine("                    {");
-            sb.AppendLine($"                        {bodyReadName} = await global::SliceFx.Wasi.Binding.JsonBodyReader");
-            sb.AppendLine($"                            .ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>());");
-            sb.AppendLine("                    }");
-            sb.AppendLine("                    catch (global::System.Text.Json.JsonException)");
-            sb.AppendLine("                    {");
-            sb.AppendLine("                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\");");
-            sb.AppendLine("                    }");
-            sb.AppendLine($"                    if ({bodyReadName} is null) return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", \"Request body is required.\");");
+            sb.AppendLine($"{ind}{bodyParam.TypeFqn}? {bodyReadName};");
+            sb.AppendLine($"{ind}try");
+            sb.AppendLine($"{ind}{{");
+            sb.AppendLine($"{ind}    {bodyReadName} = await global::SliceFx.Wasi.Binding.JsonBodyReader");
+            sb.AppendLine($"{ind}        .ReadAsync<{bodyParam.TypeFqn}>(ctx, __JsonTypeInfo<{bodyParam.TypeFqn}>());");
+            sb.AppendLine($"{ind}}}");
+            sb.AppendLine($"{ind}catch (global::System.Text.Json.JsonException)");
+            sb.AppendLine($"{ind}{{");
+            sb.AppendLine($"{ind}    return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", \"Request body contains malformed JSON.\"){wrap};");
+            sb.AppendLine($"{ind}}}");
+            sb.AppendLine($"{ind}if ({bodyReadName} is null) return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", \"Request body is required.\"){wrap};");
             if (bodyReadName != bodyTargetName)
             {
-                sb.AppendLine($"                    var {bodyTargetName} = {bodyReadName}.Value;");
+                sb.AppendLine($"{ind}var {bodyTargetName} = {bodyReadName}.Value;");
             }
 
             if (bodyValidation is not null)
             {
-                sb.AppendLine($"                    var __daErrors = {ValidationMethodName(f, bodyValidation.Value)}({bodyParam.Name});");
-                sb.AppendLine($"                    if (__daErrors is not null) return global::SliceFx.Wasi.WasiResults.ValidationProblem(__daErrors);");
+                sb.AppendLine($"{ind}var __daErrors = {ValidationMethodName(f, bodyValidation.Value)}({bodyParam.Name});");
+                sb.AppendLine($"{ind}if (__daErrors is not null) return global::SliceFx.Wasi.WasiResults.ValidationProblem(__daErrors){wrap};");
             }
 
             if (HasValidatorForParameter(bodyParam, validators))
             {
-                sb.AppendLine($"                    var __validator = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::SliceFx.ISliceValidator<{bodyParam.TypeFqn}>>(ctx.Services);");
-                sb.AppendLine("                    if (__validator is not null)");
-                sb.AppendLine("                    {");
-                sb.AppendLine($"                        var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken);");
-                sb.AppendLine($"                        if (!__vr.IsValid) return global::SliceFx.Wasi.WasiResults.ValidationProblem(__vr.Errors!);");
-                sb.AppendLine("                    }");
+                sb.AppendLine($"{ind}var __validator = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<global::SliceFx.ISliceValidator<{bodyParam.TypeFqn}>>(ctx.Services);");
+                sb.AppendLine($"{ind}if (__validator is not null)");
+                sb.AppendLine($"{ind}{{");
+                sb.AppendLine($"{ind}    var __vr = await __validator.ValidateAsync({bodyParam.Name}, ctx.CancellationToken);");
+                sb.AppendLine($"{ind}    if (!__vr.IsValid) return global::SliceFx.Wasi.WasiResults.ValidationProblem(__vr.Errors!){wrap};");
+                sb.AppendLine($"{ind}}}");
             }
         }
 
@@ -294,9 +345,9 @@ internal static class WasiRegistrationEmitter
                 f.Pattern);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
-                sb.AppendLine($"                    if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");
-                sb.AppendLine($"                        .TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
-                sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")});");
+                sb.AppendLine($"{ind}if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");
+                sb.AppendLine($"{ind}    .TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
+                sb.AppendLine($"{ind}    return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Route value '{binding.WireName}' is missing or invalid.")}){wrap};");
                 if (!p.IsNullable)
                 {
                     nonNullableRouteParams.Add(p.Name);
@@ -305,38 +356,38 @@ internal static class WasiRegistrationEmitter
             else if (binding.Source == HandlerParameterBindingSource.Query)
             {
                 var bindingVariable = "__" + p.Name + "Query";
-                sb.AppendLine($"                    var {bindingVariable} = global::SliceFx.Wasi.Binding.WasiArgumentBinder");
-                sb.AppendLine($"                        .BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
-                sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
-                sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")});");
+                sb.AppendLine($"{ind}var {bindingVariable} = global::SliceFx.Wasi.Binding.WasiArgumentBinder");
+                sb.AppendLine($"{ind}    .BindFromQuery<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"{ind}if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"{ind}    return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is invalid.")}){wrap};");
                 if (!p.IsNullable)
                 {
-                    sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
-                    sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")});");
+                    sb.AppendLine($"{ind}if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"{ind}    return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Query value '{binding.WireName}' is missing.")}){wrap};");
                 }
-                sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
+                sb.AppendLine($"{ind}var {p.Name} = {bindingVariable}.Value!;");
             }
             else if (binding.Source == HandlerParameterBindingSource.Header)
             {
                 var bindingVariable = "__" + p.Name + "Header";
-                sb.AppendLine($"                    var {bindingVariable} = global::SliceFx.Wasi.Binding.WasiArgumentBinder");
-                sb.AppendLine($"                        .BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
-                sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
-                sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")});");
+                sb.AppendLine($"{ind}var {bindingVariable} = global::SliceFx.Wasi.Binding.WasiArgumentBinder");
+                sb.AppendLine($"{ind}    .BindFromHeader<{p.TypeFqn}>(ctx, {Str(binding.WireName)});");
+                sb.AppendLine($"{ind}if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Invalid)");
+                sb.AppendLine($"{ind}    return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is invalid.")}){wrap};");
                 if (!p.IsNullable)
                 {
-                    sb.AppendLine($"                    if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
-                    sb.AppendLine($"                        return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")});");
+                    sb.AppendLine($"{ind}if ({bindingVariable}.Status == global::SliceFx.Wasi.Binding.WasiArgumentBindingStatus.Missing)");
+                    sb.AppendLine($"{ind}    return global::SliceFx.Wasi.WasiResults.Problem(400, \"Bad Request\", {Str($"Header value '{binding.WireName}' is missing.")}){wrap};");
                 }
-                sb.AppendLine($"                    var {p.Name} = {bindingVariable}.Value!;");
+                sb.AppendLine($"{ind}var {p.Name} = {bindingVariable}.Value!;");
             }
             else if (binding.Source == HandlerParameterBindingSource.KeyedServices && binding.KeyLiteral is not null)
             {
-                sb.AppendLine($"                    var {p.Name} = ({p.TypeFqn})global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(ctx.Services, typeof({p.TypeFqn}), {binding.KeyLiteral});");
+                sb.AppendLine($"{ind}var {p.Name} = ({p.TypeFqn})global::Microsoft.Extensions.DependencyInjection.ServiceProviderKeyedServiceExtensions.GetRequiredKeyedService(ctx.Services, typeof({p.TypeFqn}), {binding.KeyLiteral});");
             }
             else // DI (includes KeyedServices fallback when key literal could not be re-emitted)
             {
-                sb.AppendLine($"                    var {p.Name} = ({p.TypeFqn})ctx.Services.GetRequiredService(typeof({p.TypeFqn}));");
+                sb.AppendLine($"{ind}var {p.Name} = ({p.TypeFqn})ctx.Services.GetRequiredService(typeof({p.TypeFqn}));");
             }
         }
 
@@ -358,35 +409,35 @@ internal static class WasiRegistrationEmitter
         var callExpr = $"{f.FullyQualifiedTypeName}.Handle({string.Join(", ", argList)})";
         if (f.ReturnTypeFqn == "void")
         {
-            sb.AppendLine($"                    {callExpr};");
-            sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.NoContent();");
+            sb.AppendLine($"{ind}{callExpr};");
+            sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.NoContent(){wrap};");
         }
         else if (SourceGenerationHelpers.IsNonGenericAwaitable(f.ReturnTypeFqn))
         {
-            sb.AppendLine($"                    await {callExpr};");
-            sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.NoContent();");
+            sb.AppendLine($"{ind}await {callExpr};");
+            sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.NoContent(){wrap};");
         }
         else
         {
             if (SourceGenerationHelpers.IsGenericAwaitable(f.ReturnTypeFqn))
             {
-                sb.AppendLine($"                    var __result = await {callExpr};");
+                sb.AppendLine($"{ind}var __result = await {callExpr};");
             }
             else
             {
-                sb.AppendLine($"                    var __result = {callExpr};");
+                sb.AppendLine($"{ind}var __result = {callExpr};");
             }
 
             var awaitedType = SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn);
             if (IsWasiResponseType(awaitedType))
             {
                 // WasiResponse pass-through (raw escape hatch)
-                sb.AppendLine($"                    return __result;");
+                sb.AppendLine($"{ind}return __result{wrap};");
             }
             else if (SourceGenerationHelpers.IsSliceResultNonGenericType(awaitedType))
             {
                 // Non-generic SliceResult (status-only, no body) — no JsonTypeInfo needed
-                sb.AppendLine($"                    return __result.ToWasiResponse();");
+                sb.AppendLine($"{ind}return __result.ToWasiResponse(){wrap};");
             }
             else if (SourceGenerationHelpers.IsSliceResultOfTType(awaitedType))
             {
@@ -395,11 +446,11 @@ internal static class WasiRegistrationEmitter
                 var payloadType = SourceGenerationHelpers.GetSliceResultPayloadType(awaitedType!);
                 if (wasiJsonContextFqn is not null)
                 {
-                    sb.AppendLine($"                    return __result.ToWasiResponse(__JsonTypeInfo<{payloadType}>());");
+                    sb.AppendLine($"{ind}return __result.ToWasiResponse(__JsonTypeInfo<{payloadType}>()){wrap};");
                 }
                 else
                 {
-                    sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.Ok(__result);");
+                    sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok(__result){wrap};");
                 }
             }
             else
@@ -407,13 +458,44 @@ internal static class WasiRegistrationEmitter
                 var resultType = awaitedType;
                 if (wasiJsonContextFqn is not null)
                 {
-                    sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>());");
+                    sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>()){wrap};");
                 }
                 else
                 {
-                    sb.AppendLine($"                    return global::SliceFx.Wasi.WasiResults.Ok(__result);");
+                    sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok(__result){wrap};");
                 }
             }
+        }
+
+        if (hasFilters)
+        {
+            // Close __handlerCore delegate.
+            sb.AppendLine("                    };");
+            sb.AppendLine();
+
+            // Build filter chain (statically unrolled, outermost = sliceFilters[0]).
+            // For N filters we need N-1 intermediate SliceFilterDelegate variables.
+            // The innermost next is always __handlerCore.
+            if (sliceFilters.Length == 1)
+            {
+                // Simple case: single filter, no intermediate delegates needed.
+                sb.AppendLine("                    var __filterResult = await __sliceFilter0.InvokeAsync(__sliceFilterCtx, __handlerCore).ConfigureAwait(false);");
+            }
+            else
+            {
+                // N>1: build delegates from innermost (index N-1) to index 1, then invoke index 0.
+                sb.AppendLine($"                    global::SliceFx.SliceFilterDelegate __sliceNext{sliceFilters.Length - 1} = __handlerCore;");
+                for (var i = sliceFilters.Length - 2; i >= 1; i--)
+                {
+                    sb.AppendLine($"                    global::SliceFx.SliceFilterDelegate __sliceNext{i} = __fc{i} => __sliceFilter{i + 1}.InvokeAsync(__fc{i}, __sliceNext{i + 1});");
+                }
+                sb.AppendLine($"                    var __filterResult = await __sliceFilter0.InvokeAsync(__sliceFilterCtx, __fc0 => __sliceFilter1.InvokeAsync(__fc0, __sliceNext1)).ConfigureAwait(false);");
+            }
+
+            // Decode result: short-circuit → ToWasiResponse; pass-through → unbox WasiResponse.
+            sb.AppendLine("                    if (__filterResult.IsShortCircuit)");
+            sb.AppendLine("                        return __filterResult.ShortCircuitResult!.Value.ToWasiResponse();");
+            sb.AppendLine("                    return (global::SliceFx.Wasi.WasiResponse)__filterResult.HostResponse!;");
         }
 
         sb.AppendLine($"                }};");

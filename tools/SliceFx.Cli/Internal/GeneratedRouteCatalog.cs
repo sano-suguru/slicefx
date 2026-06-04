@@ -390,6 +390,8 @@ internal static class GeneratedRouteCatalog
         var lambdaArtifactCodeUri = GetString(args[22]);
         var lambdaBootstrapMode = GetString(args[23]);
         var lambdaRuntimeIdentifier = GetString(args[24]);
+        // arg index 25: neutral (ISliceFilter) filter types, tail-appended in schema version 1.
+        var sliceFilters = SplitLines(GetString(args[25]));
 
         return new SliceRouteInfo(
             method.ToUpperInvariant(),
@@ -419,7 +421,8 @@ internal static class GeneratedRouteCatalog
             wasiStatus,
             wasiReason,
             HasGeneratedMetadata: true,
-            SourceAssemblyName: sourceAssemblyName);
+            SourceAssemblyName: sourceAssemblyName,
+            SliceFilters: sliceFilters);
     }
 
     private static string? GetString(CustomAttributeTypedArgument<string> argument)

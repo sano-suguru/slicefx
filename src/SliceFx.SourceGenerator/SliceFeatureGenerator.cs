@@ -788,43 +788,66 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         }
         var serializedParams = string.Join(";", paramParts);
 
-        // Collect filter FQNs in declaration order, plus any [FilterOrderHint(After=...)]
-        // declared on each filter type so the generator can warn on declaration-order violations.
+        // Collect ASP.NET filter FQNs (FilterAttribute<T> where T : IEndpointFilter),
+        // neutral filter FQNs (SliceFilterAttribute<T> where T : ISliceFilter), and
+        // any [FilterOrderHint(After=...)] declared on each filter type so the generator can
+        // warn on declaration-order violations (SLICE007) and cross-layer hint misuse (SLICE008).
         var filterParts = new List<string>();
+        var sliceFilterParts = new List<string>();
         var orderHintParts = new List<string>();
         foreach (var a in featureType.GetAttributes())
         {
-            if (a.AttributeClass is { IsGenericType: true } ac
-                && ac.OriginalDefinition.Name == "FilterAttribute"
-                && ac.ContainingNamespace?.ToDisplayString() == "SliceFx"
-                && ac.TypeArguments.Length == 1)
+            if (a.AttributeClass is not { IsGenericType: true } ac
+                || ac.ContainingNamespace?.ToDisplayString() != "SliceFx"
+                || ac.TypeArguments.Length != 1)
             {
-                var filterTypeArg = ac.TypeArguments[0];
-                var filterFqn = filterTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                continue;
+            }
+
+            var isAspNetFilter = ac.OriginalDefinition.Name == "FilterAttribute";
+            var isSliceFilter = ac.OriginalDefinition.Name == "SliceFilterAttribute";
+            if (!isAspNetFilter && !isSliceFilter)
+            {
+                continue;
+            }
+
+            var filterTypeArg = ac.TypeArguments[0];
+            var filterFqn = filterTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            if (isAspNetFilter)
+            {
                 filterParts.Add(filterFqn);
+            }
+            else
+            {
+                sliceFilterParts.Add(filterFqn);
+            }
 
-                if (filterTypeArg is INamedTypeSymbol filterNamedType)
+            if (filterTypeArg is INamedTypeSymbol filterNamedType)
+            {
+                foreach (var hintAttr in filterNamedType.GetAttributes())
                 {
-                    foreach (var hintAttr in filterNamedType.GetAttributes())
+                    if (hintAttr.AttributeClass?.ToDisplayString() != "SliceFx.FilterOrderHintAttribute")
                     {
-                        if (hintAttr.AttributeClass?.ToDisplayString() != "SliceFx.FilterOrderHintAttribute")
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        foreach (var kv in hintAttr.NamedArguments)
+                    foreach (var kv in hintAttr.NamedArguments)
+                    {
+                        if (kv.Key == "After" && kv.Value.Value is INamedTypeSymbol afterType)
                         {
-                            if (kv.Key == "After" && kv.Value.Value is INamedTypeSymbol afterType)
-                            {
-                                var afterFqn = afterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                                orderHintParts.Add(filterFqn + "|" + afterFqn);
-                            }
+                            var afterFqn = afterType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                            // Encode the source layer so cross-layer detection can flag SLICE008.
+                            // Format: "filterFqn|afterFqn|sourceLayer" where sourceLayer is "S" (slice) or "A" (aspnet).
+                            var layer = isSliceFilter ? "S" : "A";
+                            orderHintParts.Add(filterFqn + "|" + afterFqn + "|" + layer);
                         }
                     }
                 }
             }
         }
         var serializedFilters = string.Join(";", filterParts);
+        var serializedSliceFilters = string.Join(";", sliceFilterParts);
         var serializedOrderHints = string.Join(";", orderHintParts);
         var (lambdaStartupTypeFqn, lambdaStartupDiagnostic) = FindLambdaFeatureStartup(featureType, ctx.SemanticModel.Compilation);
         if (lambdaStartupDiagnostic is not null)
@@ -848,6 +871,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             returnsAspNetResult,
             serializedParams,
             serializedFilters,
+            serializedSliceFilters,
             serializedValidationRules,
             requiresReflectionValidation,
             serializedUnsupportedValidationAttributes,
@@ -1566,21 +1590,50 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var filters = model.GetFilterFqns();
-            var positions = new Dictionary<string, int>(StringComparer.Ordinal);
-            for (var i = 0; i < filters.Length; i++)
+            // Build position maps per layer (within-layer ordering only).
+            var aspNetFilters = model.GetFilterFqns();
+            var sliceFilters = model.GetSliceFilterFqns();
+
+            var aspNetPositions = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < aspNetFilters.Length; i++)
             {
-                positions[filters[i]] = i;
+                aspNetPositions[aspNetFilters[i]] = i;
+            }
+
+            var slicePositions = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < sliceFilters.Length; i++)
+            {
+                slicePositions[sliceFilters[i]] = i;
             }
 
             foreach (var hint in hints)
             {
-                if (!positions.TryGetValue(hint.FilterFqn, out var filterIndex))
+                // Determine which position map applies to this hint based on its source layer.
+                var isNeutralHint = hint.SourceLayer == "S";
+                var sameLayerPositions = isNeutralHint ? slicePositions : aspNetPositions;
+                var otherLayerPositions = isNeutralHint ? aspNetPositions : slicePositions;
+
+                if (!sameLayerPositions.TryGetValue(hint.FilterFqn, out _))
                 {
+                    // Filter itself not found in its own layer (not on this feature) — silently skip.
                     continue;
                 }
 
-                if (!positions.TryGetValue(hint.AfterFqn, out var afterIndex))
+                // Check for cross-layer hint (AfterFqn lives in the opposite layer).
+                if (otherLayerPositions.ContainsKey(hint.AfterFqn))
+                {
+                    diagnostics.Add(EquatableDiagnostic.Create(
+                        SliceDiagnostics.CrossLayerFilterOrderHint,
+                        model.GetDiagnosticLocationModel(),
+                        model.FullyQualifiedTypeName,
+                        SourceGenerationHelpers.TrimGlobalAlias(hint.FilterFqn),
+                        SourceGenerationHelpers.TrimGlobalAlias(hint.AfterFqn)));
+                    continue;
+                }
+
+                // Same-layer order check (SLICE007).
+                if (!sameLayerPositions.TryGetValue(hint.FilterFqn, out var filterIndex)
+                    || !sameLayerPositions.TryGetValue(hint.AfterFqn, out var afterIndex))
                 {
                     continue;
                 }
