@@ -1,5 +1,7 @@
 # Migrating from plain Minimal APIs
 
+[日本語](../ja/migrations/from-minimal-api.md)
+
 SliceFx is designed to sit beside standard ASP.NET Core Minimal APIs. You can migrate one endpoint at a time, keep the rest of the app unchanged, and stop the migration if the feature shape does not pay for itself.
 
 > **Preview status:** `0.1.0-preview.8` is available on NuGet. This is pre-1.0 experimental software — APIs may change before a stable release.

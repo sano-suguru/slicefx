@@ -1,5 +1,7 @@
 # SliceFx production readiness criteria
 
+[日本語](ja/production-readiness.md)
+
 This document defines the **objective gate values** for deciding whether SliceFx is ready to adopt in production. These are readiness targets, not a claim that SliceFx is production-ready today.
 
 Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01). No production adoption is claimed yet.

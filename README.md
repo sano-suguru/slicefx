@@ -1,5 +1,7 @@
 # SliceFx
 
+[日本語](README.ja.md)
+
 [![CI](https://github.com/sano-suguru/slicefx/actions/workflows/ci.yml/badge.svg)](https://github.com/sano-suguru/slicefx/actions/workflows/ci.yml)
 [![Perf (nightly)](https://github.com/sano-suguru/slicefx/actions/workflows/perf.yml/badge.svg)](https://github.com/sano-suguru/slicefx/actions/workflows/perf.yml)
 [![Pages](https://github.com/sano-suguru/slicefx/actions/workflows/pages.yml/badge.svg)](https://github.com/sano-suguru/slicefx/actions/workflows/pages.yml)

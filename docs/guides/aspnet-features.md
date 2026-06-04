@@ -1,5 +1,7 @@
 # ASP.NET features and escape hatches
 
+[日本語](../ja/guides/aspnet-features.md)
+
 SliceFx generated code is pure Minimal API expansion. Every feature endpoint is a standard
 `WebApplication.MapMethods` call — the full ASP.NET Core surface stays available, and nothing in
 the framework restricts which ASP.NET features you can use.

@@ -1,5 +1,7 @@
 # SliceFx CLI
 
+[日本語](ja/cli.md)
+
 `SliceFx.Cli` is the local `slicefx` command for scaffolding, route inspection, client generation, and deployment artifacts.
 
 ## Commands

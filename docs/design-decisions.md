@@ -1,5 +1,7 @@
 # Design decisions FAQ
 
+[日本語](ja/design-decisions.md)
+
 This page collects the design questions that come up most often about SliceFx, with short answers and pointers into the codebase. It complements [`production-readiness.md`](production-readiness.md), which documents the **strength-preservation invariants** these decisions defend.
 
 ## Why no `IMediator` / `IPipelineBehavior` layer?

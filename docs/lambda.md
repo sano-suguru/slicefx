@@ -1,5 +1,7 @@
 # AWS Lambda
 
+[日本語](ja/lambda.md)
+
 SliceFx has two Lambda paths:
 
 - `SliceFx.Lambda` — hosts the full ASP.NET Core app in a single Lambda function.

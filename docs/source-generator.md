@@ -1,5 +1,7 @@
 # Source generator and route manifest
 
+[日本語](ja/source-generator.md)
+
 `SliceFx.SourceGenerator` is the registration path for SliceFx features. It discovers `[Feature]` classes at compile time and emits explicit ASP.NET Core Minimal API registrations into the `SliceFx` namespace.
 
 ## Generated registration shape

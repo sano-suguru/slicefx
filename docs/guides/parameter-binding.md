@@ -1,5 +1,7 @@
 # Parameter binding across hosting targets
 
+[日本語](../ja/guides/parameter-binding.md)
+
 SliceFx maps the same `Handle` signature to every supported host. Because each host resolves
 parameters differently, binding rules differ by target. The key distinction:
 

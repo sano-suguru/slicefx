@@ -1,5 +1,7 @@
 # Handler return-type style guide
 
+[日本語](../ja/guides/return-types.md)
+
 A Slice `Handle` method can return either a plain response type or an `IResult`. This guide explains when to choose each.
 
 ## Recommendation up front
