@@ -147,7 +147,7 @@ internal static class WasiRegistrationEmitter
             }
 
             sb.AppendLine($"        // {ToSingleLineComment(f.EndpointName)}");
-            EmitTableAdd(sb, f, validators, wasiJsonContextFqn);
+            EmitTableAdd(sb, f, validators);
             sb.AppendLine();
         }
 
@@ -236,8 +236,7 @@ internal static class WasiRegistrationEmitter
     private static void EmitTableAdd(
         StringBuilder sb,
         FeatureModel f,
-        ImmutableArray<ValidatorModel> validators,
-        string? wasiJsonContextFqn)
+        ImmutableArray<ValidatorModel> validators)
     {
         var @params = f.GetParams();
         var bodyParam = FindBodyParam(f);
@@ -444,26 +443,22 @@ internal static class WasiRegistrationEmitter
                 // Generic SliceResult<T> (typed body + variable status) — requires context.
                 // awaitedType is non-null here: IsSliceResultOfTType checks for null first.
                 var payloadType = SourceGenerationHelpers.GetSliceResultPayloadType(awaitedType!);
-                if (wasiJsonContextFqn is not null)
-                {
-                    sb.AppendLine($"{ind}return __result.ToWasiResponse(__JsonTypeInfo<{payloadType}>()){wrap};");
-                }
-                else
-                {
-                    sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok(__result){wrap};");
-                }
+                // INVARIANT: SliceResult<T> features without a WasiJsonContext are excluded by
+                // SLICE021 in JsonContextPlanner.CreatePlan before EmitTableAdd is ever called,
+                // so wasiJsonContextFqn is guaranteed non-null here. If the planner ever breaks
+                // this invariant, the __JsonTypeInfo<T>() reference below (emitted only when
+                // wasiJsonContextFqn is not null) will produce a CS0103 compile error — a
+                // deliberately loud failure rather than a silent regression to reflection.
+                sb.AppendLine($"{ind}return __result.ToWasiResponse(__JsonTypeInfo<{payloadType}>()){wrap};");
             }
             else
             {
                 var resultType = awaitedType;
-                if (wasiJsonContextFqn is not null)
-                {
-                    sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>()){wrap};");
-                }
-                else
-                {
-                    sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok(__result){wrap};");
-                }
+                // INVARIANT: POCO-returning features without a WasiJsonContext are excluded by
+                // SLICE021 in JsonContextPlanner.CreatePlan before EmitTableAdd is ever called,
+                // so wasiJsonContextFqn is guaranteed non-null here. Same CS0103 loud-failure
+                // guarantee as the SliceResult<T> branch above.
+                sb.AppendLine($"{ind}return global::SliceFx.Wasi.WasiResults.Ok<{resultType}>(__result, __JsonTypeInfo<{resultType}>()){wrap};");
             }
         }
 

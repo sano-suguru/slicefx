@@ -17,16 +17,6 @@ public sealed class WasiResultsTests
     }
 
     [Fact]
-    public void Ok_with_null_value_serializes_json_null()
-    {
-        var response = WasiResults.Ok(null);
-
-        Assert.Equal(200, response.Status);
-        Assert.Equal("application/json", response.Headers["Content-Type"]);
-        Assert.Equal("null", BodyText(response));
-    }
-
-    [Fact]
     public void Ok_with_json_type_info_serializes_null_as_json_null()
     {
         var response = WasiResults.Ok(null!, SliceResultTestJsonContext.Default.String);
@@ -48,33 +38,12 @@ public sealed class WasiResultsTests
     }
 
     [Fact]
-    public void Created_with_null_value_serializes_json_null()
-    {
-        var response = WasiResults.Created("/users/1", null);
-
-        Assert.Equal(201, response.Status);
-        Assert.Equal("/users/1", response.Headers["Location"]);
-        Assert.Equal("application/json", response.Headers["Content-Type"]);
-        Assert.Equal("null", BodyText(response));
-    }
-
-    [Fact]
     public void Created_with_json_type_info_serializes_null_as_json_null()
     {
         var response = WasiResults.Created("/users/1", null!, SliceResultTestJsonContext.Default.String);
 
         Assert.Equal(201, response.Status);
         Assert.Equal("/users/1", response.Headers["Location"]);
-        Assert.Equal("application/json", response.Headers["Content-Type"]);
-        Assert.Equal("null", BodyText(response));
-    }
-
-    [Fact]
-    public void Json_serializes_null_as_json_null()
-    {
-        var response = WasiResults.Json(202, null);
-
-        Assert.Equal(202, response.Status);
         Assert.Equal("application/json", response.Headers["Content-Type"]);
         Assert.Equal("null", BodyText(response));
     }

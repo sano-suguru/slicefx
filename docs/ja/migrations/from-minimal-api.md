@@ -4,13 +4,13 @@
 
 > この日本語版は参考訳です。仕様判断は英語版を正本とします。
 
-SliceFx は standard ASP.NET Core Minimal APIs の隣に置けるよう設計されています。1 endpoint ずつ移行し、残りの app はそのままにできます。feature shape が価値を出さない場合は移行を止められます。
+SliceFx は standard ASP.NET Core Minimal APIs の隣に置けるよう設計されています。1 endpoint ずつ移行し、残りのアプリはそのままにできます。feature shape が価値を出さない場合は移行を止められます。
 
 > **Preview status:** `0.1.0-preview.8` is available on NuGet。これは pre-1.0 experimental software であり、stable release 前に API が変わる可能性があります。
 
 ## When this is a good fit
 
-既存 Minimal API app で endpoint code、DTO、validation、route name、client wiring が散らばり始めている場合に向いています。特に、app 全体に触る前に1つの feature group で形を証明できる small-to-medium API に向いています。
+既存の Minimal API アプリで endpoint code・DTO・validation・route name・client wiring が散らばり始めている場合に向いています。特に、app 全体に触る前に1つの feature group で形を証明できる small-to-medium API に向いています。
 
 単に "portable" にしたいだけで endpoint を移行しないでください。ASP.NET-only behavior を意図的に使う endpoint は raw Minimal API のままでもよく、Slice feature にして `IResult` を返し `aspnet-only` として扱っても構いません。
 
@@ -49,7 +49,7 @@ app.MapSlices();                               // generated Slice endpoints
 app.Run();
 ```
 
-SliceFx には2つの migration safety net がありますが、route inventory の代わりにはなりません。
+SliceFx には2つの migration safety net がありますが、route inventory の代替にはなりません。
 
 - source generator は same-project literal Minimal API overlap を warning として報告します。例: `app.MapPost("/users", ...)` と `[Feature("POST /users")]` が並ぶ場合、また literal `.WithName("...")` が generated Slice endpoint name と一致する場合。
 - generated `MapSlices()` は route builder から見える endpoint に対して startup migration audit を実行します。`SliceFx:MigrationAudit` を `Off`、`Warn`、`Throw` にできます。default は Development で `Warn`、それ以外で `Off` です。

@@ -96,7 +96,7 @@ app.MapGroup("/api")
 
 ## DI binding
 
-ASP.NET path では generated code は plain Minimal API です。binding annotation は注入されません。ASP.NET Core は built-in `IServiceProviderIsService` check により、登録済み service (concrete / interface) を DI から解決します。`[FromServices]` はここでは不要で、raw Minimal API と同じ動きです。
+ASP.NET path では generated code は plain Minimal API です。binding annotation は付与しません。ASP.NET Core は built-in `IServiceProviderIsService` check により、登録済み service (concrete / interface) を DI から解決します。`[FromServices]` はここでは不要で、raw Minimal API と同じ動きです。
 
 > **Portability note:** ASP.NET、WASI、Lambda across portable にしたい場合は、concrete service parameter に `[FromServices]`、keyed service に `[FromKeyedServices(key)]` を付けてください。portable-dispatch generator は compile-time heuristic を使い DI container を probe できないため、annotation なしの concrete service は second body candidate とみなされ、portable route table から除外されます (SLICE023/SLICE033)。
 >

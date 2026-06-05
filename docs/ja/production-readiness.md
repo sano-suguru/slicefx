@@ -4,7 +4,7 @@
 
 > この日本語版は参考訳です。production readiness の判断は英語版を正本とします。
 
-この文書は、SliceFx を production adoption してよいか判断するための **objective gate values** を定義します。これは readiness target であり、SliceFx が現時点で production-ready であるという主張ではありません。
+この文書は、SliceFx を本番環境に採用してよいかどうか判断するための **objective gate values** を定義します。これは readiness target であり、SliceFx が現時点で production-ready であるという主張ではありません。
 
 Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01)。production adoption はまだ claim しません。
 

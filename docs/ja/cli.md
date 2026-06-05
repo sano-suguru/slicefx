@@ -4,7 +4,7 @@
 
 > この日本語版は参考訳です。仕様判断は英語版を正本とします。
 
-`SliceFx.Cli` は local `slicefx` command です。scaffolding、route inspection、client generation、deployment artifact generation を扱います。
+`SliceFx.Cli` は local `slicefx` command です。scaffolding、route inspection、client generation、deployment artifact generation を提供します。
 
 ## Commands
 

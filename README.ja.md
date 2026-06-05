@@ -14,7 +14,7 @@
 
 Website: <https://sano-suguru.github.io/slicefx/>
 
-**SliceFx** は、ASP.NET Core Minimal APIs は好きだが、route string、DTO、validation、filter、client、deployment check をばらばらに保守したくないチーム向けの実験的 .NET framework です。1つの feature は、request、response、handler、validation、filter を1つの static class にまとめます。source generator は標準 Minimal API 登録に加え、tooling、AOT-friendly startup、Lambda 実験、WASI/WebAssembly dispatch 用の route manifest を生成します。
+**SliceFx** は、ASP.NET Core Minimal APIs は好きだが、route string・DTO・validation・filter・client・deployment check をバラバラに管理したくないチーム向けの実験的 .NET framework です。1つの feature は、request、response、handler、validation、filter を1つの static class にまとめます。source generator は標準 Minimal API 登録に加え、tooling、AOT-friendly startup、Lambda 実験、WASI/WebAssembly dispatch 用の route manifest を生成します。
 
 設計背景は [Design decisions FAQ](docs/ja/design-decisions.md) と [Production readiness criteria](docs/ja/production-readiness.md) を参照してください。
 
@@ -23,17 +23,17 @@ Website: <https://sano-suguru.github.io/slicefx/>
 | 課題 | SliceFx が提供するもの |
 | --- | --- |
 | endpoint code をレビューしやすくしたい | 1 endpoint = 1 feature file。request、response、handler、validation、filter を近くに置けます。 |
-| API glue の手同期を減らしたい | `AddSlice()` / `MapSlices()`、route metadata、typed client を同じ feature 定義から生成します。 |
+| API glue を手動で同期する手間を減らしたい | `AddSlice()` / `MapSlices()`、route metadata、typed client を同じ feature 定義から生成します。 |
 | 標準 ASP.NET Core の挙動を維持したい | Minimal API binding、DI、endpoint filter、DataAnnotations、OpenAPI compatibility、`IResult` をそのまま使えます。 |
 | Native AOT-friendly な startup にしたい | generated `MapMethods` が startup route scanning を避けます。`SliceFx.Core` は `PackageReference` を持たず、`Microsoft.AspNetCore.App` framework reference のみです。 |
-| portability を早く知りたい | `slicefx routes` が各 endpoint を `portable`、`partial`、`aspnet-only` に分類します。Lambda と wasi:http adapter は opt-in です。 |
-| lock-in を低くしたい | 生成コードは標準 `MapMethods` に展開されます。source generator 参照を外して生成結果を展開すれば離脱できます。 |
+| portability をすぐに把握したい | `slicefx routes` が各 endpoint を `portable`、`partial`、`aspnet-only` に分類します。Lambda と wasi:http adapter は opt-in です。 |
+| lock-in を最小限に抑えたい | 生成コードは標準 `MapMethods` に展開されます。source generator 参照を外して生成結果を展開すれば離脱できます。 |
 
 SliceFx は ASP.NET Core の機能を制限しません。authorization、rate limiting、caching、CORS、custom validation pattern については [保持できるもの](#保持できるもの) を参照してください。
 
 SliceFx は ASP.NET Core の置き換えではありません。Minimal APIs の周囲に、明示的な feature file、生成 contract、portability check を足す vertical-slice layer です。mediator stack や独自 endpoint pipeline を採用せず、Minimal API に近い形を保ちます。
 
-既存 ASP.NET Core app を全面移行する必要はありません。1 endpoint から始め、残りは controller や手書き Minimal API のままにできます。移行時は [Minimal API からの移行](docs/ja/migrations/from-minimal-api.md) を参照してください。
+既存の ASP.NET Core アプリを全面移行する必要はありません。1 endpoint から始め、残りは controller や手書き Minimal API のままにできます。移行時は [Minimal API からの移行](docs/ja/migrations/from-minimal-api.md) を参照してください。
 
 ### 最新 benchmark
 

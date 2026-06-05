@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -25,17 +24,6 @@ public static partial class WasiResults
     public static WasiResponse Ok() => new(200, s_emptyHeaders, s_emptyBody);
 
     /// <summary>
-    /// Creates a 200 OK response with a JSON response body.
-    /// </summary>
-    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
-    /// <returns>A 200 OK WASI response.</returns>
-    /// <remarks>This overload uses reflection-based JSON serialization. Use <see cref="Ok{T}(T, JsonTypeInfo{T})"/> for NativeAOT and trimming.</remarks>
-    [RequiresDynamicCode("Use Ok<T>(T, JsonTypeInfo<T>) for NativeAOT-compatible WASI responses.")]
-    [RequiresUnreferencedCode("Use Ok<T>(T, JsonTypeInfo<T>) for trim-compatible WASI responses.")]
-    public static WasiResponse Ok(object? value)
-        => new(200, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value));
-
-    /// <summary>
     /// Creates a 200 OK response with a JSON response body using source-generated metadata.
     /// </summary>
     /// <typeparam name="T">The response body type.</typeparam>
@@ -52,25 +40,6 @@ public static partial class WasiResults
     /// <returns>A 201 Created WASI response.</returns>
     public static WasiResponse Created(string location)
         => new(201, new Dictionary<string, string>(StringComparer.Ordinal) { ["Location"] = location }, s_emptyBody);
-
-    /// <summary>
-    /// Creates a 201 Created response with a <c>Location</c> header and JSON response body.
-    /// </summary>
-    /// <param name="location">The resource location to write to the <c>Location</c> header.</param>
-    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
-    /// <returns>A 201 Created WASI response.</returns>
-    /// <remarks>This overload uses reflection-based JSON serialization. Use <see cref="Created{T}(string, T, JsonTypeInfo{T})"/> for NativeAOT and trimming.</remarks>
-    [RequiresDynamicCode("Use Created<T>(string, T, JsonTypeInfo<T>) for NativeAOT-compatible WASI responses.")]
-    [RequiresUnreferencedCode("Use Created<T>(string, T, JsonTypeInfo<T>) for trim-compatible WASI responses.")]
-    public static WasiResponse Created(string location, object? value)
-    {
-        var headers = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["Location"] = location,
-            ["Content-Type"] = "application/json",
-        };
-        return new(201, headers, JsonSerializer.SerializeToUtf8Bytes(value));
-    }
 
     /// <summary>
     /// Creates a 201 Created response with a <c>Location</c> header and JSON response body using source-generated metadata.
@@ -136,18 +105,6 @@ public static partial class WasiResults
         var problem = new ProblemDto("about:blank", title, status, detail, Errors: null);
         return new(status, s_problemHeaders, JsonSerializer.SerializeToUtf8Bytes(problem, SliceResultJsonContext.Default.ProblemDto));
     }
-
-    /// <summary>
-    /// Creates a response with the specified status code and a JSON response body.
-    /// </summary>
-    /// <param name="status">The HTTP status code for the response.</param>
-    /// <param name="value">The value to serialize as JSON. <c>null</c> is serialized as JSON <c>null</c>.</param>
-    /// <returns>A WASI response with the specified status code.</returns>
-    /// <remarks>This overload uses reflection-based JSON serialization. Use <see cref="Json{T}(int, T, JsonTypeInfo{T})"/> for NativeAOT and trimming.</remarks>
-    [RequiresDynamicCode("Use Json<T>(int, T, JsonTypeInfo<T>) for NativeAOT-compatible WASI responses.")]
-    [RequiresUnreferencedCode("Use Json<T>(int, T, JsonTypeInfo<T>) for trim-compatible WASI responses.")]
-    public static WasiResponse Json(int status, object? value)
-        => new(status, s_jsonHeaders, JsonSerializer.SerializeToUtf8Bytes(value));
 
     /// <summary>
     /// Creates a response with the specified status code and a JSON response body using source-generated metadata.

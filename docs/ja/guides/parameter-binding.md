@@ -6,15 +6,15 @@
 
 SliceFx は同じ `Handle` signature を supported host ごとに map します。ただし host ごとに parameter resolution が異なるため、binding rule も target によって変わります。重要な違いは以下です。
 
-| Question | ASP.NET Core | Portable (WASI / Lambda) |
+| 観点 | ASP.NET Core | Portable (WASI / Lambda) |
 |---|---|---|
-| binding を誰が決めるか | ASP.NET Core runtime binder | source generator at compile time |
+| binding の決定主体 | ASP.NET Core runtime binder | source generator at compile time |
 | concrete DI service, no attribute | raw Minimal API と同じく DI から解決 | body candidate とみなされ、annotation がないと route excluded (SLICE023/033) |
 | `[FromServices]` は必要か | 不要。optional / harmless | concrete service type では必要 |
 
 ## ASP.NET Core (Kestrel / TestHost)
 
-source generator は bare delegate を使った plain `MapMethods` call を emit します。binding annotation は注入しません。binding は **ASP.NET Core の推論と完全に同じ** で、順序は以下です。
+source generator は bare delegate を使った plain `MapMethods` call を emit します。binding annotation は付与しません。binding は **ASP.NET Core の推論と完全に同じ** で、順序は以下です。
 
 1. explicit attribute (`[FromRoute]`, `[FromQuery]`, `[FromHeader]`, `[FromBody]`, `[FromServices]`, `[FromKeyedServices]`)
 2. special type (`HttpContext`, `HttpRequest`, `HttpResponse`, `CancellationToken`, ...)

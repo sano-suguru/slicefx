@@ -2097,6 +2097,69 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_excludes_wasi_poco_response_routes_without_wasi_json_context()
+    {
+        var source = """
+            using SliceFx;
+
+            namespace WasiMissingJsonContextPocoApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class GetItems
+            {
+                public sealed record Response(string Name);
+
+                public static Response Handle() => new("x");
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiMissingJsonContextPocoApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE021" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        Assert.Contains("// SLICE021:", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/items\"", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_excludes_wasi_SliceResultOfT_routes_without_wasi_json_context()
+    {
+        var source = """
+            using SliceFx;
+
+            namespace WasiMissingJsonContextSliceResultApp.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public sealed record Response(string Name);
+
+                public static SliceResult<Response> Handle(string id) =>
+                    SliceResult<Response>.Ok(new(id));
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiMissingJsonContextSliceResultApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains(generatorDiagnostics, static diagnostic => diagnostic.Id == "SLICE021" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        Assert.Contains("// SLICE021:", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("table.Add(", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"/items/{id}\"", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_auto_registers_and_resolves_wasi_slice_validators()
     {
         var source = """

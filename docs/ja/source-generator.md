@@ -53,7 +53,7 @@ generator は host registration を emit する前に、local feature と aggreg
 
 ## Route manifest
 
-generator は feature がまだない project に対しても empty manifest を含む route metadata を emit します。manifest には以下が含まれます。
+generator は feature が1つもないプロジェクトに対しても empty manifest を含む route metadata を emit します。manifest には以下が含まれます。
 
 - HTTP method と route pattern
 - feature type、tag、endpoint name、summary
