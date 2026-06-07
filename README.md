@@ -211,7 +211,8 @@ The C# typed client reuses C# request/response types rather than generating DTO 
 
 | Evidence type | Current public count | Notes |
 | --- | ---: | --- |
-| Production adoption | 1 | Maintainer dogfooding: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) running on Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) since preview.5. All 8 routes use `SliceResult<T>` / `SliceResult` (preview.7); `SliceApiClient.g.cs` is fully generated. |
+| Production adoption | 0 | Third-party production use. Do not claim before public evidence exists. |
+| Maintainer dogfooding (live) | 1 | [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) running on Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) since preview.5. All 11 handlers return `SliceResult<T>` / `SliceResult` (preview.7+); `SliceApiClient.g.cs` fully generated. |
 | Published personal dogfooding logs | 0 | A published write-up is planned; the dogfooding itself is live. |
 
 ## Portability

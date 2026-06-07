@@ -4,7 +4,7 @@
 
 This document defines the **objective gate values** for deciding whether SliceFx is ready to adopt in production. These are readiness targets, not a claim that SliceFx is production-ready today.
 
-Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01). No production adoption is claimed yet.
+Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01). No production adoption is claimed yet. Maintainer dogfooding is live: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) on Fermyon Cloud (Spin WASI).
 
 ## Strength-preservation invariants
 
@@ -124,8 +124,9 @@ Measured on Apple M1, macOS 26.4.1, .NET SDK 10.0.300, BenchmarkDotNet 0.14.0, S
 
 | Evidence type | Current public count | Notes |
 |---|---:|---|
-| Production adoption | 0 | Do not claim production readiness from repository checks alone. |
-| Published personal dogfooding logs | 0 | Add a maintainer side-project write-up before claiming real-world usage. |
+| Production adoption | 0 | Third-party production use. Do not claim before public evidence exists. |
+| Maintainer dogfooding (live) | 1 | [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) running on Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) since preview.5. All 11 handlers return `SliceResult<T>` / `SliceResult` (preview.7+); `SliceApiClient.g.cs` fully generated. |
+| Published personal dogfooding logs | 0 | A published write-up is planned; the dogfooding itself is live. |
 
 ## Adoption matrix
 

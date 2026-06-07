@@ -6,7 +6,7 @@
 
 この文書は、SliceFx を本番環境に採用してよいかどうか判断するための **objective gate values** を定義します。これは readiness target であり、SliceFx が現時点で production-ready であるという主張ではありません。
 
-Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01)。production adoption はまだ claim しません。
+Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01)。production adoption はまだ claim しません。Maintainer dogfooding は稼働中: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox)（Fermyon Cloud / Spin WASI）。
 
 ## Strength-preservation invariants
 
@@ -124,8 +124,9 @@ dotnet run -c Release --project tests/SliceFx.Benchmarks.Runtime --no-build -- -
 
 | Evidence type | Current public count | Notes |
 | --- | ---: | --- |
-| Production adoption | 0 | repository check だけで production readiness を claim しません。 |
-| Published personal dogfooding logs | 0 | real-world usage を claim する前に maintainer side-project write-up を追加します。 |
+| Production adoption | 0 | 第三者による本番採用。public evidence なしに claim しません。 |
+| Maintainer dogfooding (live) | 1 | [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) が Fermyon Cloud (Spin WASI, `wasi:http/incoming-handler`) で稼働中（preview.5 以降）。全 11 ハンドラが `SliceResult<T>` / `SliceResult`（preview.7+）を返す; `SliceApiClient.g.cs` は完全生成済み。 |
+| Published personal dogfooding logs | 0 | write-up は計画中。dogfooding 自体は稼働中。 |
 
 ## Adoption matrix
 

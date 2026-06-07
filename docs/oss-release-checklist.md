@@ -62,7 +62,7 @@ Current version: `0.1.0-preview.5` (2026-05-30). Previous: `0.1.0-preview.4` (20
   - Do not claim production adoption before public evidence exists.
 - [ ] Publish at least one dogfooding note before claiming real-world usage.
   - Record project shape, routes implemented with SliceFx, friction points, and fixes made from dogfooding.
-  - Until then, public adoption counts remain: Production adoption 0, published personal dogfooding logs 0.
+  - Until then, public adoption counts remain: Production adoption 0 (third-party), maintainer dogfooding (live) 1 ([slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox)), published personal dogfooding logs 0.
 
 ## Local verification
 
