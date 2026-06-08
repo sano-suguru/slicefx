@@ -856,6 +856,50 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_emits_wasi_query_binding_for_explicit_nullable_int_params()
+    {
+        // Regression test: [FromQuery] int? was previously misclassified as Unsupported (SLICE023)
+        // because IsSimpleNullableType only matched the long Nullable<T> form but
+        // SymbolDisplayFormat.FullyQualifiedFormat emits the trailing-? form (int?).
+        var source = """
+            #nullable enable
+
+            using Microsoft.AspNetCore.Mvc;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiQueryApp.Features.Items;
+
+            [Feature("GET /items")]
+            public static class ListItems
+            {
+                public static WasiResponse Handle(
+                    [FromQuery] int? limit,
+                    [FromQuery] int? offset,
+                    [FromQuery] string? q)
+                    => global::SliceFx.Wasi.WasiResults.NoContent();
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiQueryApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        // Feature must NOT be excluded (no SLICE023 warning/error).
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken),
+            static d => d.Id == "SLICE023");
+        // Nullable params must be bound from query (not skipped or treated as services).
+        Assert.Contains(".BindFromQuery<int?>(ctx, \"limit\")", wasiSource, StringComparison.Ordinal);
+        Assert.Contains(".BindFromQuery<int?>(ctx, \"offset\")", wasiSource, StringComparison.Ordinal);
+        // Nullable params must NOT generate a "missing" required-value error (they are optional).
+        Assert.DoesNotContain("Query value 'limit' is missing.", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Query value 'offset' is missing.", wasiSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Query value 'q' is missing.", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_honors_explicit_wasi_binding_metadata()
     {
         var source = """
