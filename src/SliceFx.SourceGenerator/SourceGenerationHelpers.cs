@@ -315,13 +315,23 @@ internal static class SourceGenerationHelpers
 
     private static bool IsSimpleNullableType(string typeFqn)
     {
-        if (!typeFqn.StartsWith("global::System.Nullable<", StringComparison.Ordinal))
+        // Long form: global::System.Nullable<global::System.Int32> — kept for completeness.
+        if (typeFqn.StartsWith("global::System.Nullable<", StringComparison.Ordinal))
         {
-            return false;
+            var inner = typeFqn.Substring("global::System.Nullable<".Length).TrimEnd('>');
+            return s_simpleTypes.Contains(inner);
         }
 
-        var inner = typeFqn.Substring("global::System.Nullable<".Length).TrimEnd('>');
-        return s_simpleTypes.Contains(inner);
+        // Trailing-? form: what SymbolDisplayFormat.FullyQualifiedFormat actually emits for
+        // nullable value types (e.g. int? → "int?", Guid? → "global::System.Guid?").
+        // string? and other reference types are NOT emitted with a trailing ? by FullyQualifiedFormat,
+        // so this branch only fires for genuine Nullable<T> value types.
+        if (typeFqn.EndsWith("?", StringComparison.Ordinal))
+        {
+            return s_simpleTypes.Contains(typeFqn.Substring(0, typeFqn.Length - 1));
+        }
+
+        return false;
     }
 
     private static string NormalizeRouteParameterName(string token)
