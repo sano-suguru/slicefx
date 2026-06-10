@@ -190,6 +190,21 @@ internal static class SliceDiagnostics
         isEnabledByDefault: true);
 
     /// <summary>
+    /// Diagnostic reported when a concrete request-like parameter on a body-method (POST/PUT/PATCH) is
+    /// not registered in the JSON context and has no explicit [FromServices]/[FromBody] attribute.
+    /// The parameter is classified as a DI service (not a body param) by the JSON-context membership
+    /// discriminator. If the developer intended it as a body param, they should add
+    /// [JsonSerializable(typeof(T))] to the [SliceJsonContext] class.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConcreteTypeTreatedAsServiceNotBody = new(
+        "SLICE024",
+        "Concrete type on body-method treated as DI service (not body parameter)",
+        "Feature '{0}': parameter '{2}' of type '{1}' is not registered in the [SliceJsonContext] and will be resolved from DI. If this is a body parameter, add [JsonSerializable(typeof({1}))] to the JSON context.",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
     /// Diagnostic reported when a feature return type cannot be used by Lambda function-per-feature handlers.
     /// </summary>
     public static readonly DiagnosticDescriptor UnsupportedReturnTypeForLambdaFunctionPerFeature = new(

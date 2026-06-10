@@ -36,9 +36,12 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine("{");
         sb.AppendLine("}");
 
+        // Build the serializable-type set once; used for body/service disambiguation in all per-feature loops.
+        var lambdaSerializableTypes = jsonContextPlan.GetSerializableTypesSet();
+
         foreach (var feature in features)
         {
-            EmitFeatureHandlerClass(sb, className, feature, validators, referencedModules, jsonContextPlan, diagnostics);
+            EmitFeatureHandlerClass(sb, className, feature, validators, referencedModules, jsonContextPlan, diagnostics, lambdaSerializableTypes);
         }
 
         return (sb.ToString(), diagnostics.ToImmutable());
@@ -79,9 +82,10 @@ internal static class LambdaFunctionPerFeatureEmitter
         ImmutableArray<ValidatorModel> validators,
         ImmutableArray<ReferencedSliceModule> referencedModules,
         JsonContextPlan jsonContextPlan,
-        ImmutableArray<EquatableDiagnostic>.Builder diagnostics)
+        ImmutableArray<EquatableDiagnostic>.Builder diagnostics,
+        HashSet<string>? serializableTypes = null)
     {
-        var skip = GetSkipReason(feature);
+        var skip = GetSkipReason(feature, serializableTypes);
         var jsonExclusion = JsonContextPlanner.FindExclusion(jsonContextPlan, feature);
         if (jsonExclusion is not null)
         {
@@ -99,7 +103,7 @@ internal static class LambdaFunctionPerFeatureEmitter
         }
 
         var @params = feature.GetParams();
-        var bodyParam = FindBodyParam(feature);
+        var bodyParam = FindBodyParam(feature, serializableTypes);
         var bodyValidation = bodyParam is null ? null : FindValidationParameter(feature, @params.IndexOf(bodyParam));
         var awaitedReturnType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
 
@@ -168,7 +172,8 @@ internal static class LambdaFunctionPerFeatureEmitter
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
                 feature.HttpMethod,
-                feature.Pattern);
+                feature.Pattern,
+                serializableTypes);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"        if (!global::SliceFx.Lambda.FunctionPerFeature.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
@@ -260,7 +265,9 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine("}");
     }
 
-    private static LambdaSkipReason? GetSkipReason(FeatureModel feature)
+    private static LambdaSkipReason? GetSkipReason(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
     {
         if (feature.ReturnsAspNetResult)
         {
@@ -293,7 +300,8 @@ internal static class LambdaFunctionPerFeatureEmitter
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
                 feature.HttpMethod,
-                feature.Pattern);
+                feature.Pattern,
+                serializableTypes);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 bodyCount++;
@@ -451,8 +459,10 @@ internal static class LambdaFunctionPerFeatureEmitter
         sb.AppendLine($"            ?? throw new global::System.InvalidOperationException({Str($"Lambda function-per-feature JSON metadata provider did not contain required metadata for {feature.EndpointName}.")}));");
     }
 
-    private static HandleParamModel? FindBodyParam(FeatureModel feature)
-        => SourceGenerationHelpers.FindSingleBodyParameter(feature);
+    private static HandleParamModel? FindBodyParam(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
+        => SourceGenerationHelpers.FindSingleBodyParameter(feature, serializableTypes);
 
     private static ValidationParameterModel? FindValidationParameter(FeatureModel feature, int parameterIndex)
     {

@@ -982,6 +982,8 @@ public class SourceGeneratorCompileTests
                 public sealed record CreateItemResponse(string Name);
 
                 [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(WasiSharedBodyApp.CreateItemRequest))]
+                [JsonSerializable(typeof(WasiSharedBodyApp.CreateItemResponse))]
                 public sealed class WasiJsonContext : JsonSerializerContext
                 {
                     public static WasiJsonContext Default { get; } = new();
@@ -1572,7 +1574,9 @@ public class SourceGeneratorCompileTests
                 public sealed class Clock;
 
                 [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
-
+                [JsonSerializable(typeof(LambdaApp.Features.Users.GetUser.Response))]
+                [JsonSerializable(typeof(LambdaApp.Features.Users.CreateUser.Request))]
+                [JsonSerializable(typeof(LambdaApp.Features.Users.CreateUser.Response))]
                 public sealed class LambdaJsonContext : JsonSerializerContext
                 {
                     public static LambdaJsonContext Default { get; } = new();
@@ -2340,6 +2344,8 @@ public class SourceGeneratorCompileTests
             namespace WasiValidatorApp
             {
                 [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(WasiValidatorApp.Features.Items.CreateItem.Request))]
+                [JsonSerializable(typeof(WasiValidatorApp.Features.Items.CreateItem.Response))]
                 public sealed class WasiJsonContext : JsonSerializerContext
                 {
                     public static WasiJsonContext Default { get; } = new();
@@ -3792,6 +3798,7 @@ public class SourceGeneratorCompileTests
             new DiagnosticCatalogEntry("SLICE021", "MissingWasiJsonContext", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE022", "UnsupportedValidationForWasi", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE023", "UnsupportedParameterForWasi", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE024", "ConcreteTypeTreatedAsServiceNotBody", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE030", "UnsupportedReturnTypeForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Info),
             new DiagnosticCatalogEntry("SLICE031", "UnsupportedFilterForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Info),
             new DiagnosticCatalogEntry("SLICE032", "MissingLambdaJsonContext", "Slice", DiagnosticSeverity.Warning),
@@ -3834,8 +3841,13 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
-    public void Generator_emits_SLICE023_and_excludes_wasi_route_for_unannotated_concrete_service_on_post()
+    public void Generator_treats_unregistered_concrete_types_as_di_services_on_post()
     {
+        // When a WasiJsonContext exists but registers neither CreateItemRequest nor ConcreteAuditLog,
+        // the membership discriminator classifies both as DI services (not body params).
+        // Result: SLICE023 (multiple body params) does NOT fire; the route IS included.
+        // SLICE024 fires only when serializableTypes.Count > 0 (context has some registrations).
+        // Here the context is empty so SLICE024 is suppressed; both params become services.
         var source = """
             using System;
             using System.Text.Json;
@@ -3851,6 +3863,7 @@ public class SourceGeneratorCompileTests
                 public sealed class ConcreteAuditLog { public void Record(string msg) { } }
 
                 [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(ConcreteBodyApp.CreateItemResponse))]
                 public sealed class WasiJsonContext : JsonSerializerContext
                 {
                     public static WasiJsonContext Default { get; } = new();
@@ -3882,9 +3895,16 @@ public class SourceGeneratorCompileTests
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
         var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
 
-        Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE023");
-        Assert.Contains("// SLICE023:", wasiSource, StringComparison.Ordinal);
+        // Both params are service-classified; no multiple-body error
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE023");
+        Assert.DoesNotContain("// SLICE023:", wasiSource, StringComparison.Ordinal);
+        // No body reading emitted — both are resolved from DI
         Assert.DoesNotContain(".ReadAsync<global::ConcreteBodyApp.CreateItemRequest>", wasiSource, StringComparison.Ordinal);
+        // Both params resolved from DI
+        Assert.Contains("GetRequiredService(typeof(global::ConcreteBodyApp.CreateItemRequest))", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("GetRequiredService(typeof(global::ConcreteBodyApp.ConcreteAuditLog))", wasiSource, StringComparison.Ordinal);
+        // SLICE024 fires because context HAS registrations (CreateItemResponse) but req/audit are not in it
+        Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE024");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
     }
 
@@ -3907,6 +3927,8 @@ public class SourceGeneratorCompileTests
                 public sealed class ConcreteAuditLog { public void Record(string msg) { } }
 
                 [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(ConcreteBodyApp.CreateItemRequest))]
+                [JsonSerializable(typeof(ConcreteBodyApp.CreateItemResponse))]
                 public sealed class WasiJsonContext : JsonSerializerContext
                 {
                     public static WasiJsonContext Default { get; } = new();

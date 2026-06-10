@@ -18,6 +18,7 @@ SLICE020 | Slice | Info | UnsupportedReturnTypeForWasi
 SLICE021 | Slice | Warning | MissingWasiJsonContext
 SLICE022 | Slice | Warning | UnsupportedValidationForWasi
 SLICE023 | Slice | Warning | UnsupportedParameterForWasi
+SLICE024 | Slice | Warning | ConcreteTypeTreatedAsServiceNotBody
 SLICE030 | Slice | Info | UnsupportedReturnTypeForLambdaFunctionPerFeature
 SLICE031 | Slice | Info | UnsupportedFilterForLambdaFunctionPerFeature
 SLICE032 | Slice | Warning | MissingLambdaJsonContext

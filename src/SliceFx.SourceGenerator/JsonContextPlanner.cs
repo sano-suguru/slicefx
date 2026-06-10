@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
-
 namespace SliceFx.SourceGenerator;
 
 internal static class JsonContextPlanner
@@ -23,18 +22,69 @@ internal static class JsonContextPlanner
             }
         }
 
+        // Collect all types registered via [JsonSerializable(typeof(T))] on this context type.
+        // These form the compile-time body/service discriminator set for WASI and Lambda paths:
+        // a request-like param whose type is in this set is classified as a body parameter;
+        // otherwise it is resolved from DI (service). This matches ASP.NET Minimal API's runtime
+        // IServiceProviderIsService semantics without any per-request reflection.
+        var serializableTypes = CollectJsonSerializableTypes(type);
+
         return new JsonContextOverrideCandidate(
             type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             CreateDiagnosticLocation(type.Locations.Length > 0 ? type.Locations[0] : null),
             InheritsFromJsonSerializerContext(type),
             hasWasiTarget,
-            hasLambdaFunctionPerFeatureTarget);
+            hasLambdaFunctionPerFeatureTarget,
+            serializableTypes);
+    }
+
+    /// <summary>
+    /// Returns a newline-separated, sorted string of raw (global::-prefixed) FQNs for all types
+    /// registered via [JsonSerializable(typeof(T))] on <paramref name="contextType"/>.
+    /// Uses <see cref="ITypeSymbol"/> (not <see cref="INamedTypeSymbol"/>) to handle array and
+    /// constructed generic types (e.g. <c>Dictionary&lt;string, List&lt;int&gt;&gt;</c>).
+    /// </summary>
+    private static string CollectJsonSerializableTypes(INamedTypeSymbol contextType)
+    {
+        var fqns = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var attr in contextType.GetAttributes())
+        {
+            if (!IsJsonSerializableAttribute(attr))
+            {
+                continue;
+            }
+
+            if (attr.ConstructorArguments.Length > 0
+                && attr.ConstructorArguments[0].Value is ITypeSymbol typeArg)
+            {
+                fqns.Add(typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            }
+        }
+
+        return string.Join("\n", fqns);
+    }
+
+    private static bool IsJsonSerializableAttribute(AttributeData attr)
+    {
+        var cls = attr.AttributeClass;
+        if (cls is null)
+        {
+            return false;
+        }
+
+        var fqn = cls.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return string.Equals(
+            fqn,
+            "global::System.Text.Json.Serialization.JsonSerializableAttribute",
+            StringComparison.Ordinal);
     }
 
     public static JsonContextOverrides CreateOverrides(ImmutableArray<JsonContextOverrideCandidate> candidates)
     {
         string? wasi = null;
+        string? wasiSerializableTypes = null;
         string? lambda = null;
+        string? lambdaSerializableTypes = null;
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
         foreach (var candidate in candidates)
         {
@@ -56,6 +106,7 @@ internal static class JsonContextPlanner
                 else
                 {
                     wasi = candidate.ContextFqn;
+                    wasiSerializableTypes = candidate.SerializedSerializableTypes;
                 }
             }
 
@@ -68,26 +119,35 @@ internal static class JsonContextPlanner
                 else
                 {
                     lambda = candidate.ContextFqn;
+                    lambdaSerializableTypes = candidate.SerializedSerializableTypes;
                 }
             }
         }
 
-        return new JsonContextOverrides(wasi, lambda, diagnostics.ToImmutable());
+        return new JsonContextOverrides(
+            wasi,
+            lambda,
+            diagnostics.ToImmutable(),
+            wasiSerializableTypes ?? "",
+            lambdaSerializableTypes ?? "");
     }
 
     public static JsonContextPlan CreateWasiPlan(
         ImmutableArray<FeatureModel> features,
-        string? explicitContextFqn)
-        => CreatePlan(JsonContextTarget.Wasi, features, explicitContextFqn);
+        string? explicitContextFqn,
+        string serializedSerializableTypes = "")
+        => CreatePlan(JsonContextTarget.Wasi, features, explicitContextFqn, serializedSerializableTypes);
 
     public static JsonContextPlan CreateLambdaPlan(
         ImmutableArray<FeatureModel> features,
-        string? explicitContextFqn)
-        => CreatePlan(JsonContextTarget.LambdaFunctionPerFeature, features, explicitContextFqn);
+        string? explicitContextFqn,
+        string serializedSerializableTypes = "")
+        => CreatePlan(JsonContextTarget.LambdaFunctionPerFeature, features, explicitContextFqn, serializedSerializableTypes);
 
     public static string StatusForWasi(FeatureModel feature, JsonContextPlan plan)
     {
-        if (GetWasiStructuralSkipReason(feature) is not null || FindExclusion(plan, feature) is not null)
+        var serializableTypes = plan.GetSerializableTypesSet();
+        if (GetWasiStructuralSkipReason(feature, serializableTypes) is not null || FindExclusion(plan, feature) is not null)
         {
             return SourceGenerationHelpers.ManifestIneligible;
         }
@@ -96,10 +156,16 @@ internal static class JsonContextPlanner
     }
 
     public static string? ReasonForWasi(FeatureModel feature, JsonContextPlan plan)
-        => GetWasiStructuralSkipReason(feature) ?? FindExclusion(plan, feature)?.Reason;
+    {
+        var serializableTypes = plan.GetSerializableTypesSet();
+        return GetWasiStructuralSkipReason(feature, serializableTypes) ?? FindExclusion(plan, feature)?.Reason;
+    }
 
     public static string? ReasonForLambda(FeatureModel feature, JsonContextPlan plan)
-        => GetLambdaStructuralSkipReason(feature) ?? FindExclusion(plan, feature)?.Reason;
+    {
+        var serializableTypes = plan.GetSerializableTypesSet();
+        return GetLambdaStructuralSkipReason(feature, serializableTypes) ?? FindExclusion(plan, feature)?.Reason;
+    }
 
     public static FeatureJsonExclusion? FindExclusion(JsonContextPlan plan, FeatureModel feature)
         => plan.FindExclusion(feature.FullyQualifiedTypeName);
@@ -111,7 +177,9 @@ internal static class JsonContextPlanner
         return $"{contextName} JSON requires an explicit [SliceJsonContext] JsonSerializerContext with JsonSerializable metadata for: {rootList}";
     }
 
-    public static string? GetWasiStructuralSkipReason(FeatureModel feature)
+    public static string? GetWasiStructuralSkipReason(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
     {
         if (feature.ReturnsAspNetResult)
         {
@@ -123,10 +191,12 @@ internal static class JsonContextPlanner
             return "DataAnnotations validation requires reflection";
         }
 
-        return GetParameterBindingSkipReason(feature);
+        return GetParameterBindingSkipReason(feature, serializableTypes);
     }
 
-    public static string? GetLambdaStructuralSkipReason(FeatureModel feature)
+    public static string? GetLambdaStructuralSkipReason(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
     {
         if (feature.ReturnsAspNetResult)
         {
@@ -148,25 +218,31 @@ internal static class JsonContextPlanner
             return "DataAnnotations validation requires reflection in the Lambda function-per-feature path";
         }
 
-        return GetParameterBindingSkipReason(feature);
+        return GetParameterBindingSkipReason(feature, serializableTypes);
     }
 
     private static JsonContextPlan CreatePlan(
         JsonContextTarget target,
         ImmutableArray<FeatureModel> features,
-        string? explicitContextFqn)
+        string? explicitContextFqn,
+        string serializedSerializableTypes = "")
     {
         var exclusions = ImmutableArray.CreateBuilder<FeatureJsonExclusion>();
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
 
+        // Parse the serializable-types set once for this plan; used for body/service disambiguation.
+        var serializableTypes = ParseSerializableTypes(serializedSerializableTypes);
+
         foreach (var feature in features)
         {
-            if ((target == JsonContextTarget.Wasi ? GetWasiStructuralSkipReason(feature) : GetLambdaStructuralSkipReason(feature)) is not null)
+            if ((target == JsonContextTarget.Wasi
+                    ? GetWasiStructuralSkipReason(feature, serializableTypes)
+                    : GetLambdaStructuralSkipReason(feature, serializableTypes)) is not null)
             {
                 continue;
             }
 
-            var featureRoots = CollectRoots(target, feature);
+            var featureRoots = CollectRoots(target, feature, serializableTypes);
             var requiresExplicitContext = target == JsonContextTarget.Wasi;
             var exclusionReason = requiresExplicitContext && explicitContextFqn is null && !featureRoots.IsEmpty
                 ? CreateMissingContextReason(target, featureRoots)
@@ -192,19 +268,77 @@ internal static class JsonContextPlanner
                 continue;
             }
 
+            // Emit SLICE024 warning for each concrete request-like param on a body-method that is
+            // NOT in the JSON context and has no explicit [FromServices]/[FromBody]. These params
+            // are classified as DI services; the developer may have intended them as body params.
+            // Only emitted when a context exists (if no context, SLICE021 already covers the route).
+            if (explicitContextFqn is not null && serializableTypes.Count > 0
+                && SourceGenerationHelpers.IsInferredBodyMethod(feature.HttpMethod))
+            {
+                foreach (var p in feature.GetParams())
+                {
+                    if (p.TypeFqn == "global::System.Threading.CancellationToken")
+                    {
+                        continue;
+                    }
+
+                    // Only warn for params that were reclassified from the syntax-default (body)
+                    // to service by the membership check: request-like, no explicit binding, not in set.
+                    if (p.BindingSource is "services" or "body" or "route" or "query" or "header" or "keyedServices" or "parameters")
+                    {
+                        continue; // explicit binding — developer made an intentional choice
+                    }
+
+                    if (!SourceGenerationHelpers.IsRequestLikeParameter(p))
+                    {
+                        continue;
+                    }
+
+                    if (!serializableTypes.Contains(p.TypeFqn))
+                    {
+                        diagnostics.Add(EquatableDiagnostic.Create(
+                            SliceDiagnostics.ConcreteTypeTreatedAsServiceNotBody,
+                            feature.GetDiagnosticLocationModel(),
+                            feature.TypeName,
+                            SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn),
+                            p.Name));
+                    }
+                }
+            }
         }
 
         return new JsonContextPlan(
             target,
             explicitContextFqn,
             exclusions.ToImmutable(),
-            diagnostics.ToImmutable());
+            diagnostics.ToImmutable(),
+            serializedSerializableTypes);
     }
 
-    private static ImmutableArray<JsonRootType> CollectRoots(JsonContextTarget target, FeatureModel feature)
+    private static HashSet<string> ParseSerializableTypes(string serialized)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        if (!string.IsNullOrEmpty(serialized))
+        {
+            foreach (var fqn in serialized.Split('\n'))
+            {
+                if (!string.IsNullOrWhiteSpace(fqn))
+                {
+                    set.Add(fqn);
+                }
+            }
+        }
+
+        return set;
+    }
+
+    private static ImmutableArray<JsonRootType> CollectRoots(
+        JsonContextTarget target,
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
     {
         var roots = ImmutableArray.CreateBuilder<JsonRootType>();
-        var bodyParam = FindBodyParam(feature);
+        var bodyParam = FindBodyParam(feature, serializableTypes);
         if (bodyParam is not null)
         {
             roots.Add(new JsonRootType(bodyParam.TypeFqn));
@@ -247,10 +381,14 @@ internal static class JsonContextPlanner
         return null;
     }
 
-    private static HandleParamModel? FindBodyParam(FeatureModel feature)
-        => SourceGenerationHelpers.FindSingleBodyParameter(feature);
+    private static HandleParamModel? FindBodyParam(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
+        => SourceGenerationHelpers.FindSingleBodyParameter(feature, serializableTypes);
 
-    private static string? GetParameterBindingSkipReason(FeatureModel feature)
+    private static string? GetParameterBindingSkipReason(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
     {
         var bodyCount = 0;
         foreach (var p in feature.GetParams())
@@ -263,7 +401,8 @@ internal static class JsonContextPlanner
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
                 feature.HttpMethod,
-                feature.Pattern);
+                feature.Pattern,
+                serializableTypes);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 bodyCount++;

@@ -125,7 +125,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Combine(hasWasiRef)
             .Select(static (pair, _) =>
                 pair.Right
-                    ? JsonContextPlanner.CreateWasiPlan(pair.Left.Left, pair.Left.Right.WasiContextFqn)
+                    ? JsonContextPlanner.CreateWasiPlan(
+                        pair.Left.Left,
+                        pair.Left.Right.WasiContextFqn,
+                        pair.Left.Right.WasiSerializableTypes)
                     : new JsonContextPlan(JsonContextTarget.Wasi, null, [], []))
             .WithTrackingName("SliceWasiJsonContextPlan");
 
@@ -134,7 +137,10 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Combine(lambdaFunctionPerFeatureOptions)
             .Select(static (pair, _) =>
                 pair.Right.Enabled
-                    ? JsonContextPlanner.CreateLambdaPlan(pair.Left.Left, pair.Left.Right.LambdaFunctionPerFeatureContextFqn)
+                    ? JsonContextPlanner.CreateLambdaPlan(
+                        pair.Left.Left,
+                        pair.Left.Right.LambdaFunctionPerFeatureContextFqn,
+                        pair.Left.Right.LambdaSerializableTypes)
                     : new JsonContextPlan(JsonContextTarget.LambdaFunctionPerFeature, null, [], []))
             .WithTrackingName("SliceLambdaJsonContextPlan");
 

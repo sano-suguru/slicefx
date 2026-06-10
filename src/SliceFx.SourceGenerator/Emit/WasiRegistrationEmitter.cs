@@ -104,10 +104,13 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine("    public static void RegisterWasiRoutes(global::SliceFx.Wasi.Routing.WasiRouteTable table)");
         sb.AppendLine("    {");
 
+        // Build the serializable-type set once; used for body/service disambiguation in all per-feature loops.
+        var wasiSerializableTypes = jsonContextPlan.GetSerializableTypesSet();
+
         foreach (var f in features)
         {
             var jsonExclusion = JsonContextPlanner.FindExclusion(jsonContextPlan, f);
-            var skipReason = GetSkipReason(f);
+            var skipReason = GetSkipReason(f, wasiSerializableTypes);
             var skipMessage = skipReason?.Reason ?? jsonExclusion?.Reason;
             if (skipMessage is not null)
             {
@@ -147,7 +150,7 @@ internal static class WasiRegistrationEmitter
             }
 
             sb.AppendLine($"        // {ToSingleLineComment(f.EndpointName)}");
-            EmitTableAdd(sb, f, validators);
+            EmitTableAdd(sb, f, validators, wasiSerializableTypes);
             sb.AppendLine();
         }
 
@@ -158,7 +161,9 @@ internal static class WasiRegistrationEmitter
         return (sb.ToString(), diagnostics.ToImmutable());
     }
 
-    private static WasiSkipReason? GetSkipReason(FeatureModel feature)
+    private static WasiSkipReason? GetSkipReason(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
     {
         if (feature.ReturnsAspNetResult)
         {
@@ -181,7 +186,8 @@ internal static class WasiRegistrationEmitter
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
                 feature.HttpMethod,
-                feature.Pattern);
+                feature.Pattern,
+                serializableTypes);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 bodyCount++;
@@ -236,10 +242,11 @@ internal static class WasiRegistrationEmitter
     private static void EmitTableAdd(
         StringBuilder sb,
         FeatureModel f,
-        ImmutableArray<ValidatorModel> validators)
+        ImmutableArray<ValidatorModel> validators,
+        HashSet<string>? serializableTypes = null)
     {
         var @params = f.GetParams();
-        var bodyParam = FindBodyParam(f);
+        var bodyParam = FindBodyParam(f, serializableTypes);
         var bodyValidation = bodyParam is null ? null : FindValidationParameter(f, @params.IndexOf(bodyParam));
         var sliceFilters = f.GetSliceFilterFqns();
 
@@ -341,7 +348,8 @@ internal static class WasiRegistrationEmitter
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
                 f.HttpMethod,
-                f.Pattern);
+                f.Pattern,
+                serializableTypes);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"{ind}if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");
@@ -598,8 +606,10 @@ internal static class WasiRegistrationEmitter
         sb.AppendLine($"        => (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>){wasiJsonContextFqn}.Default.GetTypeInfo(typeof(T))!;");
     }
 
-    private static HandleParamModel? FindBodyParam(FeatureModel feature)
-        => SourceGenerationHelpers.FindSingleBodyParameter(feature);
+    private static HandleParamModel? FindBodyParam(
+        FeatureModel feature,
+        HashSet<string>? serializableTypes = null)
+        => SourceGenerationHelpers.FindSingleBodyParameter(feature, serializableTypes);
 
     private static ValidationParameterModel? FindValidationParameter(FeatureModel feature, int parameterIndex)
     {

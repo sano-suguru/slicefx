@@ -5,17 +5,20 @@ namespace SliceFx.SourceGenerator;
 internal sealed class JsonContextPlan : IEquatable<JsonContextPlan>
 {
     private readonly Dictionary<string, FeatureJsonExclusion> _exclusionsByFeature;
+    private HashSet<string>? _serializableTypesSet;
 
     public JsonContextPlan(
         JsonContextTarget target,
         string? contextFqn,
         ImmutableArray<FeatureJsonExclusion> exclusions,
-        ImmutableArray<EquatableDiagnostic> diagnostics)
+        ImmutableArray<EquatableDiagnostic> diagnostics,
+        string serializableTypes = "")
     {
         Target = target;
         ContextFqn = contextFqn;
         Exclusions = exclusions;
         Diagnostics = diagnostics;
+        SerializableTypes = serializableTypes;
         _exclusionsByFeature = new Dictionary<string, FeatureJsonExclusion>(StringComparer.Ordinal);
         foreach (var exclusion in exclusions)
         {
@@ -27,6 +30,15 @@ internal sealed class JsonContextPlan : IEquatable<JsonContextPlan>
 
     public string? ContextFqn { get; }
 
+    /// <summary>
+    /// Newline-separated, sorted, raw (global::-prefixed) FQNs of types registered via
+    /// [JsonSerializable(typeof(T))] in the associated JSON context.
+    /// Empty string when no context is present or the context has no [JsonSerializable] entries.
+    /// Used as the compile-time body/service discriminator for WASI and Lambda paths.
+    /// Stored as a string for value equality in the incremental pipeline.
+    /// </summary>
+    public string SerializableTypes { get; }
+
     public ImmutableArray<FeatureJsonExclusion> Exclusions { get; }
 
     public ImmutableArray<EquatableDiagnostic> Diagnostics { get; }
@@ -36,10 +48,37 @@ internal sealed class JsonContextPlan : IEquatable<JsonContextPlan>
             ? exclusion
             : null;
 
+    /// <summary>
+    /// Returns the parsed set of serializable type FQNs (raw, global::-prefixed).
+    /// Parsed lazily and cached; the result is stable for the lifetime of this plan instance.
+    /// </summary>
+    public HashSet<string> GetSerializableTypesSet()
+    {
+        if (_serializableTypesSet is not null)
+        {
+            return _serializableTypesSet;
+        }
+
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        if (!string.IsNullOrEmpty(SerializableTypes))
+        {
+            foreach (var fqn in SerializableTypes.Split('\n'))
+            {
+                if (!string.IsNullOrWhiteSpace(fqn))
+                {
+                    set.Add(fqn);
+                }
+            }
+        }
+
+        return _serializableTypesSet = set;
+    }
+
     public bool Equals(JsonContextPlan? other)
         => other is not null
            && Target == other.Target
            && string.Equals(ContextFqn, other.ContextFqn, StringComparison.Ordinal)
+           && string.Equals(SerializableTypes, other.SerializableTypes, StringComparison.Ordinal)
            && Exclusions.SequenceEqual(other.Exclusions)
            && Diagnostics.SequenceEqual(other.Diagnostics);
 
@@ -51,6 +90,7 @@ internal sealed class JsonContextPlan : IEquatable<JsonContextPlan>
         {
             var hash = (int)Target;
             hash = (hash * 31) + (ContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(ContextFqn));
+            hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(SerializableTypes);
             foreach (var exclusion in Exclusions)
             {
                 hash = (hash * 31) + exclusion.GetHashCode();
@@ -87,23 +127,42 @@ internal readonly record struct JsonContextOverrideCandidate(
     DiagnosticLocationModel Location,
     bool InheritsFromJsonSerializerContext,
     bool HasWasiTarget,
-    bool HasLambdaFunctionPerFeatureTarget);
+    bool HasLambdaFunctionPerFeatureTarget,
+    // Newline-separated, sorted, raw (global::-prefixed) FQNs of types registered via
+    // [JsonSerializable(typeof(T))] in this context. Empty string if none.
+    string SerializedSerializableTypes);
 
 internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
 {
     public JsonContextOverrides(
         string? wasiContextFqn,
         string? lambdaFunctionPerFeatureContextFqn,
-        ImmutableArray<EquatableDiagnostic> diagnostics)
+        ImmutableArray<EquatableDiagnostic> diagnostics,
+        string wasiSerializableTypes = "",
+        string lambdaSerializableTypes = "")
     {
         WasiContextFqn = wasiContextFqn;
         LambdaFunctionPerFeatureContextFqn = lambdaFunctionPerFeatureContextFqn;
         Diagnostics = diagnostics;
+        WasiSerializableTypes = wasiSerializableTypes;
+        LambdaSerializableTypes = lambdaSerializableTypes;
     }
 
     public string? WasiContextFqn { get; }
 
     public string? LambdaFunctionPerFeatureContextFqn { get; }
+
+    /// <summary>
+    /// Newline-separated, sorted, raw FQNs of types in the [SliceJsonContext(Wasi)] context.
+    /// Empty string if no Wasi context was found.
+    /// </summary>
+    public string WasiSerializableTypes { get; }
+
+    /// <summary>
+    /// Newline-separated, sorted, raw FQNs of types in the [SliceJsonContext(LambdaFunctionPerFeature)] context.
+    /// Empty string if no Lambda context was found.
+    /// </summary>
+    public string LambdaSerializableTypes { get; }
 
     public ImmutableArray<EquatableDiagnostic> Diagnostics { get; }
 
@@ -111,6 +170,8 @@ internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
         => other is not null
            && string.Equals(WasiContextFqn, other.WasiContextFqn, StringComparison.Ordinal)
            && string.Equals(LambdaFunctionPerFeatureContextFqn, other.LambdaFunctionPerFeatureContextFqn, StringComparison.Ordinal)
+           && string.Equals(WasiSerializableTypes, other.WasiSerializableTypes, StringComparison.Ordinal)
+           && string.Equals(LambdaSerializableTypes, other.LambdaSerializableTypes, StringComparison.Ordinal)
            && Diagnostics.SequenceEqual(other.Diagnostics);
 
     public override bool Equals(object? obj) => Equals(obj as JsonContextOverrides);
@@ -121,6 +182,8 @@ internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
         {
             var hash = WasiContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(WasiContextFqn);
             hash = (hash * 31) + (LambdaFunctionPerFeatureContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(LambdaFunctionPerFeatureContextFqn));
+            hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(WasiSerializableTypes);
+            hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(LambdaSerializableTypes);
             foreach (var diagnostic in Diagnostics)
             {
                 hash = (hash * 31) + diagnostic.GetHashCode();

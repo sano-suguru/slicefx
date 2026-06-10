@@ -97,7 +97,9 @@ internal static class SourceGenerationHelpers
            && !IsSimpleType(parameter.TypeFqn)
            && !IsFrameworkType(parameter.TypeFqn);
 
-    public static ImmutableArray<HandleParamModel> FindBodyParameters(FeatureModel feature)
+    public static ImmutableArray<HandleParamModel> FindBodyParameters(
+        FeatureModel feature,
+        HashSet<string>? knownSerializableTypes = null)
     {
         var parameters = feature.GetParams();
         if (parameters.IsEmpty)
@@ -111,7 +113,8 @@ internal static class SourceGenerationHelpers
             var binding = ResolveParameterBinding(
                 parameter,
                 feature.HttpMethod,
-                feature.Pattern);
+                feature.Pattern,
+                knownSerializableTypes);
             if (binding.Source == HandlerParameterBindingSource.Body)
             {
                 builder.Add(parameter);
@@ -121,9 +124,11 @@ internal static class SourceGenerationHelpers
         return builder.ToImmutable();
     }
 
-    public static HandleParamModel? FindSingleBodyParameter(FeatureModel feature)
+    public static HandleParamModel? FindSingleBodyParameter(
+        FeatureModel feature,
+        HashSet<string>? knownSerializableTypes = null)
     {
-        var bodyParameters = FindBodyParameters(feature);
+        var bodyParameters = FindBodyParameters(feature, knownSerializableTypes);
         return bodyParameters.Length == 1 ? bodyParameters[0] : null;
     }
 
@@ -163,7 +168,8 @@ internal static class SourceGenerationHelpers
     public static HandlerParameterBinding ResolveParameterBinding(
         HandleParamModel parameter,
         string httpMethod,
-        string pattern)
+        string pattern,
+        HashSet<string>? knownSerializableTypes = null)
     {
         var wireName = string.IsNullOrWhiteSpace(parameter.BindingName) ? parameter.Name : parameter.BindingName!;
         return parameter.BindingSource switch
@@ -175,7 +181,7 @@ internal static class SourceGenerationHelpers
             "services" => new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null),
             "keyedServices" => new HandlerParameterBinding(HandlerParameterBindingSource.KeyedServices, wireName, null, parameter.BindingKeyLiteral),
             "parameters" => Unsupported(wireName, "[AsParameters] is not supported in generated WASI/Lambda dispatch; ASP.NET routes are unaffected"),
-            _ => ResolveConventionBinding(parameter, httpMethod, pattern, wireName),
+            _ => ResolveConventionBinding(parameter, httpMethod, pattern, wireName, knownSerializableTypes),
         };
     }
 
@@ -288,7 +294,8 @@ internal static class SourceGenerationHelpers
         HandleParamModel parameter,
         string httpMethod,
         string pattern,
-        string wireName)
+        string wireName,
+        HashSet<string>? knownSerializableTypes = null)
     {
         if (parameter.TypeFqn == "global::System.Threading.CancellationToken")
         {
@@ -297,9 +304,24 @@ internal static class SourceGenerationHelpers
 
         if (!IsSimpleType(parameter.TypeFqn))
         {
-            return IsInferredBodyMethod(httpMethod) && IsRequestLikeParameter(parameter)
-                ? new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null)
-                : new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
+            if (IsInferredBodyMethod(httpMethod) && IsRequestLikeParameter(parameter))
+            {
+                // When a compile-time JSON-context membership set is provided (WASI/Lambda paths),
+                // use it to distinguish body params (registered) from DI services (not registered).
+                // This matches ASP.NET Minimal API's runtime IServiceProviderIsService semantics
+                // without any per-request reflection. When no set is provided (ASP.NET path), fall
+                // back to the original pure-syntax body inference.
+                if (knownSerializableTypes is not null)
+                {
+                    return knownSerializableTypes.Contains(parameter.TypeFqn)
+                        ? new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null)
+                        : new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
+                }
+
+                return new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null);
+            }
+
+            return new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
         }
 
         return IsRouteParam(wireName, pattern)
@@ -310,7 +332,7 @@ internal static class SourceGenerationHelpers
     private static HandlerParameterBinding Unsupported(string wireName, string reason)
         => new(HandlerParameterBindingSource.Unsupported, wireName, reason);
 
-    private static bool IsInferredBodyMethod(string httpMethod)
+    public static bool IsInferredBodyMethod(string httpMethod)
         => httpMethod is "POST" or "PUT" or "PATCH";
 
     private static bool IsSimpleNullableType(string typeFqn)
