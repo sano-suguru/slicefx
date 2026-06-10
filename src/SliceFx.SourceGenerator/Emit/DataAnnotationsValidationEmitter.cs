@@ -64,6 +64,13 @@ internal static class DataAnnotationsValidationEmitter
             sb.AppendLine($"        if ({propertyAccess} is string {localName}Url && !s_urlAttribute.IsValid({localName}Url))");
             EmitAddValidationError(sb, propertyName, message);
         }
+        else if (parts[1] == "HttpsUrl")
+        {
+            var message = DecodeValidationMessage(parts, 2, $"The {propertyName} field is not a valid HTTPS URL.");
+            // Emit a compile-time Uri.TryCreate + scheme check — no stored attribute instance needed.
+            sb.AppendLine($"        if ({propertyAccess} is string {localName}HttpsUrl && !(global::System.Uri.TryCreate({localName}HttpsUrl, global::System.UriKind.Absolute, out var {localName}HttpsUrlParsed) && {localName}HttpsUrlParsed.Scheme == \"https\"))");
+            EmitAddValidationError(sb, propertyName, message);
+        }
         else if (parts[1] == "RegularExpression" && parts.Length > 3)
         {
             var pattern = DecodeValidationMessage(parts, 2, "");
