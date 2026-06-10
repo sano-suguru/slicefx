@@ -125,4 +125,40 @@ public sealed class SliceRuntimeHttpTests
         Assert.True(document.RootElement.GetProperty("errors").TryGetProperty("Tier", out var tierErrors));
         Assert.NotEmpty(tierErrors.EnumerateArray());
     }
+
+    // ── SliceResult non-JSON result types (Redirect / Html) end-to-end ───────────
+
+    [Fact]
+    public async Task SliceResult_Redirect_feature_returns_302_with_location_header()
+    {
+        // RedirectWidget returns SliceResult.Redirect("/widgets/1").
+        // Without the generated __SliceResultToIResult wrapper, Minimal API would serialize
+        // the struct as JSON (200 + struct body). This test captures the raw 302 to confirm
+        // the wrapper correctly dispatches the redirect.
+        await using var factory = new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<SliceApp::Program>();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+        });
+
+        using var response = await client.GetAsync("/widgets/redirect", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/widgets/1", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task SliceResult_Html_feature_returns_200_with_text_html_content_type_and_body()
+    {
+        // HtmlWidget returns SliceResult.Html("<h1>Hello from SliceFx</h1>").
+        // Without the wrapper the struct would be JSON-serialized; with it we get text/html.
+        await using var host = SliceTestHost.Create<SliceApp::Program>();
+
+        using var response = await host.Client.GetAsync("/widgets/html", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("<h1>Hello from SliceFx</h1>", body);
+    }
 }
