@@ -1299,6 +1299,12 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             return $"{propertyName}|Url|{EncodeValidationMessage(message)}";
         }
 
+        if (attributeName == "SliceFx.HttpsUrlAttribute")
+        {
+            var message = GetErrorMessage(attribute) ?? $"The {propertyName} field is not a valid HTTPS URL.";
+            return $"{propertyName}|HttpsUrl|{EncodeValidationMessage(message)}";
+        }
+
         if (attributeName == "System.ComponentModel.DataAnnotations.RegularExpressionAttribute"
             && attribute.ConstructorArguments.Length == 1
             && attribute.ConstructorArguments[0].Value is string pattern)

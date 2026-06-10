@@ -1,8 +1,28 @@
 // CA1000: Static factory methods on a generic type are intentional for the fluent API pattern
 // SliceResult<T>.Ok(value), SliceResult<T>.NotFound(), etc.
 #pragma warning disable CA1000
+// CA1819: Arrays returned from properties are intentional; Body is raw bytes already allocated by
+// factory methods. Callers should not mutate the array; this is documented on the Body property.
+#pragma warning disable CA1819
+
+using System.Text;
 
 namespace SliceFx;
+
+/// <summary>
+/// Discriminates the kind of result carried by a non-generic <see cref="SliceResult"/>.
+/// </summary>
+public enum SliceResultKind
+{
+    /// <summary>Status code only (no special body or redirect). Covers Ok, NoContent, Created, and Problem responses.</summary>
+    StatusOnly,
+
+    /// <summary>HTTP redirect (301 Permanent or 302 Temporary). The <see cref="SliceResult.Location"/> property contains the target URL.</summary>
+    Redirect,
+
+    /// <summary>Raw body response with an explicit <c>Content-Type</c>. Used for Html, Text, Content, and Bytes responses.</summary>
+    RawBody,
+}
 
 /// <summary>
 /// A host-neutral typed result for Slice features that combines a typed response body
@@ -152,13 +172,19 @@ public readonly struct SliceResult
     private SliceResult(
         int status,
         bool isSuccess,
+        SliceResultKind kind,
         string? location,
+        string? contentType,
+        byte[]? body,
         string? problemTitle,
         string? problemDetail)
     {
         Status = status;
         IsSuccess = isSuccess;
+        Kind = kind;
         Location = location;
+        ContentType = contentType;
+        Body = body;
         ProblemTitle = problemTitle;
         ProblemDetail = problemDetail;
     }
@@ -170,10 +196,28 @@ public readonly struct SliceResult
     public bool IsSuccess { get; }
 
     /// <summary>
-    /// The <c>Location</c> header value for 201 Created results; <c>null</c> otherwise.
-    /// When non-null, the WASI translation always emits status 201.
+    /// Indicates what kind of result this is: <see cref="SliceResultKind.StatusOnly"/>,
+    /// <see cref="SliceResultKind.Redirect"/>, or <see cref="SliceResultKind.RawBody"/>.
+    /// </summary>
+    public SliceResultKind Kind { get; }
+
+    /// <summary>
+    /// The <c>Location</c> header value for 201 Created and redirect results; <c>null</c> otherwise.
     /// </summary>
     public string? Location { get; }
+
+    /// <summary>
+    /// The <c>Content-Type</c> header value for <see cref="SliceResultKind.RawBody"/> results;
+    /// <c>null</c> for other result kinds.
+    /// </summary>
+    public string? ContentType { get; }
+
+    /// <summary>
+    /// The raw response body bytes for <see cref="SliceResultKind.RawBody"/> results;
+    /// <c>null</c> for other result kinds.
+    /// Do not mutate the returned array — it is owned by the result.
+    /// </summary>
+    public byte[]? Body { get; }
 
     /// <summary>The problem title for error results; <c>null</c> for success results.</summary>
     public string? ProblemTitle { get; }
@@ -183,34 +227,78 @@ public readonly struct SliceResult
 
     /// <summary>Creates a 200 OK result (no body).</summary>
     public static SliceResult Ok() =>
-        new(200, isSuccess: true, location: null, problemTitle: null, problemDetail: null);
+        new(200, isSuccess: true, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: null, problemDetail: null);
 
     /// <summary>Creates a 204 No Content result.</summary>
     public static SliceResult NoContent() =>
-        new(204, isSuccess: true, location: null, problemTitle: null, problemDetail: null);
+        new(204, isSuccess: true, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: null, problemDetail: null);
 
     /// <summary>
     /// Creates a 201 Created result with a <c>Location</c> header (no body).
     /// </summary>
     /// <param name="location">The resource location for the <c>Location</c> header.</param>
-    /// <remarks>A non-null <see cref="Location"/> always implies status 201 in the WASI translation.</remarks>
     public static SliceResult Created(string location) =>
-        new(201, isSuccess: true, location, problemTitle: null, problemDetail: null);
+        new(201, isSuccess: true, SliceResultKind.StatusOnly, location, contentType: null, body: null, problemTitle: null, problemDetail: null);
+
+    /// <summary>Creates a 302 Found (temporary) redirect, or 301 Moved Permanently when <paramref name="permanent"/> is <c>true</c>.</summary>
+    /// <param name="location">The redirect target URL written to the <c>Location</c> header.</param>
+    /// <param name="permanent">
+    /// When <c>true</c>, emits 301 Moved Permanently; otherwise 302 Found.
+    /// </param>
+    public static SliceResult Redirect(string location, bool permanent = false) =>
+        new(permanent ? 301 : 302, isSuccess: true, SliceResultKind.Redirect, location, contentType: null, body: null, problemTitle: null, problemDetail: null);
+
+    /// <summary>
+    /// Creates a response with an explicit body and <c>Content-Type</c>, using the given status code.
+    /// The <paramref name="body"/> string is UTF-8 encoded; use <see cref="Bytes"/> for pre-encoded content.
+    /// </summary>
+    /// <param name="body">The response body text to encode as UTF-8.</param>
+    /// <param name="contentType">The value to write to the <c>Content-Type</c> header.</param>
+    /// <param name="status">The HTTP status code (default 200).</param>
+    public static SliceResult Content(string body, string contentType, int status = 200) =>
+        new(status, isSuccess: true, SliceResultKind.RawBody, location: null, contentType, Encoding.UTF8.GetBytes(body), problemTitle: null, problemDetail: null);
+
+    /// <summary>
+    /// Creates a 200 OK <c>text/html; charset=utf-8</c> response.
+    /// Equivalent to <c>Content(html, "text/html; charset=utf-8")</c>.
+    /// </summary>
+    /// <param name="html">The HTML body text.</param>
+    public static SliceResult Html(string html) =>
+        Content(html, "text/html; charset=utf-8");
+
+    /// <summary>
+    /// Creates a 200 OK <c>text/plain; charset=utf-8</c> response.
+    /// Equivalent to <c>Content(text, "text/plain; charset=utf-8")</c>.
+    /// </summary>
+    /// <param name="text">The plain-text body.</param>
+    public static SliceResult Text(string text) =>
+        Content(text, "text/plain; charset=utf-8");
+
+    /// <summary>
+    /// Creates a response from pre-encoded bytes with an explicit <c>Content-Type</c> and status.
+    /// Use this when the caller has already encoded the body (e.g., binary formats).
+    /// Do not mutate <paramref name="body"/> after passing it here.
+    /// </summary>
+    /// <param name="body">The raw response body bytes.</param>
+    /// <param name="contentType">The value to write to the <c>Content-Type</c> header.</param>
+    /// <param name="status">The HTTP status code (default 200).</param>
+    public static SliceResult Bytes(byte[] body, string contentType, int status = 200) =>
+        new(status, isSuccess: true, SliceResultKind.RawBody, location: null, contentType, body, problemTitle: null, problemDetail: null);
 
     /// <summary>Creates a 404 Not Found error result (Problem Details, <c>application/problem+json</c>).</summary>
     /// <param name="detail">Optional detail about the specific problem occurrence.</param>
     public static SliceResult NotFound(string? detail = null) =>
-        new(404, isSuccess: false, location: null, problemTitle: "Not Found", detail);
+        new(404, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Not Found", detail);
 
     /// <summary>Creates a 401 Unauthorized error result (Problem Details, <c>application/problem+json</c>).</summary>
     /// <param name="detail">Optional detail about the specific problem occurrence.</param>
     public static SliceResult Unauthorized(string? detail = null) =>
-        new(401, isSuccess: false, location: null, problemTitle: "Unauthorized", detail);
+        new(401, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Unauthorized", detail);
 
     /// <summary>Creates a 400 Bad Request error result (Problem Details, <c>application/problem+json</c>).</summary>
     /// <param name="detail">Optional detail about the specific problem occurrence.</param>
     public static SliceResult BadRequest(string? detail = null) =>
-        new(400, isSuccess: false, location: null, problemTitle: "Bad Request", detail);
+        new(400, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Bad Request", detail);
 
     /// <summary>
     /// Creates an error result with an explicit status code, title, and optional detail (Problem Details).
@@ -219,5 +307,5 @@ public readonly struct SliceResult
     /// <param name="title">The short, human-readable problem title.</param>
     /// <param name="detail">Optional detail about the specific problem occurrence.</param>
     public static SliceResult Problem(int status, string title, string? detail = null) =>
-        new(status, isSuccess: false, location: null, problemTitle: title, detail);
+        new(status, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: title, detail);
 }

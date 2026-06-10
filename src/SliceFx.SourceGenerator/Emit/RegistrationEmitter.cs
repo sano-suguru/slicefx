@@ -220,13 +220,29 @@ internal static class RegistrationEmitter
         var filterFqns = f.GetFilterFqns();
         var sliceFilterFqns = f.GetSliceFilterFqns();
 
-        var delegateType = BuildDelegateType(paramModels, f.ReturnTypeFqn);
-
         sb.AppendLine($"        app.MapMethods(");
         sb.AppendLine($"            {CSharpLiteral.String(f.Pattern)},");
         sb.AppendLine($"            new[] {{ {CSharpLiteral.String(f.HttpMethod)} }},");
-        sb.AppendLine($"            new {delegateType}(");
-        sb.AppendLine($"                {f.FullyQualifiedTypeName}.Handle))");
+
+        var awaitedReturn = SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn);
+        if (SourceGenerationHelpers.IsSliceResultNonGenericType(awaitedReturn))
+        {
+            // Wrap Handle in a lambda that calls __SliceResultToIResult so Minimal API dispatches
+            // the result correctly (Redirect → 301/302, RawBody → Bytes, StatusOnly → status code).
+            // Without the wrapper, Minimal API JSON-serializes the SliceResult struct — incorrect.
+            var lambdaParams = BuildLambdaParamList(paramModels);
+            var argList = BuildCallArgList(paramModels);
+            var asyncPrefix = SourceGenerationHelpers.IsGenericAwaitable(f.ReturnTypeFqn) ? "async " : "";
+            var awaitPrefix = SourceGenerationHelpers.IsGenericAwaitable(f.ReturnTypeFqn) ? "await " : "";
+            var lambdaBody = $"__SliceResultToIResult({awaitPrefix}{f.FullyQualifiedTypeName}.Handle({argList}))";
+            sb.AppendLine($"            {asyncPrefix}({lambdaParams}) => {lambdaBody})");
+        }
+        else
+        {
+            var delegateType = BuildDelegateType(paramModels, f.ReturnTypeFqn);
+            sb.AppendLine($"            new {delegateType}(");
+            sb.AppendLine($"                {f.FullyQualifiedTypeName}.Handle))");
+        }
 
         // Neutral filters run outermost (before validation) — [SliceFilter<T>] in declaration order.
         foreach (var ft in sliceFilterFqns)
@@ -502,59 +518,68 @@ internal static class RegistrationEmitter
 
     private static void EmitSliceFilterHelpers(StringBuilder sb, ImmutableArray<FeatureModel> features)
     {
-        if (!features.Any(static f => !f.GetSliceFilterFqns().IsEmpty))
+        var hasFilterFeatures = features.Any(static f => !f.GetSliceFilterFqns().IsEmpty);
+        var hasNonGenericSliceResultFeatures = features.Any(static f =>
+            SourceGenerationHelpers.IsSliceResultNonGenericType(
+                SourceGenerationHelpers.GetAwaitedReturnType(f.ReturnTypeFqn)));
+
+        if (!hasFilterFeatures && !hasNonGenericSliceResultFeatures)
         {
             return;
         }
 
-        sb.AppendLine();
-        // Generic bridge: resolves TFilter from DI, builds SliceFilterContext, adapts the ASP.NET
-        // EndpointFilterDelegate to SliceFilterDelegate, invokes the neutral filter, and maps the
-        // result back to the object? that MapMethods / AddEndpointFilter expects.
-        sb.AppendLine("    private static async global::System.Threading.Tasks.ValueTask<object?> __InvokeSliceFilter<TFilter>(");
-        sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterInvocationContext ctx,");
-        sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterDelegate next)");
-        sb.AppendLine("        where TFilter : class, global::SliceFx.ISliceFilter");
-        sb.AppendLine("    {");
-        sb.AppendLine("        var __filter = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<TFilter>(ctx.HttpContext.RequestServices);");
-        sb.AppendLine("        var __filterCtx = __BuildSliceFilterContext(ctx);");
-        sb.AppendLine("        global::SliceFx.SliceFilterDelegate __next = async __ =>");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var __r = await next(ctx).ConfigureAwait(false);");
-        sb.AppendLine("            // Best-effort status: exact for IStatusCodeHttpResult, null for POCO/unknown results.");
-        sb.AppendLine("            int? __s = __r is global::Microsoft.AspNetCore.Http.IStatusCodeHttpResult __sc ? __sc.StatusCode : null;");
-        sb.AppendLine("            return global::SliceFx.SliceFilterResult.PassThrough(__r, __s);");
-        sb.AppendLine("        };");
-        sb.AppendLine("        var __result = await __filter.InvokeAsync(__filterCtx, __next).ConfigureAwait(false);");
-        sb.AppendLine("        if (__result.IsShortCircuit)");
-        sb.AppendLine("            return __SliceResultToIResult(__result.ShortCircuitResult!.Value);");
-        sb.AppendLine("        return __result.HostResponse;");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    private static global::SliceFx.SliceFilterContext __BuildSliceFilterContext(");
-        sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterInvocationContext ctx)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        var __headers = new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase);");
-        sb.AppendLine("        foreach (var __h in ctx.HttpContext.Request.Headers)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            __headers[__h.Key] = __h.Value.ToString();");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        sb.AppendLine("        var __routeValues = new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase);");
-        sb.AppendLine("        foreach (var __rv in ctx.HttpContext.Request.RouteValues)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            if (__rv.Value is not null)");
-        sb.AppendLine("                __routeValues[__rv.Key] = __rv.Value.ToString() ?? string.Empty;");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        sb.AppendLine("        return new global::SliceFx.SliceFilterContext(");
-        sb.AppendLine("            ctx.HttpContext.Request.Method,");
-        sb.AppendLine("            ctx.HttpContext.Request.Path,");
-        sb.AppendLine("            __headers,");
-        sb.AppendLine("            __routeValues,");
-        sb.AppendLine("            ctx.HttpContext.RequestServices,");
-        sb.AppendLine("            ctx.HttpContext.RequestAborted);");
-        sb.AppendLine("    }");
+        if (hasFilterFeatures)
+        {
+            sb.AppendLine();
+            // Generic bridge: resolves TFilter from DI, builds SliceFilterContext, adapts the ASP.NET
+            // EndpointFilterDelegate to SliceFilterDelegate, invokes the neutral filter, and maps the
+            // result back to the object? that MapMethods / AddEndpointFilter expects.
+            sb.AppendLine("    private static async global::System.Threading.Tasks.ValueTask<object?> __InvokeSliceFilter<TFilter>(");
+            sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterInvocationContext ctx,");
+            sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterDelegate next)");
+            sb.AppendLine("        where TFilter : class, global::SliceFx.ISliceFilter");
+            sb.AppendLine("    {");
+            sb.AppendLine("        var __filter = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<TFilter>(ctx.HttpContext.RequestServices);");
+            sb.AppendLine("        var __filterCtx = __BuildSliceFilterContext(ctx);");
+            sb.AppendLine("        global::SliceFx.SliceFilterDelegate __next = async __ =>");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var __r = await next(ctx).ConfigureAwait(false);");
+            sb.AppendLine("            // Best-effort status: exact for IStatusCodeHttpResult, null for POCO/unknown results.");
+            sb.AppendLine("            int? __s = __r is global::Microsoft.AspNetCore.Http.IStatusCodeHttpResult __sc ? __sc.StatusCode : null;");
+            sb.AppendLine("            return global::SliceFx.SliceFilterResult.PassThrough(__r, __s);");
+            sb.AppendLine("        };");
+            sb.AppendLine("        var __result = await __filter.InvokeAsync(__filterCtx, __next).ConfigureAwait(false);");
+            sb.AppendLine("        if (__result.IsShortCircuit)");
+            sb.AppendLine("            return __SliceResultToIResult(__result.ShortCircuitResult!.Value);");
+            sb.AppendLine("        return __result.HostResponse;");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine("    private static global::SliceFx.SliceFilterContext __BuildSliceFilterContext(");
+            sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterInvocationContext ctx)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        var __headers = new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase);");
+            sb.AppendLine("        foreach (var __h in ctx.HttpContext.Request.Headers)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            __headers[__h.Key] = __h.Value.ToString();");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        var __routeValues = new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase);");
+            sb.AppendLine("        foreach (var __rv in ctx.HttpContext.Request.RouteValues)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            if (__rv.Value is not null)");
+            sb.AppendLine("                __routeValues[__rv.Key] = __rv.Value.ToString() ?? string.Empty;");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        return new global::SliceFx.SliceFilterContext(");
+            sb.AppendLine("            ctx.HttpContext.Request.Method,");
+            sb.AppendLine("            ctx.HttpContext.Request.Path,");
+            sb.AppendLine("            __headers,");
+            sb.AppendLine("            __routeValues,");
+            sb.AppendLine("            ctx.HttpContext.RequestServices,");
+            sb.AppendLine("            ctx.HttpContext.RequestAborted);");
+            sb.AppendLine("    }");
+        }
+
         sb.AppendLine();
         sb.AppendLine("    private static global::Microsoft.AspNetCore.Http.IResult __SliceResultToIResult(");
         sb.AppendLine("        global::SliceFx.SliceResult result)");
@@ -564,11 +589,99 @@ internal static class RegistrationEmitter
         sb.AppendLine("                detail: result.ProblemDetail,");
         sb.AppendLine("                statusCode: result.Status,");
         sb.AppendLine("                title: result.ProblemTitle);");
+        sb.AppendLine("        if (result.Kind == global::SliceFx.SliceResultKind.Redirect)");
+        sb.AppendLine("            return global::Microsoft.AspNetCore.Http.Results.Redirect(");
+        sb.AppendLine("                result.Location!,");
+        sb.AppendLine("                permanent: result.Status == 301);");
+        sb.AppendLine("        if (result.Kind == global::SliceFx.SliceResultKind.RawBody)");
+        sb.AppendLine("            return new __RawBytesResult(result.Body!, result.ContentType!, result.Status);");
+        // StatusOnly: 201 Created with Location, or bare status code (200 OK / 204 No Content / etc.)
         sb.AppendLine("        if (result.Location is not null)");
         // Results.Created(string? uri, object? value) — no body (null value) with Location header.
         sb.AppendLine("            return global::Microsoft.AspNetCore.Http.Results.Created(result.Location, value: null);");
         sb.AppendLine("        return global::Microsoft.AspNetCore.Http.Results.StatusCode(result.Status);");
         sb.AppendLine("    }");
+        sb.AppendLine();
+        // __RawBytesResult: IResult implementation for RawBody (binary or text) with arbitrary status.
+        // Results.Bytes() is a file-download helper that always returns 200 and does not accept
+        // a statusCode parameter; we emit our own minimal IResult instead.
+        sb.AppendLine("    private sealed class __RawBytesResult : global::Microsoft.AspNetCore.Http.IResult");
+        sb.AppendLine("    {");
+        sb.AppendLine("        private readonly byte[] _body;");
+        sb.AppendLine("        private readonly string _contentType;");
+        sb.AppendLine("        private readonly int _statusCode;");
+        sb.AppendLine("        internal __RawBytesResult(byte[] body, string contentType, int statusCode)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            _body = body;");
+        sb.AppendLine("            _contentType = contentType;");
+        sb.AppendLine("            _statusCode = statusCode;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        public global::System.Threading.Tasks.Task ExecuteAsync(");
+        sb.AppendLine("            global::Microsoft.AspNetCore.Http.HttpContext httpContext)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            httpContext.Response.StatusCode = _statusCode;");
+        sb.AppendLine("            httpContext.Response.ContentType = _contentType;");
+        sb.AppendLine("            return httpContext.Response.Body.WriteAsync(_body, 0, _body.Length);");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Builds the lambda parameter list for a non-generic SliceResult wrapper delegate, including
+    /// explicit binding attributes for parameters that need them (e.g. <c>[FromHeader]</c>).
+    /// </summary>
+    private static string BuildLambdaParamList(ImmutableArray<HandleParamModel> parameters)
+    {
+        if (parameters.IsEmpty)
+        {
+            return "";
+        }
+
+        var parts = new List<string>(parameters.Length);
+        foreach (var p in parameters)
+        {
+            var attr = "";
+            if (p.BindingSource == "header" && p.BindingName is not null)
+            {
+                attr = $"[global::Microsoft.AspNetCore.Mvc.FromHeaderAttribute(Name = {CSharpLiteral.String(p.BindingName)})] ";
+            }
+            else if (p.BindingSource == "query" && p.BindingName is not null && p.BindingName != p.Name)
+            {
+                attr = $"[global::Microsoft.AspNetCore.Mvc.FromQueryAttribute(Name = {CSharpLiteral.String(p.BindingName)})] ";
+            }
+            else if (p.BindingSource == "route" && p.BindingName is not null && p.BindingName != p.Name)
+            {
+                attr = $"[global::Microsoft.AspNetCore.Mvc.FromRouteAttribute(Name = {CSharpLiteral.String(p.BindingName)})] ";
+            }
+            else if (p.BindingSource == "keyedServices" && p.BindingKeyLiteral is not null)
+            {
+                attr = $"[global::Microsoft.Extensions.DependencyInjection.FromKeyedServicesAttribute({p.BindingKeyLiteral})] ";
+            }
+
+            parts.Add($"{attr}{p.TypeFqn} {p.Name}");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Builds the call argument list for a non-generic SliceResult wrapper lambda.
+    /// All parameters are forwarded by name.
+    /// </summary>
+    private static string BuildCallArgList(ImmutableArray<HandleParamModel> parameters)
+    {
+        if (parameters.IsEmpty)
+        {
+            return "";
+        }
+
+        var parts = new List<string>(parameters.Length);
+        foreach (var p in parameters)
+        {
+            parts.Add(p.Name);
+        }
+
+        return string.Join(", ", parts);
     }
 
     private static string BuildDelegateType(ImmutableArray<HandleParamModel> parameters, string returnTypeFqn)

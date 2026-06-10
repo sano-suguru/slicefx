@@ -47,9 +47,8 @@ public static class SliceResultExtensions
     }
 
     /// <summary>
-    /// Translates a non-generic (status-only) <see cref="SliceResult"/> to a
-    /// <see cref="WasiResponse"/>. No <c>JsonTypeInfo</c> is needed because success responses
-    /// carry no body.
+    /// Translates a non-generic <see cref="SliceResult"/> to a <see cref="WasiResponse"/>.
+    /// No <c>JsonTypeInfo</c> is needed because the non-generic result carries no JSON body.
     /// </summary>
     /// <param name="result">The result to translate.</param>
     /// <returns>A <see cref="WasiResponse"/> that represents the result.</returns>
@@ -60,14 +59,29 @@ public static class SliceResultExtensions
             return WasiResults.Problem(result.Status, result.ProblemTitle!, result.ProblemDetail);
         }
 
-        if (result.Location is not null)
+        switch (result.Kind)
         {
-            // 201 Created, no body
-            return WasiResults.Created(result.Location);
-        }
+            case SliceResultKind.Redirect:
+                // 301 or 302 — Location header set, empty body.
+                return new WasiResponse(
+                    result.Status,
+                    new Dictionary<string, string>(StringComparer.Ordinal) { ["Location"] = result.Location! },
+                    s_emptyBody);
 
-        // 200 OK or 204 No Content — both are body-less in the non-generic case
-        return new WasiResponse(result.Status, s_emptyHeaders, s_emptyBody);
+            case SliceResultKind.RawBody:
+                // Html / Text / Content / Bytes — pre-encoded body with explicit Content-Type.
+                return WasiResults.Bytes(result.Status, result.ContentType!, result.Body!);
+
+            case SliceResultKind.StatusOnly:
+            default:
+                // StatusOnly: 201 Created (Location), or status-only 200/204.
+                if (result.Location is not null)
+                {
+                    return WasiResults.Created(result.Location);
+                }
+
+                return new WasiResponse(result.Status, s_emptyHeaders, s_emptyBody);
+        }
     }
 
     private static readonly IReadOnlyDictionary<string, string> s_emptyHeaders =

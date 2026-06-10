@@ -181,6 +181,81 @@ public sealed class SliceResultExtensionsTests
         Assert.Equal("Item already exists.", doc.RootElement.GetProperty("detail").GetString());
     }
 
+    // ── Non-generic Redirect / Html / Text / Content / Bytes ─────────────────────
+
+    [Fact]
+    public void NonGeneric_Redirect_temporary_produces_302_location_empty_body()
+    {
+        var result = SliceResult.Redirect("/new-path");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(302, response.Status);
+        Assert.Equal("/new-path", response.Headers["Location"]);
+        Assert.Empty(response.Body);
+        Assert.False(response.Headers.ContainsKey("Content-Type"));
+    }
+
+    [Fact]
+    public void NonGeneric_Redirect_permanent_produces_301_location()
+    {
+        var result = SliceResult.Redirect("/new-path", permanent: true);
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(301, response.Status);
+        Assert.Equal("/new-path", response.Headers["Location"]);
+    }
+
+    [Fact]
+    public void NonGeneric_Html_produces_200_html_body()
+    {
+        var result = SliceResult.Html("<h1>Hello</h1>");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("text/html; charset=utf-8", response.Headers["Content-Type"]);
+        Assert.Equal("<h1>Hello</h1>", BodyText(response));
+    }
+
+    [Fact]
+    public void NonGeneric_Text_produces_200_plaintext_body()
+    {
+        var result = SliceResult.Text("hello world");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("text/plain; charset=utf-8", response.Headers["Content-Type"]);
+        Assert.Equal("hello world", BodyText(response));
+    }
+
+    [Fact]
+    public void NonGeneric_Content_custom_type_produces_correct_body()
+    {
+        var result = SliceResult.Content("<root/>", "application/xml");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("application/xml", response.Headers["Content-Type"]);
+        Assert.Equal("<root/>", BodyText(response));
+    }
+
+    [Fact]
+    public void NonGeneric_Bytes_produces_raw_bytes_with_correct_content_type()
+    {
+        byte[] data = [0x89, 0x50, 0x4E, 0x47]; // PNG magic bytes
+        var result = SliceResult.Bytes(data, "image/png");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("image/png", response.Headers["Content-Type"]);
+        Assert.Equal(data, response.Body);
+    }
+
     private static string BodyText(WasiResponse response)
         => Encoding.UTF8.GetString(response.Body);
 }

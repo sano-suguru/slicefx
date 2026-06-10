@@ -237,6 +237,18 @@ internal static class LambdaFunctionPerFeatureEmitter
             {
                 sb.AppendLine("        return __result;");
             }
+            else if (SourceGenerationHelpers.IsSliceResultNonGenericType(awaitedReturnType))
+            {
+                // Non-generic SliceResult — translate Kind/Status/Location/Body to Lambda response.
+                sb.AppendLine("        return global::SliceFx.Lambda.FunctionPerFeature.SliceResultExtensions.ToLambdaResponse(__result);");
+            }
+            else if (SourceGenerationHelpers.IsSliceResultOfTType(awaitedReturnType))
+            {
+                // Generic SliceResult<T> — translate to Lambda response using the payload's JsonTypeInfo.
+                // JSON root is T (not SliceResult<T>), matching what JsonContextPlanner registered.
+                var payloadType = SourceGenerationHelpers.GetSliceResultPayloadType(awaitedReturnType!);
+                sb.AppendLine($"        return global::SliceFx.Lambda.FunctionPerFeature.SliceResultExtensions.ToLambdaResponse<{payloadType}>(__result, __JsonTypeInfo<{payloadType}>());");
+            }
             else
             {
                 sb.AppendLine($"        return global::SliceFx.Lambda.FunctionPerFeature.LambdaResponseFactory.Ok<{awaitedReturnType}>(__result, __JsonTypeInfo<{awaitedReturnType}>());");

@@ -105,7 +105,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor UnsupportedValidationForAspNet = new(
         "SLICE010",
         "DataAnnotations validation requires reflection",
-        "Feature '{0}': DataAnnotations attribute '{1}' can't be generated as compile-time validation. Move this rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, RegularExpression, Range).",
+        "Feature '{0}': DataAnnotations attribute '{1}' can't be generated as compile-time validation. Move this rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, HttpsUrl, RegularExpression, Range).",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -172,7 +172,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor UnsupportedValidationForWasi = new(
         "SLICE022",
         "DataAnnotations validation is not supported in WASI path",
-        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the WASI route table. Move the rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, RegularExpression, Range).",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from the WASI route table. Move the rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, HttpsUrl, RegularExpression, Range).",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
@@ -239,7 +239,7 @@ internal static class SliceDiagnostics
     public static readonly DiagnosticDescriptor UnsupportedValidationForLambdaFunctionPerFeature = new(
         "SLICE034",
         "DataAnnotations validation is not supported in Lambda function-per-feature path",
-        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda function-per-feature handlers. Move the rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, RegularExpression, Range).",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and will be excluded from Lambda function-per-feature handlers. Move the rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, HttpsUrl, RegularExpression, Range).",
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,

@@ -22,6 +22,25 @@ public static partial class LambdaResponseFactory
         => Json(200, value, jsonTypeInfo);
 
     /// <summary>
+    /// Creates a 201 Created response with a <c>Location</c> header and JSON body.
+    /// </summary>
+    public static APIGatewayHttpApiV2ProxyResponse Created<T>(string location, T value, JsonTypeInfo<T> jsonTypeInfo)
+    {
+        ArgumentNullException.ThrowIfNull(jsonTypeInfo);
+        var headers = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Location"] = location,
+            ["Content-Type"] = "application/json",
+        };
+        return new APIGatewayHttpApiV2ProxyResponse
+        {
+            StatusCode = 201,
+            Headers = headers,
+            Body = value is null ? "null" : JsonSerializer.Serialize(value, jsonTypeInfo),
+        };
+    }
+
+    /// <summary>
     /// Creates a 204 No Content response.
     /// </summary>
     public static APIGatewayHttpApiV2ProxyResponse NoContent()
