@@ -268,43 +268,6 @@ internal static class JsonContextPlanner
                 continue;
             }
 
-            // Emit SLICE024 warning for each concrete request-like param on a body-method that is
-            // NOT in the JSON context and has no explicit [FromServices]/[FromBody]. These params
-            // are classified as DI services; the developer may have intended them as body params.
-            // Only emitted when a context exists (if no context, SLICE021 already covers the route).
-            if (explicitContextFqn is not null && serializableTypes.Count > 0
-                && SourceGenerationHelpers.IsInferredBodyMethod(feature.HttpMethod))
-            {
-                foreach (var p in feature.GetParams())
-                {
-                    if (p.TypeFqn == "global::System.Threading.CancellationToken")
-                    {
-                        continue;
-                    }
-
-                    // Only warn for params that were reclassified from the syntax-default (body)
-                    // to service by the membership check: request-like, no explicit binding, not in set.
-                    if (p.BindingSource is "services" or "body" or "route" or "query" or "header" or "keyedServices" or "parameters")
-                    {
-                        continue; // explicit binding — developer made an intentional choice
-                    }
-
-                    if (!SourceGenerationHelpers.IsRequestLikeParameter(p))
-                    {
-                        continue;
-                    }
-
-                    if (!serializableTypes.Contains(p.TypeFqn))
-                    {
-                        diagnostics.Add(EquatableDiagnostic.Create(
-                            SliceDiagnostics.ConcreteTypeTreatedAsServiceNotBody,
-                            feature.GetDiagnosticLocationModel(),
-                            feature.TypeName,
-                            SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn),
-                            p.Name));
-                    }
-                }
-            }
         }
 
         return new JsonContextPlan(

@@ -3798,7 +3798,6 @@ public class SourceGeneratorCompileTests
             new DiagnosticCatalogEntry("SLICE021", "MissingWasiJsonContext", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE022", "UnsupportedValidationForWasi", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE023", "UnsupportedParameterForWasi", "Slice", DiagnosticSeverity.Warning),
-            new DiagnosticCatalogEntry("SLICE024", "ConcreteTypeTreatedAsServiceNotBody", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE030", "UnsupportedReturnTypeForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Info),
             new DiagnosticCatalogEntry("SLICE031", "UnsupportedFilterForLambdaFunctionPerFeature", "Slice", DiagnosticSeverity.Info),
             new DiagnosticCatalogEntry("SLICE032", "MissingLambdaJsonContext", "Slice", DiagnosticSeverity.Warning),
@@ -3846,8 +3845,8 @@ public class SourceGeneratorCompileTests
         // When a WasiJsonContext exists but registers neither CreateItemRequest nor ConcreteAuditLog,
         // the membership discriminator classifies both as DI services (not body params).
         // Result: SLICE023 (multiple body params) does NOT fire; the route IS included.
-        // SLICE024 fires only when serializableTypes.Count > 0 (context has some registrations).
-        // Here the context is empty so SLICE024 is suppressed; both params become services.
+        // Both params become services and are resolved via GetRequiredService; if unregistered
+        // in DI they will throw at runtime (same as any other unregistered service — by design).
         var source = """
             using System;
             using System.Text.Json;
@@ -3903,8 +3902,9 @@ public class SourceGeneratorCompileTests
         // Both params resolved from DI
         Assert.Contains("GetRequiredService(typeof(global::ConcreteBodyApp.CreateItemRequest))", wasiSource, StringComparison.Ordinal);
         Assert.Contains("GetRequiredService(typeof(global::ConcreteBodyApp.ConcreteAuditLog))", wasiSource, StringComparison.Ordinal);
-        // SLICE024 fires because context HAS registrations (CreateItemResponse) but req/audit are not in it
-        Assert.Contains(generatorDiagnostics, static d => d.Id == "SLICE024");
+        // SLICE024 was removed in preview.12 — concrete service params are correctly classified
+        // by the membership discriminator and generate no diagnostic.
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Id == "SLICE024");
         Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
     }
 
