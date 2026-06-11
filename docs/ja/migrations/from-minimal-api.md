@@ -6,7 +6,7 @@
 
 SliceFx は standard ASP.NET Core Minimal APIs の隣に置けるよう設計されています。1 endpoint ずつ移行し、残りのアプリはそのままにできます。feature shape が価値を出さない場合は移行を止められます。
 
-> **Preview status:** `0.1.0-preview.8` is available on NuGet。これは pre-1.0 experimental software であり、stable release 前に API が変わる可能性があります。
+> **Preview status:** a 0.x preview is available on NuGet。これは pre-1.0 experimental software であり、stable release 前に API が変わる可能性があります。
 
 ## When this is a good fit
 
@@ -21,8 +21,8 @@ SliceFx は standard ASP.NET Core Minimal APIs の隣に置けるよう設計さ
 package を追加します。
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.8
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.8
+dotnet add package SliceFx.Core --prerelease
+dotnet add package SliceFx.SourceGenerator --prerelease
 ```
 
 generated namespace 用の global using を追加します。

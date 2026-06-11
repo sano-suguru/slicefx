@@ -4,7 +4,7 @@
 
 This document defines the **objective gate values** for deciding whether SliceFx is ready to adopt in production. These are readiness targets, not a claim that SliceFx is production-ready today.
 
-Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01). No production adoption is claimed yet. Maintainer dogfooding is live: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) on Fermyon Cloud (Spin WASI).
+Current public status: a 0.x preview is published on NuGet (2026-06-01). No production adoption is claimed yet. Maintainer dogfooding is live: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox) on Fermyon Cloud (Spin WASI).
 
 ## Strength-preservation invariants
 

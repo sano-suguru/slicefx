@@ -7,6 +7,7 @@
 [![Pages](https://github.com/sano-suguru/slicefx/actions/workflows/pages.yml/badge.svg)](https://github.com/sano-suguru/slicefx/actions/workflows/pages.yml)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![NuGet](https://img.shields.io/nuget/vpre/SliceFx.Core?label=NuGet)](https://www.nuget.org/packages/SliceFx.Core)
 
 > One feature file per endpoint. Generated ASP.NET Core registration, checks, clients, and portability hints.
 
@@ -50,11 +51,11 @@ curl http://localhost:5099/health
 
 SliceFx is pre-1.0 experimental software. Preview packages use `0.x` versions until the API is intentionally stabilized.
 
-**Release status:** `0.1.0-preview.8` is the latest preview release. Install from NuGet:
+The latest preview is published on NuGet — see the NuGet badge above. Install from NuGet:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.8
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.8
+dotnet add package SliceFx.Core --prerelease
+dotnet add package SliceFx.SourceGenerator --prerelease
 ```
 
 See the [package table](#project-status) for satellite packages. NuGet package pages: [SliceFx.Core](https://www.nuget.org/packages/SliceFx.Core), [SliceFx.SourceGenerator](https://www.nuget.org/packages/SliceFx.SourceGenerator), [SliceFx.Cli](https://www.nuget.org/packages/SliceFx.Cli).
@@ -81,8 +82,8 @@ All adapters are opt-in. Reference only the packages you need; the source genera
 Add `SliceFx.Core` and `SliceFx.SourceGenerator` at the same preview version:
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.8
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.8
+dotnet add package SliceFx.Core --prerelease
+dotnet add package SliceFx.SourceGenerator --prerelease
 ```
 
 ## Hello, SliceFx

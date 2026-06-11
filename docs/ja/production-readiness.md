@@ -6,7 +6,7 @@
 
 この文書は、SliceFx を本番環境に採用してよいかどうか判断するための **objective gate values** を定義します。これは readiness target であり、SliceFx が現時点で production-ready であるという主張ではありません。
 
-Current public status: `0.1.0-preview.8` is published on NuGet (2026-06-01)。production adoption はまだ claim しません。Maintainer dogfooding は稼働中: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox)（Fermyon Cloud / Spin WASI）。
+Current public status: 0.x preview is published on NuGet (2026-06-01)。production adoption はまだ claim しません。Maintainer dogfooding は稼働中: [slicefx-inbox](https://github.com/sano-suguru/slicefx-inbox)（Fermyon Cloud / Spin WASI）。
 
 ## Strength-preservation invariants
 

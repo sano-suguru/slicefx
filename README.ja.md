@@ -9,6 +9,7 @@
 [![Pages](https://github.com/sano-suguru/slicefx/actions/workflows/pages.yml/badge.svg)](https://github.com/sano-suguru/slicefx/actions/workflows/pages.yml)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![NuGet](https://img.shields.io/nuget/vpre/SliceFx.Core?label=NuGet)](https://www.nuget.org/packages/SliceFx.Core)
 
 > 1 endpoint = 1 feature file。ASP.NET Core 登録、検査、クライアント、portability hint を生成します。
 
@@ -50,11 +51,11 @@ curl http://localhost:5099/health
 
 SliceFx は pre-1.0 の experimental software です。API を意図的に安定化するまでは preview package は `0.x` version を使います。
 
-**Release status:** `0.1.0-preview.8` が最新 preview release です。NuGet から install できます。
+最新 preview は NuGet で公開中です（上の NuGet バッジ参照）。NuGet から install できます。
 
 ```bash
-dotnet add package SliceFx.Core --version 0.1.0-preview.8
-dotnet add package SliceFx.SourceGenerator --version 0.1.0-preview.8
+dotnet add package SliceFx.Core --prerelease
+dotnet add package SliceFx.SourceGenerator --prerelease
 ```
 
 repository は .NET 10 を対象にし、`global.json` で SDK `10.0.300` と `rollForward: latestFeature` を指定しています。warning と code-analysis diagnostic は error として扱いますが、通常の PR/main build が新しい SDK analyzer promotion で突然壊れないよう、analyzer recommendation set は `10.0-recommended` に pin しています。
