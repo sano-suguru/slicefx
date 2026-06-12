@@ -5,6 +5,7 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/samples/">
+    <Project Path="samples/SliceFx.AotSample/SliceFx.AotSample.csproj" />
     <Project Path="samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Contracts/SliceFx.BlazorSample.Contracts.csproj" />
     <Project Path="samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Server/SliceFx.BlazorSample.Server.csproj" />
     <Project Path="samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client/SliceFx.BlazorSample.Client.csproj" />
@@ -31,6 +32,7 @@
     <Project Path="tests/SliceFx.Benchmarks.RuntimeApps/Bench50/Bench50.csproj" />
     <Project Path="tests/SliceFx.Benchmarks.RuntimeApps/Bench100/Bench100.csproj" />
     <Project Path="tests/SliceFx.Benchmarks.RuntimeApps/Bench200/Bench200.csproj" />
+    <Project Path="tests/SliceFx.AotSample.Tests/SliceFx.AotSample.Tests.csproj" />
     <Project Path="tests/SliceFx.Core.Tests/SliceFx.Core.Tests.csproj" />
     <Project Path="tests/SliceFx.Cli.Tests/SliceFx.Cli.Tests.csproj" />
     <Project Path="tests/SliceFx.Lambda.FunctionPerFeature.Tests/SliceFx.Lambda.FunctionPerFeature.Tests.csproj" />

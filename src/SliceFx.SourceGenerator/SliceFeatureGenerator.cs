@@ -94,6 +94,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Select(static (c, _) => FindLambdaFunctionPerFeatureOptions(c))
             .WithTrackingName("SliceLambdaFunctionPerFeatureOptions");
 
+        // Only emit ASP.NET NativeAOT-safe registration when the assembly opts in via [assembly: SliceAspNetAot].
+        var aspNetAotEnabled = context.CompilationProvider
+            .Select(static (c, _) => FindAspNetAotEnabled(c))
+            .WithTrackingName("SliceAspNetAotOptions");
+
         var referencedModules = context.CompilationProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
             .Select(static (pair, _) => FindReferencedSliceModules(pair.Left, pair.Right))
@@ -144,6 +149,18 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                     : new JsonContextPlan(JsonContextTarget.LambdaFunctionPerFeature, null, [], []))
             .WithTrackingName("SliceLambdaJsonContextPlan");
 
+        var aspNetAotJsonContextPlan = validModels
+            .Combine(jsonContextOverrides)
+            .Combine(aspNetAotEnabled)
+            .Select(static (pair, _) =>
+                pair.Right
+                    ? JsonContextPlanner.CreateAspNetPlan(
+                        pair.Left.Left,
+                        pair.Left.Right.AspNetContextFqn,
+                        pair.Left.Right.AspNetSerializableTypes)
+                    : new JsonContextPlan(JsonContextTarget.AspNet, null, [], []))
+            .WithTrackingName("SliceAspNetAotJsonContextPlan");
+
         var emitPlan = validModels.Combine(validValidators)
             .Combine(assemblyName)
             .Combine(hasAspNetRef)
@@ -154,6 +171,8 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
             .Combine(wasiJsonContextPlan)
             .Combine(lambdaFunctionPerFeatureOptions)
             .Combine(lambdaJsonContextPlan)
+            .Combine(aspNetAotEnabled)
+            .Combine(aspNetAotJsonContextPlan)
             .Select(static (pair, _) => CreateEmitPlan(EmitPipelineInputs.FromCombined(pair)))
             .WithTrackingName("SliceEmitPlan");
 
@@ -179,7 +198,7 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
     {
         var (models, validators, asmName, emitAspNet, emitWasi, referencedModulesResult,
             emitExtensions, jsonContextOverrides, wasiJsonContextPlan, lambdaOptions,
-            lambdaJsonContextPlan) = inputs;
+            lambdaJsonContextPlan, aspNetAotEnabled, aspNetAotJsonContextPlan) = inputs;
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
         diagnostics.AddRange(referencedModulesResult.Diagnostics);
         var referencedModules = referencedModulesResult.Modules;
@@ -204,6 +223,11 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         diagnostics.AddRange(jsonContextOverrides.Diagnostics);
         diagnostics.AddRange(wasiJsonContextPlan.Diagnostics);
         diagnostics.AddRange(lambdaJsonContextPlan.Diagnostics);
+        if (aspNetAotEnabled)
+        {
+            diagnostics.AddRange(aspNetAotJsonContextPlan.Diagnostics);
+        }
+
         if (emitAspNet)
         {
             diagnostics.AddRange(FindAspNetUnsupportedValidationDiagnostics(models));
@@ -223,9 +247,26 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
 
         if (emitAspNet)
         {
-            sources.Add(new GeneratedSource(
-                $"{asmName}.SliceRegistrations.g.cs",
-                RegistrationEmitter.Emit(models, matchedValidators, asmName, referencedModules, emitExtensions)));
+            if (aspNetAotEnabled)
+            {
+                var (aotSource, aotDiagnostics) = AspNetAotRegistrationEmitter.Emit(
+                    models,
+                    matchedValidators,
+                    asmName,
+                    referencedModules,
+                    emitExtensions,
+                    aspNetAotJsonContextPlan);
+                diagnostics.AddRange(aotDiagnostics);
+                sources.Add(new GeneratedSource(
+                    $"{asmName}.SliceRegistrations.g.cs",
+                    aotSource));
+            }
+            else
+            {
+                sources.Add(new GeneratedSource(
+                    $"{asmName}.SliceRegistrations.g.cs",
+                    RegistrationEmitter.Emit(models, matchedValidators, asmName, referencedModules, emitExtensions)));
+            }
         }
 
         if (lambdaOptions.Enabled)
@@ -285,6 +326,26 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         return compilation.Options.OutputKind == OutputKind.DynamicallyLinkedLibrary
             ? SliceGenerationRole.Feature
             : SliceGenerationRole.Host;
+    }
+
+    private static bool FindAspNetAotEnabled(Compilation compilation)
+    {
+        var attributeType = compilation.GetTypeByMetadataName("SliceFx.SliceAspNetAotAttribute");
+        if (attributeType is null)
+        {
+            return false;
+        }
+
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass is { } cls
+                && cls.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::SliceFx.SliceAspNetAotAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static LambdaFunctionPerFeatureOptions FindLambdaFunctionPerFeatureOptions(Compilation compilation)
@@ -2127,15 +2188,19 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
         JsonContextOverrides JsonContextOverrides,
         JsonContextPlan WasiJsonContextPlan,
         LambdaFunctionPerFeatureOptions LambdaOptions,
-        JsonContextPlan LambdaJsonContextPlan)
+        JsonContextPlan LambdaJsonContextPlan,
+        bool AspNetAotEnabled,
+        JsonContextPlan AspNetAotJsonContextPlan)
     {
         public static EmitPipelineInputs FromCombined(
-            ((((((((((ImmutableArray<FeatureModel>, ImmutableArray<ValidatorModel>),
+            ((((((((((((ImmutableArray<FeatureModel>, ImmutableArray<ValidatorModel>),
                 string), bool), bool), ReferencedSliceModulesResult), bool),
                 JsonContextOverrides), JsonContextPlan),
-                LambdaFunctionPerFeatureOptions), JsonContextPlan) pair)
+                LambdaFunctionPerFeatureOptions), JsonContextPlan), bool), JsonContextPlan) pair)
         {
-            var (lambdaOptionsPair, lambdaJsonContextPlan) = pair;
+            var (aspNetPlanPair, aspNetAotJsonContextPlan) = pair;
+            var (aspNetEnabledPair, aspNetAotEnabled) = aspNetPlanPair;
+            var (lambdaOptionsPair, lambdaJsonContextPlan) = aspNetEnabledPair;
             var (wasiPlanPair, lambdaOptions) = lambdaOptionsPair;
             var (overridesPair, wasiJsonContextPlan) = wasiPlanPair;
             var (emitExtensionsPair, jsonContextOverrides) = overridesPair;
@@ -2157,7 +2222,9 @@ public sealed class SliceFeatureGenerator : IIncrementalGenerator
                 jsonContextOverrides,
                 wasiJsonContextPlan,
                 lambdaOptions,
-                lambdaJsonContextPlan);
+                lambdaJsonContextPlan,
+                aspNetAotEnabled,
+                aspNetAotJsonContextPlan);
         }
     }
 }

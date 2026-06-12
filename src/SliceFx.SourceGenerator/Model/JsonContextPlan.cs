@@ -110,6 +110,7 @@ internal enum JsonContextTarget
 {
     Wasi,
     LambdaFunctionPerFeature,
+    AspNet,
 }
 
 internal readonly record struct JsonRootType(string TypeFqn);
@@ -128,6 +129,7 @@ internal readonly record struct JsonContextOverrideCandidate(
     bool InheritsFromJsonSerializerContext,
     bool HasWasiTarget,
     bool HasLambdaFunctionPerFeatureTarget,
+    bool HasAspNetTarget,
     // Newline-separated, sorted, raw (global::-prefixed) FQNs of types registered via
     // [JsonSerializable(typeof(T))] in this context. Empty string if none.
     string SerializedSerializableTypes);
@@ -137,20 +139,29 @@ internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
     public JsonContextOverrides(
         string? wasiContextFqn,
         string? lambdaFunctionPerFeatureContextFqn,
+        string? aspNetContextFqn,
         ImmutableArray<EquatableDiagnostic> diagnostics,
         string wasiSerializableTypes = "",
-        string lambdaSerializableTypes = "")
+        string lambdaSerializableTypes = "",
+        string aspNetSerializableTypes = "")
     {
         WasiContextFqn = wasiContextFqn;
         LambdaFunctionPerFeatureContextFqn = lambdaFunctionPerFeatureContextFqn;
+        AspNetContextFqn = aspNetContextFqn;
         Diagnostics = diagnostics;
         WasiSerializableTypes = wasiSerializableTypes;
         LambdaSerializableTypes = lambdaSerializableTypes;
+        AspNetSerializableTypes = aspNetSerializableTypes;
     }
 
     public string? WasiContextFqn { get; }
 
     public string? LambdaFunctionPerFeatureContextFqn { get; }
+
+    /// <summary>
+    /// FQN of the [SliceJsonContext(SliceJsonTarget.AspNet)] JsonSerializerContext, or null if none.
+    /// </summary>
+    public string? AspNetContextFqn { get; }
 
     /// <summary>
     /// Newline-separated, sorted, raw FQNs of types in the [SliceJsonContext(Wasi)] context.
@@ -164,14 +175,22 @@ internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
     /// </summary>
     public string LambdaSerializableTypes { get; }
 
+    /// <summary>
+    /// Newline-separated, sorted, raw FQNs of types in the [SliceJsonContext(AspNet)] context.
+    /// Empty string if no AspNet context was found.
+    /// </summary>
+    public string AspNetSerializableTypes { get; }
+
     public ImmutableArray<EquatableDiagnostic> Diagnostics { get; }
 
     public bool Equals(JsonContextOverrides? other)
         => other is not null
            && string.Equals(WasiContextFqn, other.WasiContextFqn, StringComparison.Ordinal)
            && string.Equals(LambdaFunctionPerFeatureContextFqn, other.LambdaFunctionPerFeatureContextFqn, StringComparison.Ordinal)
+           && string.Equals(AspNetContextFqn, other.AspNetContextFqn, StringComparison.Ordinal)
            && string.Equals(WasiSerializableTypes, other.WasiSerializableTypes, StringComparison.Ordinal)
            && string.Equals(LambdaSerializableTypes, other.LambdaSerializableTypes, StringComparison.Ordinal)
+           && string.Equals(AspNetSerializableTypes, other.AspNetSerializableTypes, StringComparison.Ordinal)
            && Diagnostics.SequenceEqual(other.Diagnostics);
 
     public override bool Equals(object? obj) => Equals(obj as JsonContextOverrides);
@@ -182,8 +201,10 @@ internal sealed class JsonContextOverrides : IEquatable<JsonContextOverrides>
         {
             var hash = WasiContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(WasiContextFqn);
             hash = (hash * 31) + (LambdaFunctionPerFeatureContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(LambdaFunctionPerFeatureContextFqn));
+            hash = (hash * 31) + (AspNetContextFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(AspNetContextFqn));
             hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(WasiSerializableTypes);
             hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(LambdaSerializableTypes);
+            hash = (hash * 31) + StringComparer.Ordinal.GetHashCode(AspNetSerializableTypes);
             foreach (var diagnostic in Diagnostics)
             {
                 hash = (hash * 31) + diagnostic.GetHashCode();

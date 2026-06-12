@@ -3812,6 +3812,11 @@ public class SourceGeneratorCompileTests
             new DiagnosticCatalogEntry("SLICE051", "InvalidSliceFxAggregateReferences", "Slice", DiagnosticSeverity.Error),
             new DiagnosticCatalogEntry("SLICE060", "RawMinimalApiRouteOverlap", "Slice", DiagnosticSeverity.Warning),
             new DiagnosticCatalogEntry("SLICE061", "RawMinimalApiEndpointNameOverlap", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE070", "UnsupportedParameterForAspNetAot", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE071", "MissingAspNetAotJsonContext", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE072", "UnsupportedValidationForAspNetAot", "Slice", DiagnosticSeverity.Error),
+            new DiagnosticCatalogEntry("SLICE073", "IResultReturnForAspNetAot", "Slice", DiagnosticSeverity.Warning),
+            new DiagnosticCatalogEntry("SLICE074", "MixedAspNetAotAggregation", "Slice", DiagnosticSeverity.Error),
         };
 
         Assert.Equal(expected, descriptors);

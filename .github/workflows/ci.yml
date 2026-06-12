@@ -78,3 +78,54 @@ jobs:
           if ($coreProject -match '<PackageReference\b') {
             throw 'SliceFx.Core must not contain PackageReference entries.'
           }
+
+  nativeaot-sample:
+    name: NativeAOT sample publish and smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore samples/SliceFx.AotSample/SliceFx.AotSample.csproj
+
+      - name: Publish (NativeAOT linux-x64)
+        # TreatWarningsAsErrors=true means this step fails on any IL2026/IL3050 warning,
+        # asserting that the generated ASP.NET NativeAOT-safe dispatch is reflection-free.
+        run: dotnet publish samples/SliceFx.AotSample/SliceFx.AotSample.csproj -c Release -r linux-x64 --no-restore
+
+      - name: Smoke test
+        run: |
+          bin=samples/SliceFx.AotSample/bin/Release/net10.0/linux-x64/publish/SliceFx.AotSample
+          ASPNETCORE_URLS=http://127.0.0.1:5103 "$bin" &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          curl --fail --retry 15 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:5103/health
+          curl --fail -X POST http://127.0.0.1:5103/todos \
+            -H 'Content-Type: application/json' \
+            -d '{"title":"ci smoke"}'
+          status_400=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X POST http://127.0.0.1:5103/todos \
+            -H 'Content-Type: application/json' \
+            -d '{"title":""}')
+          [ "$status_400" = "400" ] || (echo "Expected 400, got $status_400" && exit 1)
+          status_404=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:5103/todos/00000000-0000-0000-0000-000000000001)
+          [ "$status_404" = "404" ] || (echo "Expected 404, got $status_404" && exit 1)
+
+      - name: Report binary size
+        if: always()
+        run: |
+          bin=samples/SliceFx.AotSample/bin/Release/net10.0/linux-x64/publish/SliceFx.AotSample
+          if [ -f "$bin" ]; then
+            size=$(stat -c %s "$bin")
+            echo "NativeAOT binary size: $size bytes ($(( size / 1024 / 1024 )) MB)" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi

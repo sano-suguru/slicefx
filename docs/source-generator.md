@@ -75,6 +75,7 @@ Diagnostic IDs are grouped into reserved ranges so new rules can be added withou
 | `SLICE040`-`SLICE049` | JSON context overrides |
 | `SLICE050`-`SLICE059` | Cross-assembly aggregation |
 | `SLICE060`-`SLICE069` | Minimal API migration overlap |
+| `SLICE070`-`SLICE079` | ASP.NET NativeAOT-safe registration |
 
 <!-- diagnostics-reference:start -->
 | ID | Severity | Area | Meaning | Suggested fix |
@@ -109,4 +110,9 @@ Diagnostic IDs are grouped into reserved ranges so new rules can be added withou
 | `SLICE051` | Error | Cross-assembly aggregation | `SliceFxAggregateReferences` has an unsupported value. | Use `true`/`false`, `1`/`0`, or `yes`/`no`. |
 | `SLICE060` | Warning | Minimal API migration overlap | Raw Minimal API route literal overlaps a generated Slice route. | Remove one mapping or make the overlap an intentional migration choice. |
 | `SLICE061` | Warning | Minimal API migration overlap | Raw Minimal API endpoint name overlaps a generated Slice endpoint name. | Change one endpoint name or set `FeatureAttribute.Name`. |
+| `SLICE070` | Error | ASP.NET NativeAOT-safe registration | Parameter type cannot be bound in NativeAOT registration mode. | Remove `[assembly: SliceAspNetAot]` or use supported parameter shapes (route, query, header, body, DI, `CancellationToken`, `HttpContext`). |
+| `SLICE071` | Error | ASP.NET NativeAOT-safe registration | Feature body or response type is missing from the `[SliceJsonContext(SliceJsonTarget.AspNet)]` context. | Add `[JsonSerializable(typeof(T))]` for the missing type to the `JsonSerializerContext` that carries `[SliceJsonContext(SliceJsonTarget.AspNet)]`. |
+| `SLICE072` | Error | ASP.NET NativeAOT-safe registration | Feature uses reflection-dependent DataAnnotations. | Use generated-supported attributes (`Required`, `StringLength`, `MinLength`, `MaxLength`, `EmailAddress`, `Url`, `HttpsUrl`, `RegularExpression`, `Range`) or move validation to `ISliceValidator<T>`. |
+| `SLICE073` | Warning | ASP.NET NativeAOT-safe registration | Feature returns `IResult`; AOT-safety depends on the result's own serialization. | Use `TypedResults.Json` with `JsonTypeInfo`, or register the response type via `ConfigureHttpJsonOptions`. |
+| `SLICE074` | Error | ASP.NET NativeAOT-safe registration | Referenced Slice module was not compiled with `[assembly: SliceAspNetAot]`. | Apply `[assembly: SliceAspNetAot]` to the referenced module as well. |
 <!-- diagnostics-reference:end -->

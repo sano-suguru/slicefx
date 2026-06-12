@@ -30,4 +30,15 @@ public enum SliceJsonTarget
     /// Use the marked context for generated Lambda function-per-feature handlers.
     /// </summary>
     LambdaFunctionPerFeature = 2,
+
+    /// <summary>
+    /// Use the marked context for generated ASP.NET NativeAOT-safe route dispatch.
+    /// </summary>
+    /// <remarks>
+    /// Required when <c>[assembly: SliceAspNetAot]</c> is set. The context must declare
+    /// <c>[JsonSerializable]</c> entries for every request and response type used by the
+    /// assembly's features. The generator reports <c>SLICE071</c> when a required root
+    /// is missing.
+    /// </remarks>
+    AspNet = 3,
 }

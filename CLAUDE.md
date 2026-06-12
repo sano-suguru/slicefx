@@ -28,10 +28,12 @@ dotnet run --project samples/SliceFx.TestHostSample # in-process HTTP demo (no s
 dotnet run --project samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Server  # API on http://localhost:5101 (run alongside the Client)
 dotnet run --project samples/SliceFx.BlazorSample/SliceFx.BlazorSample.Client  # WASM dev server on http://localhost:5102
 dotnet publish samples/SliceFx.WasiSample -r wasi-wasm -c Release  # Linux x64 / Windows x64, or Docker linux/amd64 on macOS
+dotnet run --project samples/SliceFx.AotSample        # listens on http://localhost:5103 (JIT dev run)
+dotnet publish samples/SliceFx.AotSample -c Release    # macOS: osx-arm64 native binary; Linux: add -r linux-x64
 dotnet format SliceFx.slnx --verify-no-changes --severity info --exclude-diagnostics CS1591 xUnit1004  # matches CI; drop --verify-no-changes to apply
 ```
 
-xUnit tests live under `tests/` — runtime tests (`SliceFx.Core.Tests`, `SliceFx.SourceGenerator.Tests`, `SliceFx.TestHost.Tests`, `SliceFx.Wasi.Tests`, `SliceFx.Lambda.Tests`, `SliceFx.Lambda.FunctionPerFeature.Tests`, `SliceFx.Cli.Tests`), the `SliceFx.Lambda.NativeAotFixture` support project, and benchmarks (`SliceFx.Benchmarks`, `SliceFx.Benchmarks.Runtime`, plus the `SliceFx.Benchmarks.RuntimeApps/Bench{50,100,200}` size-graded scenario apps). CI runs `dotnet test SliceFx.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test SliceFx.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
+xUnit tests live under `tests/` — runtime tests (`SliceFx.Core.Tests`, `SliceFx.SourceGenerator.Tests`, `SliceFx.TestHost.Tests`, `SliceFx.AotSample.Tests`, `SliceFx.Wasi.Tests`, `SliceFx.Lambda.Tests`, `SliceFx.Lambda.FunctionPerFeature.Tests`, `SliceFx.Cli.Tests`), the `SliceFx.Lambda.NativeAotFixture` support project, and benchmarks (`SliceFx.Benchmarks`, `SliceFx.Benchmarks.Runtime`, plus the `SliceFx.Benchmarks.RuntimeApps/Bench{50,100,200}` size-graded scenario apps). CI runs `dotnet test SliceFx.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test SliceFx.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
 
 ```bash
 curl http://localhost:5099/health
@@ -82,7 +84,7 @@ Framework-enforced conventions (not just style):
 - DataAnnotations on **record positional parameters** are honored (the validator reads attrs from both properties and matching primary-ctor parameters). Validation failures return Problem Details automatically.
 - OpenAPI tag is inferred from the namespace segment after `.Features.` (`SliceFx.Sample.Features.Users` → tag `Users`); endpoint name is `{Tag}.{TypeName}`. Override via `[Feature(..., Tag = "...")]`.
 - Filters are plain `IEndpointFilter` classes under `Filters/`. `AddSlice()` discovers every `[Filter<T>]` reference and registers `T` as **scoped** in DI. Generated DataAnnotations validation is always attached before any `[Filter<T>]`. Filter ordering can be expressed declaratively via `[FilterOrderHint(After = typeof(OtherFilter))]`; the source generator reports SLICE007 when a feature's declared `[Filter<T>]` order contradicts the hint.
-- Full diagnostic catalog (IDs, severities, titles) lives in `src/SliceFx.SourceGenerator/AnalyzerReleases.Unshipped.md`. Notable ranges: SLICE00x handler/route shape, SLICE01x ASP.NET validation, SLICE02x WASI route eligibility, SLICE03x Lambda function-per-feature eligibility, SLICE04x `[SliceJsonContext]` overrides, SLICE05x cross-assembly aggregation, SLICE06x raw Minimal API overlap detection.
+- Full diagnostic catalog (IDs, severities, titles) lives in `src/SliceFx.SourceGenerator/AnalyzerReleases.Unshipped.md`. Notable ranges: SLICE00x handler/route shape, SLICE01x ASP.NET validation, SLICE02x WASI route eligibility, SLICE03x Lambda function-per-feature eligibility, SLICE04x `[SliceJsonContext]` overrides, SLICE05x cross-assembly aggregation, SLICE06x raw Minimal API overlap detection, SLICE07x ASP.NET NativeAOT-safe registration (triggered by `[assembly: SliceAspNetAot]`).
 
 ## Satellite libraries
 
@@ -294,6 +296,11 @@ samples/SliceFx.LambdaSample/   # ASP.NET-hosted Lambda sample: AddSlice → Use
 samples/SliceFx.LambdaFunctionPerFeatureSample/ # per-feature NativeAOT packaging demo (Kestrel locally on port 5000)
   LambdaSetup.cs          # [assembly: LambdaFunctionPerFeature] opt-in
   Features/Orders/        # incl. OrderFeatureStartup.cs (ILambdaFunctionPerFeatureStartup)
+samples/SliceFx.AotSample/    # NativeAOT sample: [assembly: SliceAspNetAot] + AOT-safe dispatch (port 5103)
+  AotSetup.cs               # [assembly: SliceAspNetAot] opt-in
+  AotJsonContext.cs         # [SliceJsonContext(SliceJsonTarget.AspNet)] for body/response serialization
+  Dockerfile                # multi-stage: sdk:10.0 + clang/zlib1g-dev → runtime-deps:10.0-noble-chiseled
+  README.md                 # publish/container/limitation guide
 samples/SliceFx.TestHostSample/ # in-process HTTP demo against SliceFx.Sample
 samples/SliceFx.WasiSample/  # WASI sample: WasiHost.CreateBuilder → AddSlice → DispatchAsync
   IncomingHandlerImpl.cs  # wasi:http/incoming-handler → WasiApp.DispatchAsync bridge

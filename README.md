@@ -24,7 +24,7 @@ Curious about the design choices? See **[Design decisions FAQ](docs/design-decis
 | Endpoint code that is easy to review | One feature file per endpoint: request, response, handler, validation, and filters stay together. |
 | Less hand-synced API glue | `AddSlice()` / `MapSlices()`, route metadata, and typed clients are generated from the same feature definitions. |
 | Standard ASP.NET Core behavior | Minimal API binding, DI, endpoint filters, DataAnnotations, OpenAPI compatibility, and `IResult` remain available. |
-| Native AOT-friendly startup | Generated `MapMethods` calls avoid startup route scanning; `SliceFx.Core` has no `PackageReference` entries and only uses the `Microsoft.AspNetCore.App` framework reference. |
+| Native AOT-friendly startup | Generated `MapMethods` calls avoid startup route scanning; `SliceFx.Core` has no `PackageReference` entries and only uses the `Microsoft.AspNetCore.App` framework reference. Add `[assembly: SliceAspNetAot]` to switch to reflection-free generated dispatch and publish a native binary with zero IL2026/IL3050 diagnostics. |
 | Early portability feedback | `slicefx routes` classifies each endpoint as `portable`, `partial`, or `aspnet-only`; Lambda and wasi:http adapters are optional. |
 | Low lock-in | Generated code compiles down to standard `MapMethods` calls. Remove the source generator reference and expand the output in place for a low-residue exit path. |
 
@@ -205,6 +205,7 @@ For more detail see [ASP.NET features and escape hatches](docs/guides/aspnet-fea
 | TestHost helper | Experimental |
 | WASI adapter | Experimental single-component in-process wasi:http dispatch; per-feature WASM packaging is not implemented |
 | `SliceResult<T>` / `SliceResult` typed WASI results | Implemented — host-neutral result structs in `SliceFx.Core`; source generator + CLI client generator unwrap to the payload type |
+| Plain NativeAOT ASP.NET host | Experimental — `[assembly: SliceAspNetAot]` opts into generated AOT-safe dispatch; linux-x64 publish + smoke test CI-gated |
 
 The C# typed client reuses C# request/response types rather than generating DTO copies. Use nested feature DTOs when the client can reference the feature assembly; use non-nested DTOs in a shared contracts project when Blazor or another .NET client should reference contracts without referencing server features. The TypeScript client emits interfaces from built metadata. Routes returning `SliceResult<T>` generate `Task<T>` methods; routes returning the non-generic `SliceResult` generate `Task` (void) methods.
 
@@ -229,6 +230,25 @@ The source generator classifies each feature endpoint at build time. `slicefx ro
 | `aspnet-only` | Returns `IResult` or uses ASP.NET-specific behavior. The full Minimal API feature set is available. |
 
 `aspnet-only` features are standard Minimal API endpoints with the complete ASP.NET ecosystem available — they are not penalized or degraded.
+
+### Native AOT — optional, first-class
+
+Add `[assembly: SliceAspNetAot]` to any assembly to switch from the default `RequestDelegateFactory` registration path to generated AOT-safe handlers. The generator emits `new RequestDelegate(…)` methods that bind parameters, run validation, and serialize responses using `JsonTypeInfo<T>` — no per-request reflection. Publishing with `PublishAot=true` and `TreatWarningsAsErrors=true` then fails on any residual IL2026/IL3050 diagnostic.
+
+```csharp
+// AotSetup.cs
+[assembly: SliceAspNetAot]
+```
+
+```csharp
+// AotJsonContext.cs — covers every request/response type the generator will serialize
+[SliceJsonContext(SliceJsonTarget.AspNet)]
+[JsonSerializable(typeof(CreateTodo.Request))]
+[JsonSerializable(typeof(Todo))]
+internal sealed partial class AotJsonContext : JsonSerializerContext { }
+```
+
+The default non-AOT path is unchanged for assemblies that do not carry the attribute, preserving full backwards compatibility. See [docs/aot.md](docs/aot.md) and the [AotSample README](samples/SliceFx.AotSample/README.md).
 
 ### WASI and edge are optional
 
@@ -265,6 +285,8 @@ The Slice route manifest is a separate build-time artifact for portability class
 | CLI commands | [docs/cli.md](docs/cli.md) |
 | Blazor WASM + generated typed client sample | [samples/SliceFx.BlazorSample/](samples/SliceFx.BlazorSample/README.md) |
 | OpenAPI integration | [docs/guides/openapi.md](docs/guides/openapi.md) |
+| Native AOT deployment | [docs/aot.md](docs/aot.md) |
+| Native AOT sample | [samples/SliceFx.AotSample/README.md](samples/SliceFx.AotSample/README.md) |
 | Lambda hosting and function-per-feature Lambda | [docs/lambda.md](docs/lambda.md) |
 | Lambda function-per-feature sample | [samples/SliceFx.LambdaFunctionPerFeatureSample/](samples/SliceFx.LambdaFunctionPerFeatureSample/README.md) |
 | WASI deploy path | [samples/SliceFx.WasiSample/README.md](samples/SliceFx.WasiSample/README.md) |

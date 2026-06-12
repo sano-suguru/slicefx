@@ -343,4 +343,68 @@ internal static class SliceDiagnostics
         Category,
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    // SLICE07x — ASP.NET NativeAOT-safe dispatch diagnostics (opt-in via [assembly: SliceAspNetAot])
+
+    /// <summary>
+    /// Diagnostic reported when a parameter type cannot be bound in ASP.NET NativeAOT registration mode.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedParameterForAspNetAot = new(
+        "SLICE070",
+        "Parameter type not supported in ASP.NET NativeAOT registration mode",
+        "Feature '{0}': parameter '{1}' of type '{2}' cannot be bound in NativeAOT registration mode: {3}. Remove [assembly: SliceAspNetAot] or change the parameter (IFormFile, BindAsync, [AsParameters], and multi-value query are not supported).",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        helpLinkUri: "https://github.com/sano-suguru/slicefx/blob/main/docs/aot.md");
+
+    /// <summary>
+    /// Diagnostic reported when a feature body or response type is missing from the [SliceJsonContext(AspNet)] context.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MissingAspNetAotJsonContext = new(
+        "SLICE071",
+        "ASP.NET NativeAOT JSON source-generation metadata missing",
+        "Feature '{0}' requires a [SliceJsonContext(SliceJsonTarget.AspNet)] JsonSerializerContext with [JsonSerializable] roots: {1}",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        helpLinkUri: "https://github.com/sano-suguru/slicefx/blob/main/docs/aot.md");
+
+    /// <summary>
+    /// Diagnostic reported when a feature uses reflection-dependent DataAnnotations in ASP.NET NativeAOT registration mode.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedValidationForAspNetAot = new(
+        "SLICE072",
+        "DataAnnotations validation not supported in ASP.NET NativeAOT registration mode",
+        "Feature '{0}' uses DataAnnotations validation that requires reflection and cannot be compiled in NativeAOT registration mode. Move the rule into an ISliceValidator<T> for the request type, or use a generated-supported attribute (Required, StringLength, MinLength, MaxLength, EmailAddress, Url, HttpsUrl, RegularExpression, Range).",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        helpLinkUri: "https://github.com/sano-suguru/slicefx/blob/main/docs/aot.md");
+
+    /// <summary>
+    /// Diagnostic reported when a feature returns IResult in ASP.NET NativeAOT registration mode.
+    /// The IResult value is executed directly, but its own serialization must be AOT-safe.
+    /// </summary>
+    public static readonly DiagnosticDescriptor IResultReturnForAspNetAot = new(
+        "SLICE073",
+        "IResult return type in ASP.NET NativeAOT registration mode",
+        "Feature '{0}' returns IResult; the result's own ExecuteAsync runs directly. Ensure the result serializes without reflection (use TypedResults.Json with JsonTypeInfo or register types via ConfigureHttpJsonOptions).",
+        Category,
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        helpLinkUri: "https://github.com/sano-suguru/slicefx/blob/main/docs/aot.md");
+
+    /// <summary>
+    /// Diagnostic reported when a referenced Slice module was not compiled with [assembly: SliceAspNetAot].
+    /// Its routes will use the reflection-based RDF registration path and will produce IL2026/IL3050 warnings at publish.
+    /// </summary>
+    public static readonly DiagnosticDescriptor MixedAspNetAotAggregation = new(
+        "SLICE074",
+        "Referenced Slice module not in ASP.NET NativeAOT registration mode",
+        "Referenced Slice module '{0}' was not compiled with [assembly: SliceAspNetAot]. Its routes will use the reflection-based registration path and will produce IL2026/IL3050 warnings under PublishAot.",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        helpLinkUri: "https://github.com/sano-suguru/slicefx/blob/main/docs/aot.md");
 }

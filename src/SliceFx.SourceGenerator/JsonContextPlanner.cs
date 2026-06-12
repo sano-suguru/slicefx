@@ -9,6 +9,7 @@ internal static class JsonContextPlanner
         var type = (INamedTypeSymbol)context.TargetSymbol;
         var hasWasiTarget = false;
         var hasLambdaFunctionPerFeatureTarget = false;
+        var hasAspNetTarget = false;
         foreach (var attribute in context.Attributes)
         {
             var target = ReadTarget(attribute);
@@ -20,10 +21,14 @@ internal static class JsonContextPlanner
             {
                 hasLambdaFunctionPerFeatureTarget = true;
             }
+            else if (target == JsonContextTarget.AspNet)
+            {
+                hasAspNetTarget = true;
+            }
         }
 
         // Collect all types registered via [JsonSerializable(typeof(T))] on this context type.
-        // These form the compile-time body/service discriminator set for WASI and Lambda paths:
+        // These form the compile-time body/service discriminator set for WASI, Lambda, and AspNet paths:
         // a request-like param whose type is in this set is classified as a body parameter;
         // otherwise it is resolved from DI (service). This matches ASP.NET Minimal API's runtime
         // IServiceProviderIsService semantics without any per-request reflection.
@@ -35,6 +40,7 @@ internal static class JsonContextPlanner
             InheritsFromJsonSerializerContext(type),
             hasWasiTarget,
             hasLambdaFunctionPerFeatureTarget,
+            hasAspNetTarget,
             serializableTypes);
     }
 
@@ -85,6 +91,8 @@ internal static class JsonContextPlanner
         string? wasiSerializableTypes = null;
         string? lambda = null;
         string? lambdaSerializableTypes = null;
+        string? aspNet = null;
+        string? aspNetSerializableTypes = null;
         var diagnostics = ImmutableArray.CreateBuilder<EquatableDiagnostic>();
         foreach (var candidate in candidates)
         {
@@ -122,14 +130,29 @@ internal static class JsonContextPlanner
                     lambdaSerializableTypes = candidate.SerializedSerializableTypes;
                 }
             }
+
+            if (candidate.HasAspNetTarget)
+            {
+                if (aspNet is not null)
+                {
+                    diagnostics.Add(DuplicateDiagnostic(JsonContextTarget.AspNet, aspNet, candidate));
+                }
+                else
+                {
+                    aspNet = candidate.ContextFqn;
+                    aspNetSerializableTypes = candidate.SerializedSerializableTypes;
+                }
+            }
         }
 
         return new JsonContextOverrides(
             wasi,
             lambda,
+            aspNet,
             diagnostics.ToImmutable(),
             wasiSerializableTypes ?? "",
-            lambdaSerializableTypes ?? "");
+            lambdaSerializableTypes ?? "",
+            aspNetSerializableTypes ?? "");
     }
 
     public static JsonContextPlan CreateWasiPlan(
@@ -143,6 +166,12 @@ internal static class JsonContextPlanner
         string? explicitContextFqn,
         string serializedSerializableTypes = "")
         => CreatePlan(JsonContextTarget.LambdaFunctionPerFeature, features, explicitContextFqn, serializedSerializableTypes);
+
+    public static JsonContextPlan CreateAspNetPlan(
+        ImmutableArray<FeatureModel> features,
+        string? explicitContextFqn,
+        string serializedSerializableTypes = "")
+        => CreatePlan(JsonContextTarget.AspNet, features, explicitContextFqn, serializedSerializableTypes);
 
     public static string StatusForWasi(FeatureModel feature, JsonContextPlan plan)
     {
@@ -172,7 +201,13 @@ internal static class JsonContextPlanner
 
     private static string CreateMissingContextReason(JsonContextTarget target, ImmutableArray<JsonRootType> roots)
     {
-        var contextName = target == JsonContextTarget.Wasi ? "WASI" : "Lambda function-per-feature";
+        var contextName = target switch
+        {
+            JsonContextTarget.Wasi => "WASI",
+            JsonContextTarget.LambdaFunctionPerFeature => "Lambda function-per-feature",
+            JsonContextTarget.AspNet => "ASP.NET NativeAOT",
+            _ => target.ToString(),
+        };
         var rootList = string.Join(", ", roots.Select(static root => SourceGenerationHelpers.TrimGlobalAlias(root.TypeFqn)));
         return $"{contextName} JSON requires an explicit [SliceJsonContext] JsonSerializerContext with JsonSerializable metadata for: {rootList}";
     }
@@ -221,6 +256,29 @@ internal static class JsonContextPlanner
         return GetParameterBindingSkipReason(feature, serializableTypes);
     }
 
+    /// <summary>
+    /// Returns a structural skip reason if <paramref name="feature"/> cannot participate
+    /// in ASP.NET NativeAOT-safe dispatch, or <c>null</c> if it can be emitted.
+    /// Unlike WASI and Lambda, IResult is allowed here (the IResult.ExecuteAsync is called directly);
+    /// reflection-dependent DataAnnotations are the only hard skip cause (SLICE072).
+    /// Parameter binding skip (SLICE070) is handled by the emitter with an error, not a skip.
+    /// </summary>
+    public static string? GetAspNetStructuralSkipReason(FeatureModel feature)
+    {
+        // IResult returns ARE allowed in the AspNet AOT path (the result executes directly).
+        // However, the caller must accept the SLICE073 Warning about AOT-safe serialization.
+        // Reflection-dependent validation is an error, not a skip, so we don't skip here;
+        // the emitter will emit SLICE072.
+        // We only skip for structural reasons that make JSON root collection meaningless:
+        // specifically WasiResponse (not a valid return type for the ASP.NET path).
+        if (SourceGenerationHelpers.IsWasiResponseType(SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn)))
+        {
+            return "returns SliceFx.Wasi.WasiResponse (WASI-only type)";
+        }
+
+        return null;
+    }
+
     private static JsonContextPlan CreatePlan(
         JsonContextTarget target,
         ImmutableArray<FeatureModel> features,
@@ -235,15 +293,20 @@ internal static class JsonContextPlanner
 
         foreach (var feature in features)
         {
-            if ((target == JsonContextTarget.Wasi
-                    ? GetWasiStructuralSkipReason(feature, serializableTypes)
-                    : GetLambdaStructuralSkipReason(feature, serializableTypes)) is not null)
+            var structuralSkipReason = target switch
+            {
+                JsonContextTarget.Wasi => GetWasiStructuralSkipReason(feature, serializableTypes),
+                JsonContextTarget.AspNet => GetAspNetStructuralSkipReason(feature),
+                JsonContextTarget.LambdaFunctionPerFeature => GetLambdaStructuralSkipReason(feature, serializableTypes),
+                _ => GetLambdaStructuralSkipReason(feature, serializableTypes),
+            };
+            if (structuralSkipReason is not null)
             {
                 continue;
             }
 
             var featureRoots = CollectRoots(target, feature, serializableTypes);
-            var requiresExplicitContext = target == JsonContextTarget.Wasi;
+            var requiresExplicitContext = target is JsonContextTarget.Wasi or JsonContextTarget.AspNet;
             var exclusionReason = requiresExplicitContext && explicitContextFqn is null && !featureRoots.IsEmpty
                 ? CreateMissingContextReason(target, featureRoots)
                 : null;
@@ -258,10 +321,15 @@ internal static class JsonContextPlanner
                     feature.GetDiagnosticLocationModel(),
                     exclusionReason);
                 exclusions.Add(exclusion);
+                var missingContextDiagnostic = target switch
+                {
+                    JsonContextTarget.Wasi => SliceDiagnostics.MissingWasiJsonContext,
+                    JsonContextTarget.AspNet => SliceDiagnostics.MissingAspNetAotJsonContext,
+                    JsonContextTarget.LambdaFunctionPerFeature => SliceDiagnostics.MissingLambdaJsonContext,
+                    _ => SliceDiagnostics.MissingLambdaJsonContext,
+                };
                 diagnostics.Add(EquatableDiagnostic.Create(
-                    target == JsonContextTarget.Wasi
-                        ? SliceDiagnostics.MissingWasiJsonContext
-                        : SliceDiagnostics.MissingLambdaJsonContext,
+                    missingContextDiagnostic,
                     feature.GetDiagnosticLocationModel(),
                     feature.TypeName,
                     exclusionReason));
@@ -389,6 +457,9 @@ internal static class JsonContextPlanner
         {
             JsonContextTarget.Wasi => SourceGenerationHelpers.IsWasiResponseType(responseType),
             JsonContextTarget.LambdaFunctionPerFeature => SourceGenerationHelpers.IsLambdaProxyResponseType(responseType),
+            // For AspNet AOT path, IResult is a pass-through — executed via IResult.ExecuteAsync directly,
+            // no JsonTypeInfo needed. Everything else (POCO, string, etc.) requires a JsonTypeInfo root.
+            JsonContextTarget.AspNet => SourceGenerationHelpers.IsAspNetResultType(responseType),
             _ => false,
         };
 
@@ -403,6 +474,7 @@ internal static class JsonContextPlanner
         {
             1 => JsonContextTarget.Wasi,
             2 => JsonContextTarget.LambdaFunctionPerFeature,
+            3 => JsonContextTarget.AspNet,
             _ => null,
         };
     }

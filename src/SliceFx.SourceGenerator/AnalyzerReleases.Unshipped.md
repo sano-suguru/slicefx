@@ -32,3 +32,8 @@ SLICE050 | Slice | Warning | UnconfiguredReferencedSliceModules
 SLICE051 | Slice | Error | InvalidSliceFxAggregateReferences
 SLICE060 | Slice | Warning | RawMinimalApiRouteOverlap
 SLICE061 | Slice | Warning | RawMinimalApiEndpointNameOverlap
+SLICE070 | Slice | Error | UnsupportedParameterForAspNetAot
+SLICE071 | Slice | Error | MissingAspNetAotJsonContext
+SLICE072 | Slice | Error | UnsupportedValidationForAspNetAot
+SLICE073 | Slice | Warning | IResultReturnForAspNetAot
+SLICE074 | Slice | Error | MixedAspNetAotAggregation

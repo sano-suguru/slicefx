@@ -12,7 +12,7 @@ Before discussing gate values, the six differentiators that must **never** be er
 
 1. **100% pure ASP.NET Core Minimal API expansion** — generated code only chains standard APIs.
 2. **`SliceFx.Core` is dependency-free** (`FrameworkReference` only).
-3. **No new startup-time reflection** — Native AOT friendliness preserved.
+3. **No new startup-time reflection** — startup is AOT-friendly by default; add `[assembly: SliceAspNetAot]` to switch to generated per-request AOT-safe dispatch for full `PublishAot` compatibility.
 4. **No implicit magic** — filters that are not declared in source are never injected.
 5. **Convention violations surface at compile time** — through the type system or analyzer diagnostics, not at runtime.
 6. **`slicefx routes` / `slicefx client csharp` tooling stays uninterrupted** — the route manifest schema is not broken.

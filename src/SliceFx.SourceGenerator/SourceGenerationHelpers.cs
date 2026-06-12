@@ -191,6 +191,26 @@ internal static class SourceGenerationHelpers
     public static bool IsWasiResponseType(string? typeFqn)
         => typeFqn == "global::SliceFx.Wasi.WasiResponse";
 
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="typeFqn"/> is <c>IResult</c> or a known
+    /// concrete IResult type (TypedResults, ObjectResult, etc.). These are pass-throughs
+    /// in the ASP.NET NativeAOT path — they execute via <c>IResult.ExecuteAsync</c> and
+    /// do not require a <c>JsonTypeInfo</c> root in the context.
+    /// </summary>
+    public static bool IsAspNetResultType(string? typeFqn)
+    {
+        if (typeFqn is null)
+        {
+            return false;
+        }
+
+        // Microsoft.AspNetCore.Http.IResult and any type in the Microsoft.AspNetCore.Http.HttpResults
+        // namespace (TypedResults.*) are pass-throughs.
+        return typeFqn == "global::Microsoft.AspNetCore.Http.IResult"
+            || typeFqn.StartsWith("global::Microsoft.AspNetCore.Http.HttpResults.", StringComparison.Ordinal)
+            || typeFqn.StartsWith("global::Microsoft.AspNetCore.Mvc.", StringComparison.Ordinal);
+    }
+
     // Prefix for global::SliceFx.SliceResult<T> (generic, arity 1)
     private const string SliceResultOfTPrefix = "global::SliceFx.SliceResult<";
 

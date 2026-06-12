@@ -1,0 +1,9 @@
+**/bin
+**/obj
+**/node_modules
+.git
+.github
+artifacts
+BenchmarkDotNet.Artifacts
+# WasiSample's dist/ contains built wasm + npm artifacts — large and not needed
+samples/SliceFx.WasiSample/dist
