@@ -4,6 +4,29 @@ All notable changes to SliceFx will be documented in this file.
 
 This project follows semantic versioning once stable packages are published. Before then, `0.x` and preview versions may change APIs while the framework is experimental.
 
+## 0.1.0-preview.13 - 2026-06-13
+
+### Added
+
+- **ASP.NET NativeAOT-safe dispatch** (`[assembly: SliceAspNetAot]`). Adding this assembly attribute
+  switches the source generator from `RequestDelegateFactory`-based registration (reflection-bound)
+  to generated `RequestDelegate` handlers that bind parameters, validate, and serialize responses
+  exclusively via `System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>`. Publishing with
+  `<PublishAot>true</PublishAot>` and `TreatWarningsAsErrors=true` now passes with zero
+  IL2026/IL3050 diagnostics.
+- `SliceJsonTarget.AspNet = 3` — mark a `JsonSerializerContext` with
+  `[SliceJsonContext(SliceJsonTarget.AspNet)]` to supply JSON roots for the AOT path.
+- `SliceFx.Core`: `SliceAspNetAotAttribute`, `SliceAotResults` (RFC 7807 Problem Details writer),
+  `SliceAotArgumentBinder` (route/query/header binding over `HttpContext`),
+  `SliceResultHttpResponseExtensions` (`SliceResult<T>`/`SliceResult` → `HttpContext.Response`),
+  `SliceAotFilterContextBuilder` (`HttpContext` → `SliceFilterContext` for `[SliceFilter<T>]` chains).
+- New diagnostics SLICE070–074 (parameter binding, missing JSON context, reflection-bound
+  validation, `IResult` return, mixed-mode aggregation).
+- `samples/SliceFx.AotSample` — NativeAOT sample on port 5103 with multi-stage `Dockerfile`
+  (sdk:10.0 → runtime-deps:10.0-noble-chiseled, ~9 MB binary).
+- `docs/aot.md` / `docs/ja/aot.md` — NativeAOT deployment guide.
+- CI: `nativeaot-sample` parallel job (linux-x64 publish + smoke tests + binary size report).
+
 ## 0.1.0-preview.8 - 2026-06-01
 
 ### Changed
