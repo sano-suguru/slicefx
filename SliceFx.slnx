@@ -20,6 +20,7 @@
     <Project Path="src/SliceFx.Lambda/SliceFx.Lambda.csproj" />
     <Project Path="src/SliceFx.Lambda.FunctionPerFeature/SliceFx.Lambda.FunctionPerFeature.csproj" />
     <Project Path="src/SliceFx.SourceGenerator/SliceFx.SourceGenerator.csproj" />
+    <Project Path="src/SliceFx.SourceGenerator.CodeFixes/SliceFx.SourceGenerator.CodeFixes.csproj" />
     <Project Path="src/SliceFx.TestHost/SliceFx.TestHost.csproj" />
     <Project Path="src/SliceFx.Wasi/SliceFx.Wasi.csproj" />
     <Project Path="src/SliceFx.Wasi.KeyValue/SliceFx.Wasi.KeyValue.csproj" />
@@ -39,6 +40,7 @@
     <Project Path="tests/SliceFx.Lambda.NativeAotFixture/SliceFx.Lambda.NativeAotFixture.csproj" />
     <Project Path="tests/SliceFx.Lambda.Tests/SliceFx.Lambda.Tests.csproj" />
     <Project Path="tests/SliceFx.SourceGenerator.Tests/SliceFx.SourceGenerator.Tests.csproj" />
+    <Project Path="tests/SliceFx.SourceGenerator.CodeFixes.Tests/SliceFx.SourceGenerator.CodeFixes.Tests.csproj" />
     <Project Path="tests/SliceFx.TestHost.Tests/SliceFx.TestHost.Tests.csproj" />
     <Project Path="tests/SliceFx.Wasi.Tests/SliceFx.Wasi.Tests.csproj" />
     <Project Path="tests/SliceFx.Wasi.KeyValue.Tests/SliceFx.Wasi.KeyValue.Tests.csproj" />

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Code fix projects must target netstandard2.0 alongside the generator. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>SliceFx.SourceGenerator.CodeFixes</AssemblyName>
+    <RootNamespace>SliceFx.SourceGenerator.CodeFixes</RootNamespace>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- DLL is packed explicitly via the None item below — exclude from default build output. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- Suppress XML doc warnings inherited from Directory.Build.props -->
+    <WarningsNotAsErrors>CS1591</WarningsNotAsErrors>
+    <!-- Reduce noise from analyzer-specific rules -->
+    <AnalysisMode>Minimum</AnalysisMode>
+    <!-- Not published as a standalone NuGet package; packaged inside SliceFx.SourceGenerator. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Workspaces is provided by the IDE host at runtime — do NOT include in the NuGet pack. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

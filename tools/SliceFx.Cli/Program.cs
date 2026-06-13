@@ -31,7 +31,8 @@ var root = new RootCommand("SliceFx CLI — vertical slice scaffolding.")
     manifestCmd,
     packageCmd,
     GenerateOpenApiCommand.Build(),
-    ListRoutesCommand.Build()
+    ListRoutesCommand.Build(),
+    JsonContextCommand.Build(),
 };
 
 return await root.Parse(args).InvokeAsync().ConfigureAwait(false);

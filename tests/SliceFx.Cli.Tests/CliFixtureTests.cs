@@ -3414,6 +3414,131 @@ public class CliFixtureTests
         Assert.Contains("if (q is not null)\n                __query.Add(\"q=\" + ", client);
     }
 
+    [Fact]
+    public async Task Json_context_check_reports_missing_types_and_exits_nonzero()
+    {
+        using var fixture = CliProjectFixture.Create("json-ctx-check-app");
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using SliceFx;
+            namespace Json.Ctx.Check.App.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public static Response Handle(int id) => new(id, "Test");
+                public sealed record Response(int Id, string Name);
+            }
+            """);
+        // Context has an unrelated registration but is missing GetItem.Response
+        fixture.WriteFeature(
+            "AotJsonContext.cs",
+            """
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [SliceJsonContext(SliceJsonTarget.AspNet)]
+            [JsonSerializable(typeof(Json.Ctx.Check.App.Features.Items.OtherType))]
+            internal partial class AotJsonContext : JsonSerializerContext { }
+            """);
+
+        var exitCode = await JsonContextCommand.Build()
+            .Parse(["--check", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public async Task Json_context_check_exits_zero_when_all_types_are_registered()
+    {
+        using var fixture = CliProjectFixture.Create("json-ctx-ok-app");
+        fixture.WriteFeature(
+            "Features/Items/GetItem.cs",
+            """
+            using SliceFx;
+            namespace Json.Ctx.Ok.App.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            public static class GetItem
+            {
+                public static Response Handle(int id) => new(id, "Test");
+                public sealed record Response(int Id, string Name);
+            }
+            """);
+        // Fully qualified registration — suffix match covers the short return type from source scan
+        fixture.WriteFeature(
+            "AotJsonContext.cs",
+            """
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [SliceJsonContext(SliceJsonTarget.AspNet)]
+            [JsonSerializable(typeof(Json.Ctx.Ok.App.Features.Items.GetItem.Response))]
+            internal partial class AotJsonContext : JsonSerializerContext { }
+            """);
+
+        var exitCode = await JsonContextCommand.Build()
+            .Parse(["--check", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task Json_context_fix_adds_missing_entries_so_subsequent_check_exits_zero()
+    {
+        using var fixture = CliProjectFixture.Create("json-ctx-fix-app");
+        // POST feature with nested Request/Response so both types are detected as roots
+        fixture.WriteFeature(
+            "Features/Orders/CreateOrder.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            namespace Json.Ctx.Fix.App.Features.Orders;
+
+            [Feature("POST /orders")]
+            public static class CreateOrder
+            {
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1));
+
+                public sealed record Request(string ProductId);
+                public sealed record Response(int OrderId);
+            }
+            """);
+        var contextPath = Path.Combine(fixture.Directory.FullName, "AotJsonContext.cs");
+        File.WriteAllText(contextPath,
+            """
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [SliceJsonContext(SliceJsonTarget.AspNet)]
+            [JsonSerializable(typeof(Json.Ctx.Fix.App.Features.Orders.OtherType))]
+            internal partial class AotJsonContext : JsonSerializerContext { }
+            """);
+
+        // --fix should insert the missing [JsonSerializable] entries and exit 0
+        var fixExitCode = await JsonContextCommand.Build()
+            .Parse(["--fix", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, fixExitCode);
+
+        // File must contain entries for both Request and Response (added with global:: prefix)
+        var contextSource = await File.ReadAllTextAsync(contextPath, TestContext.Current.CancellationToken);
+        Assert.Contains("[JsonSerializable", contextSource);
+
+        // --check must pass after the fix (suffix match covers the newly added global::X entries)
+        var checkExitCode = await JsonContextCommand.Build()
+            .Parse(["--check", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, checkExitCode);
+    }
+
     private sealed class StubHttpHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;

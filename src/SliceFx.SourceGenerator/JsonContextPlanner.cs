@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
+using SliceFx.Shared;
 namespace SliceFx.SourceGenerator;
 
 internal static class JsonContextPlanner
@@ -208,8 +209,47 @@ internal static class JsonContextPlanner
             JsonContextTarget.AspNet => "ASP.NET NativeAOT",
             _ => target.ToString(),
         };
-        var rootList = string.Join(", ", roots.Select(static root => SourceGenerationHelpers.TrimGlobalAlias(root.TypeFqn)));
+        var rootList = BuildRootList(roots);
         return $"{contextName} JSON requires an explicit [SliceJsonContext] JsonSerializerContext with JsonSerializable metadata for: {rootList}";
+    }
+
+    private static string CreateMissingRootsReason(JsonContextTarget target, ImmutableArray<JsonRootType> missingRoots)
+    {
+        var targetLabel = target switch
+        {
+            JsonContextTarget.Wasi => "WASI",
+            JsonContextTarget.AspNet => "ASP.NET NativeAOT",
+            JsonContextTarget.LambdaFunctionPerFeature => "Lambda function-per-feature",
+            _ => target.ToString(),
+        };
+        var rootList = BuildRootList(missingRoots);
+        return $"existing {targetLabel} JSON context is missing [JsonSerializable] entries for: {rootList}";
+    }
+
+    private static string BuildRootList(ImmutableArray<JsonRootType> roots)
+    {
+        var parts = new string[roots.Length];
+        for (var i = 0; i < roots.Length; i++)
+        {
+            parts[i] = SourceGenerationHelpers.TrimGlobalAlias(roots[i].TypeFqn);
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Returns a newline-separated list of raw (global::-prefixed) FQNs for <paramref name="roots"/>.
+    /// This is the format stored in the <c>MissingRoots</c> diagnostic property for code fixes to consume.
+    /// </summary>
+    private static string BuildMissingRootsFqnString(ImmutableArray<JsonRootType> roots)
+    {
+        var parts = new string[roots.Length];
+        for (var i = 0; i < roots.Length; i++)
+        {
+            parts[i] = roots[i].TypeFqn;
+        }
+
+        return string.Join("\n", parts);
     }
 
     public static string? GetWasiStructuralSkipReason(
@@ -307,9 +347,31 @@ internal static class JsonContextPlanner
 
             var featureRoots = CollectRoots(target, feature, serializableTypes);
             var requiresExplicitContext = target is JsonContextTarget.Wasi or JsonContextTarget.AspNet;
-            var exclusionReason = requiresExplicitContext && explicitContextFqn is null && !featureRoots.IsEmpty
-                ? CreateMissingContextReason(target, featureRoots)
-                : null;
+            string? exclusionReason = null;
+            var missingRootsForFix = ImmutableArray<JsonRootType>.Empty;
+            var isPerTypeMissing = false;
+
+            if (requiresExplicitContext && !featureRoots.IsEmpty)
+            {
+                if (explicitContextFqn is null)
+                {
+                    // Context entirely absent — all roots are missing.
+                    exclusionReason = CreateMissingContextReason(target, featureRoots);
+                }
+                else if (serializableTypes.Count > 0)
+                {
+                    // Context present with at least one [JsonSerializable] — check for missing entries.
+                    // When serializableTypes is empty we cannot distinguish a hand-rolled context
+                    // (intentionally zero entries) from one where the user forgot all types.
+                    missingRootsForFix = CollectMissingRoots(featureRoots, serializableTypes);
+                    if (!missingRootsForFix.IsEmpty)
+                    {
+                        exclusionReason = CreateMissingRootsReason(target, missingRootsForFix);
+                        isPerTypeMissing = true;
+                    }
+                }
+            }
+
             exclusionReason ??= ValidateRoots(featureRoots);
             if (exclusionReason is not null)
             {
@@ -328,11 +390,33 @@ internal static class JsonContextPlanner
                     JsonContextTarget.LambdaFunctionPerFeature => SliceDiagnostics.MissingLambdaJsonContext,
                     _ => SliceDiagnostics.MissingLambdaJsonContext,
                 };
-                diagnostics.Add(EquatableDiagnostic.Create(
-                    missingContextDiagnostic,
-                    feature.GetDiagnosticLocationModel(),
-                    feature.TypeName,
-                    exclusionReason));
+
+                if (isPerTypeMissing)
+                {
+                    // Carry structured data so the code fix can insert the missing [JsonSerializable] entries.
+                    var missingFqns = BuildMissingRootsFqnString(missingRootsForFix);
+                    var properties = new[]
+                    {
+                        new KeyValuePair<string, string>("MissingRoots", missingFqns),
+                        new KeyValuePair<string, string>("Target", target.ToString()),
+                        new KeyValuePair<string, string>("ContextFqn", explicitContextFqn!),
+                    };
+                    diagnostics.Add(EquatableDiagnostic.CreateWithProperties(
+                        missingContextDiagnostic,
+                        feature.GetDiagnosticLocationModel(),
+                        properties,
+                        feature.TypeName,
+                        exclusionReason));
+                }
+                else
+                {
+                    diagnostics.Add(EquatableDiagnostic.Create(
+                        missingContextDiagnostic,
+                        feature.GetDiagnosticLocationModel(),
+                        feature.TypeName,
+                        exclusionReason));
+                }
+
                 continue;
             }
 
@@ -374,6 +458,23 @@ internal static class JsonContextPlanner
         {
             roots.Add(new JsonRootType(bodyParam.TypeFqn));
         }
+        else if (SourceGenerationHelpers.IsInferredBodyMethod(feature.HttpMethod))
+        {
+            // Phase 1a heuristic: nested Request record body detection.
+            // When FindBodyParam returns null (the type isn't in serializableTypes yet),
+            // check if any parameter is a nested type of this feature class.
+            // This catches the conventional "Request" record pattern where the user
+            // forgot to add [JsonSerializable] to the context — detection only,
+            // binding behavior (FindBodyParam / ResolveConventionBinding) is unchanged.
+            foreach (var p in feature.GetParams())
+            {
+                if (JsonContextRootHelpers.IsNestedTypeOf(p.TypeFqn, feature.FullyQualifiedTypeName))
+                {
+                    roots.Add(new JsonRootType(p.TypeFqn));
+                    break; // Conventional SliceFx pattern has one Request record per feature.
+                }
+            }
+        }
 
         var responseType = SourceGenerationHelpers.GetAwaitedReturnType(feature.ReturnTypeFqn);
         if (responseType is not null
@@ -393,6 +494,29 @@ internal static class JsonContextPlanner
         }
 
         return roots.ToImmutable();
+    }
+
+    private static ImmutableArray<JsonRootType> CollectMissingRoots(
+        ImmutableArray<JsonRootType> roots,
+        HashSet<string> serializableTypes)
+    {
+        var missing = ImmutableArray.CreateBuilder<JsonRootType>();
+        foreach (var root in roots)
+        {
+            // Framework types (System.*, Microsoft.*) have built-in STJ converters and do not
+            // require explicit [JsonSerializable] entries — skip them in missing-root detection.
+            if (JsonContextRootHelpers.IsFrameworkType(root.TypeFqn))
+            {
+                continue;
+            }
+
+            if (!serializableTypes.Contains(root.TypeFqn))
+            {
+                missing.Add(root);
+            }
+        }
+
+        return missing.ToImmutable();
     }
 
     private static string? ValidateRoots(ImmutableArray<JsonRootType> roots)

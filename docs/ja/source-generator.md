@@ -93,7 +93,7 @@ invalid feature shape は compile time に `SLICE###` diagnostic として報告
 | `SLICE012` | Error | Validation | 同じ request に複数の `ISliceValidator<T>` が対応しています。 | rule を1つの validator にまとめます。 |
 | `SLICE013` | Error | Validation | validator target type が discovered Slice request parameter と一致しません。 | validator を削除するか、feature handler で使われる request type を target にします。 |
 | `SLICE020` | Info | WASI portability | return type が ASP.NET-specific で WASI route table から除外されます。 | POCO、`SliceResult`、`WasiResponse`、`Task<T>`、`ValueTask<T>` を返します。 |
-| `SLICE021` | Warning | WASI portability | WASI JSON serialization metadata を安全に生成できません。 | WASI target 向け `JsonSerializerContext` を提供します。 |
+| `SLICE021` | Warning | WASI portability | フィーチャーに必要な WASI JSON serialization metadata が不足しているか欠落しています。`[SliceJsonContext(Wasi)]` コンテキストが存在し `[JsonSerializable]` エントリが1件以上ある場合は不足型名を列挙(型単位検出)。コンテキスト自体が存在しない場合はフィーチャー全体が除外されます。 | `[SliceJsonContext(SliceJsonTarget.Wasi)]` を持つ `JsonSerializerContext` を作成し、必要なボディ/レスポンス型をすべて登録します。 |
 | `SLICE022` | Warning | WASI portability | WASI route が reflection-bound DataAnnotations validation を必要とします。 | supported generated validation か `ISliceValidator<T>` を使います。 |
 | `SLICE023` | Warning | WASI portability | parameter を WASI route table で bind できません。 | supported route/query/header/body shape を使うか ASP.NET-only にします。 |
 | `SLICE030` | Info | Lambda function-per-feature | return type が generated per-feature Lambda handler で supported ではありません。 | POCO、`Task<T>`、`ValueTask<T>`、`APIGatewayHttpApiV2ProxyResponse` を返します。 |
@@ -110,3 +110,8 @@ invalid feature shape は compile time に `SLICE###` diagnostic として報告
 | `SLICE051` | Error | Cross-assembly aggregation | `SliceFxAggregateReferences` が unsupported value です。 | `true`/`false`、`1`/`0`、`yes`/`no` を使います。 |
 | `SLICE060` | Warning | Minimal API migration overlap | raw Minimal API route literal が generated Slice route と重複します。 | 片方を削除するか意図的な migration として扱います。 |
 | `SLICE061` | Warning | Minimal API migration overlap | raw Minimal API endpoint name が generated Slice endpoint name と重複します。 | endpoint name を変えるか `FeatureAttribute.Name` を設定します。 |
+| `SLICE070` | Error | ASP.NET NativeAOT-safe registration | NativeAOT 登録モードでバインド不能なパラメータ型があります。 | `[assembly: SliceAspNetAot]` を外すか、supported parameter shape(route・query・header・body・DI・`CancellationToken`・`HttpContext`)を使います。 |
+| `SLICE071` | Error | ASP.NET NativeAOT-safe registration | フィーチャーのボディまたはレスポンス型が `[SliceJsonContext(SliceJsonTarget.AspNet)]` コンテキストに不足しています。コンテキストが存在し `[JsonSerializable]` エントリが1件以上ある場合は不足型名を個別に列挙(型単位検出)。コンテキスト自体が存在しない場合はすべての必要型を列挙。 | 不足型ごとに `[JsonSerializable(typeof(T))]` を追加するか、`slicefx json-context --fix` を実行して自動挿入します。 |
+| `SLICE072` | Error | ASP.NET NativeAOT-safe registration | フィーチャーがリフレクション依存の DataAnnotations を使っています。 | supported generated 属性(`Required`・`StringLength`・`MinLength`・`MaxLength`・`EmailAddress`・`Url`・`HttpsUrl`・`RegularExpression`・`Range`)か `ISliceValidator<T>` を使います。 |
+| `SLICE073` | Warning | ASP.NET NativeAOT-safe registration | フィーチャーが `IResult` を返しています。AOT 安全性は result 自身のシリアライズに依存します。 | `JsonTypeInfo` を指定した `TypedResults.Json` を使うか、`ConfigureHttpJsonOptions` でレスポンス型を登録します。 |
+| `SLICE074` | Error | ASP.NET NativeAOT-safe registration | 参照 Slice モジュールが `[assembly: SliceAspNetAot]` なしでコンパイルされています。 | 参照モジュールにも `[assembly: SliceAspNetAot]` を追加します。 |

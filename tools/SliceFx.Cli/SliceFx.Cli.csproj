@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\Shared\SliceRouteManifestSchema.cs" Link="Shared\SliceRouteManifestSchema.cs" />
+    <Compile Include="..\..\src\Shared\JsonContextRootHelpers.cs" Link="Shared\JsonContextRootHelpers.cs" />
   </ItemGroup>
 
 </Project>
