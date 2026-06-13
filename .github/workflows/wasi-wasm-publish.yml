@@ -1,0 +1,41 @@
+name: WASI wasm publish
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
+  pull_request:
+    paths:
+      - 'samples/SliceFx.WasiSample/**'
+      - 'src/SliceFx.Wasi/**'
+      - 'src/SliceFx.SourceGenerator/**'
+
+permissions:
+  contents: read
+
+jobs:
+  wasi-publish:
+    name: Publish WasiSample (wasi-wasm)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Publish (wasi-wasm)
+        run: dotnet publish samples/SliceFx.WasiSample/SliceFx.WasiSample.csproj -r wasi-wasm -c Release
+
+      - name: Assert wasm component was produced
+        run: |
+          if [ ! -f samples/SliceFx.WasiSample/dist/slice-wasi-sample.wasm ]; then
+            echo "::error::Expected samples/SliceFx.WasiSample/dist/slice-wasi-sample.wasm was not produced."
+            exit 1
+          fi
+          size=$(stat -c %s samples/SliceFx.WasiSample/dist/slice-wasi-sample.wasm)
+          echo "WASM component size: $size bytes ($(( size / 1024 / 1024 )) MB)" \
+            >> "$GITHUB_STEP_SUMMARY"

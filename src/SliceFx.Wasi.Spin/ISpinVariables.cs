@@ -5,8 +5,8 @@ namespace SliceFx.Wasi.Spin;
 /// </summary>
 /// <remarks>
 /// On Fermyon Cloud / Spin, implement this interface using the WIT-generated free function.
-/// componentize-dotnet emits it on a <c>*Interop</c> static class (e.g. <c>VariablesInterop.Get</c>);
-/// the generated <c>IVariables</c> type carries only the <c>Error</c> shape. The underlying WIT
+/// componentize-dotnet emits it on a <c>*ImportsInterop</c> static class (e.g. <c>VariablesImportsInterop.Get</c>);
+/// the generated <c>IVariablesImports</c> type carries only the <c>Error</c> shape. The underlying WIT
 /// call is synchronous — wrap it with <c>ValueTask.FromResult(...)</c>, mirroring how
 /// <c>IKeyValueStore</c> fronts the synchronous WASI key-value (<c>wasi:keyvalue</c>) host calls. Implementations are
 /// fail-closed: undefined variable or provider error → <c>null</c>.

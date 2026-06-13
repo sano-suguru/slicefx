@@ -3,14 +3,14 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using SliceFx.Wasi;
-using ITypes = ProxyWorld.wit.imports.wasi.http.v0_2_0.ITypes;
+using ITypes = ProxyWorld.wit.Imports.wasi.http.v0_2_0.ITypesImports;
 
 // CA1707/CA1711: WIT-bindgen generates versioned namespaces (e.g. v0_2_0) containing underscores;
 // this implementation must match those names to satisfy the generated partial/interface contracts.
 #pragma warning disable CA1707, CA1711
-namespace ProxyWorld.wit.exports.wasi.http.v0_2_0;
+namespace ProxyWorld.wit.Exports.wasi.http.v0_2_0;
 
-public class IncomingHandlerImpl : IIncomingHandler
+public class IncomingHandlerImpl : IIncomingHandlerExports
 {
     private const int MaxRequestBodyBytes = 1024 * 1024;
     private const int MaxResponseWriteChunkBytes = 4096;

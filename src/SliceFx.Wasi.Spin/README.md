@@ -44,11 +44,11 @@ var app = builder.Build();
 
 ### 3. Wire the WIT cron export entry point
 
-componentize-dotnet generates a world-level `handle-cron-event` export wired via the `IProxyWorld` pattern — distinct from the `wasi:http/incoming-handler` export that `IIncomingHandler` implements. Add a static entry point in your WIT-only compilation unit:
+componentize-dotnet generates a world-level `handle-cron-event` export wired via the `IProxyWorld` pattern — distinct from the `wasi:http/incoming-handler` export that `IIncomingHandlerExports` implements. Add a static entry point in your WIT-only compilation unit:
 
 ```csharp
 // CronHandlerBridge.cs — compiled only under -r wasi-wasm
-using ProxyWorld.wit.imports.fermyon.spin.v3_0_0;
+using ProxyWorld.wit.Imports.fermyon.spin.v3_0_0;
 using SliceFx.Wasi.Spin;
 
 namespace MyApp;
@@ -63,15 +63,15 @@ public static class CronHandlerBridge
         _app ??= WasiAppFactory.Create();
         var fireTime = DateTimeOffset.FromUnixTimeSeconds((long)cronEvent.Timestamp);
         var context = new SpinCronContext(fireTime);
-        // async func fails component encoding in componentize-dotnet 0.7.0-preview;
-        // declare the WIT export as func (sync) and drive async from here.
+        // async func export encoding was fixed in componentize-dotnet 0.8.0 / wit-bindgen 0.58,
+        // but C# async-export codegen is still preview quality; keep sync func + GetAwaiter().GetResult().
         SpinCronDispatcher.DispatchAsync(_app, context, CancellationToken.None)
             .GetAwaiter().GetResult();
     }
 }
 ```
 
-> **`async func` exports are not supported** in componentize-dotnet 0.7.0-preview — the component encoding step fails. Declare the WIT export as a plain `func` (sync entry point) and call `.GetAwaiter().GetResult()` to drive the async handler synchronously.
+> **`async func` export encoding was fixed in componentize-dotnet 0.8.0 / wit-bindgen 0.58**, but C# async-export codegen is still preview quality — generated code contains `// TODO` and unimplemented `future`/`stream` paths. SliceFx recommends keeping the WIT cron export as a plain `func` (sync entry point) and calling `.GetAwaiter().GetResult()` to drive the async handler synchronously until the upstream codegen stabilises.
 
 ### Cron expression format
 
@@ -116,8 +116,8 @@ On Fermyon Cloud / Spin, implement using the WIT-generated binding. componentize
 ```csharp
 // SpinVariables.cs — compiled only under -r wasi-wasm
 using SliceFx.Wasi.Spin;
-using VariablesInterop = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.VariablesInterop;
-using IVariables = ProxyWorld.wit.imports.fermyon.spin.v2_0_0.IVariables;
+using VariablesImportsInterop = ProxyWorld.wit.Imports.fermyon.spin.v2_0_0.VariablesImportsInterop;
+using IVariablesImports = ProxyWorld.wit.Imports.fermyon.spin.v2_0_0.IVariablesImports;
 
 public sealed class SpinVariablesImpl : ISpinVariables
 {
@@ -125,9 +125,9 @@ public sealed class SpinVariablesImpl : ISpinVariables
     {
         try
         {
-            // VariablesInterop.Get is the WIT-generated free function;
-            // IVariables.Error holds the error type, not the call entry point.
-            return ValueTask.FromResult<string?>(VariablesInterop.Get(name));
+            // VariablesImportsInterop.Get is the WIT-generated free function;
+            // IVariablesImports.Error holds the error type, not the call entry point.
+            return ValueTask.FromResult<string?>(VariablesImportsInterop.Get(name));
         }
         catch (Exception ex) when (ex is WitException or ProxyWorld.WitException)
         {
