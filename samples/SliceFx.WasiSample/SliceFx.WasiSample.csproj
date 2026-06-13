@@ -8,6 +8,8 @@
     <SliceFxRole>Both</SliceFxRole>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- WasiSample uses preview-feed and dynamic-Include packages incompatible with CPM static resolution. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">

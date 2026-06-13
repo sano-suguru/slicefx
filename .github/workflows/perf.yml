@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/perf.yml'
       - 'Directory.Build.props'
+      - 'Directory.Packages.props'
       - 'global.json'
       - 'src/SliceFx.Core/**'
       - 'src/SliceFx.SourceGenerator/**'

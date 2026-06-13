@@ -8,7 +8,13 @@ on:
     paths:
       - 'samples/SliceFx.WasiSample/**'
       - 'src/SliceFx.Wasi/**'
+      - 'src/SliceFx.Core/**'
+      - 'src/Shared/**'
       - 'src/SliceFx.SourceGenerator/**'
+      - 'global.json'
+      - 'Directory.Build.props'
+      - 'Directory.Packages.props'
+      - '.github/workflows/wasi-wasm-publish.yml'
 
 permissions:
   contents: read
