@@ -23,6 +23,16 @@ internal static class JsonContextRootHelpers
     private const string TaskPrefix = "global::System.Threading.Tasks.Task<";
     private const string ValueTaskPrefix = "global::System.Threading.Tasks.ValueTask<";
 
+    // Roslyn's FullyQualifiedFormat retains C# keyword aliases (e.g. "string", "int") inside
+    // generic arguments such as Task<string>.  These are built-in types with native STJ converters
+    // and never need an explicit [JsonSerializable] entry.
+    private static readonly HashSet<string> s_csharpKeywordTypes = new(StringComparer.Ordinal)
+    {
+        "string", "int", "long", "short", "uint", "ulong", "ushort",
+        "bool", "double", "float", "decimal", "byte", "sbyte", "char",
+        "object", "void",
+    };
+
     /// <summary>
     /// Returns true when <paramref name="paramTypeFqn"/> (fully-qualified, may include
     /// <c>global::</c> prefix) is a nested type of <paramref name="featureTypeFqn"/>.
@@ -89,11 +99,23 @@ internal static class JsonContextRootHelpers
     }
 
     /// <summary>
-    /// Returns true when <paramref name="typeFqn"/> is a framework type whose namespace
-    /// starts with <c>System.</c> or <c>Microsoft.</c>.
+    /// Returns true when <paramref name="typeFqn"/> is a framework type that has built-in
+    /// STJ serializer support and does not require an explicit <c>[JsonSerializable]</c> entry.
+    /// Covers:
+    /// <list type="bullet">
+    ///   <item>FQN forms prefixed with <c>System.</c> or <c>Microsoft.</c></item>
+    ///   <item>C# keyword aliases (<c>string</c>, <c>int</c>, <c>bool</c>, …) that Roslyn may
+    ///         emit inside generic arguments even when <c>FullyQualifiedFormat</c> is requested</item>
+    /// </list>
     /// </summary>
     public static bool IsFrameworkType(string typeFqn)
     {
+        // Fast path: C# keyword aliases (e.g. "string", "int") never have a global:: prefix.
+        if (s_csharpKeywordTypes.Contains(typeFqn))
+        {
+            return true;
+        }
+
         var bare = TrimGlobalAlias(typeFqn);
         return bare.StartsWith(SystemPrefix, StringComparison.Ordinal)
             || bare.StartsWith(MicrosoftPrefix, StringComparison.Ordinal);

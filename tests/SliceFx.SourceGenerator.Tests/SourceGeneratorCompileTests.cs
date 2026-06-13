@@ -4581,6 +4581,49 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Generator_does_not_exclude_wasi_route_with_string_response_and_registered_request()
+    {
+        // Regression guard: a feature returning Task<string> with a [SliceJsonContext(Wasi)]
+        // that registers the Request type must NOT be excluded by per-type detection.
+        // System.String is a framework type and does not need an explicit [JsonSerializable] entry.
+        var source = """
+            using System.Collections.Generic;
+            using System.ComponentModel.DataAnnotations;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiFilterDispatchApp
+            {
+                [SliceFx.SliceJsonContext(SliceFx.SliceJsonTarget.Wasi)]
+                [System.Text.Json.Serialization.JsonSerializable(
+                    typeof(WasiFilterDispatchApp.Features.Items.CreateItem.Request))]
+                public partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
+            }
+
+            namespace WasiFilterDispatchApp.Features.Items
+            {
+                [Feature("POST /items")]
+                public static class CreateItem
+                {
+                    public record Request([Required, MinLength(1)] string Name);
+                    public static Task<string> Handle(Request req, CancellationToken ct) =>
+                        Task.FromResult(req.Name);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiFilterDispatchApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiags, TestContext.Current.CancellationToken);
+
+        // SLICE021 must NOT fire — System.String is a framework type, no [JsonSerializable] entry needed.
+        var slice021Diags = generatorDiags.Where(d => d.Id == "SLICE021").ToList();
+        Assert.Empty(slice021Diags);
+    }
+
+    [Fact]
     public async Task Generated_wasi_routes_execute_neutral_filter_short_circuit_before_validation()
     {
         // This test verifies that a neutral filter (API key check) short-circuits with 401
