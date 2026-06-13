@@ -70,6 +70,38 @@ internal sealed partial class AotJsonContext : JsonSerializerContext { }
 
 全診断カタログは [docs/source-generator.md](../source-generator.md) を参照。
 
+**SLICE071 — 型単位の検出。** `[SliceJsonContext(AspNet)]` クラスが存在し、かつ `[JsonSerializable]` エントリが1件以上ある場合、ジェネレーターは必要なルート(レスポンス型・明示 `[FromBody]` パラメータ・規約上のネスト `Request` レコード)がすべて登録されているかを型単位で検査します。不足している型はエラーメッセージに個別に列挙されます。
+
+コンテキストが存在するが `[JsonSerializable]` エントリがゼロの場合、空コンテキストが意図的なものか区別できないため、全ルートが列挙されるコンテキスト欠落扱いのみ発火します。
+
+### 検出スコープと限界
+
+ジェネレーターが自動検出できるルート:
+
+- **レスポンス型** — 全ターゲット。
+- **明示 `[FromBody]` パラメータ** — 全ターゲット。
+- **ネスト `Request` レコード**(型名がフィーチャークラス名 + `.` で始まる) — POST/PUT/PATCH 規約ボディ; DI コンテナへの登録不要。
+
+コンパイル時に検出できないもの:
+
+- **`[FromBody]` なし・フィーチャークラス非ネストの複合ボディ** — コンパイラが DI サービスと区別できないため検出不能。
+
+### `slicefx json-context`
+
+CLI はジェネレーター診断のワークフローコンパニオンを提供します:
+
+```bash
+# 不足エントリを報告(不足あれば非ゼロ終了 — CI ゲートに使用可)
+slicefx json-context --check [--target aspnet|wasi|all] [--project path/to/app.csproj]
+
+# 不足エントリをコンテキストファイルにインプレース追記
+slicefx json-context --fix [--target aspnet|wasi|all] [--project path/to/app.csproj]
+```
+
+`--check` と `--fix` は同時指定可能。フラグを省略した場合は `--check` が暗黙指定されます。
+
+**注意:** ビルド済みプロジェクトではソース生成ルートマニフェストを使用し、未ビルドの場合は `Features/**/*.cs` スキャンにフォールバックします。フォールバック時は戻り値型がソース内の短縮名として現れるため、登録済み FQN エントリはサフィックス一致で照合されます。正確な型単位検出にはプロジェクトを先にビルドしてください。
+
 ### バリデーション
 
 ソース生成 DataAnnotations バリデーション(WASI パスと同じルール)が `[Filter<T>]` エンドポイントフィルターの前に実行されます。リフレクション依存のルール(`IValidatableObject`、型レベル属性、`ValidationAttribute` サブクラス)は SLICE072 を生成するので `ISliceValidator<T>` に移してください。

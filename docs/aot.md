@@ -75,12 +75,53 @@ custom types) produce a **SLICE070 error** at build time.
 | ID | Meaning |
 |---|---|
 | SLICE070 | Parameter type cannot be bound in AOT mode — fix or remove `[assembly: SliceAspNetAot]` |
-| SLICE071 | Missing `[JsonSerializable]` root in the `[SliceJsonContext(AspNet)]` context |
+| SLICE071 | Missing `[JsonSerializable]` root(s) in the `[SliceJsonContext(AspNet)]` context |
 | SLICE072 | Reflection-dependent DataAnnotations — use generated-supported attributes or `ISliceValidator<T>` |
 | SLICE073 | `IResult` return: the result's own `ExecuteAsync` is called directly; ensure it is AOT-safe |
 | SLICE074 | Referenced Slice module was not compiled with `[assembly: SliceAspNetAot]` |
 
 See [docs/source-generator.md](source-generator.md) for the full diagnostic catalog.
+
+**SLICE071 — per-type detection.** When a `[SliceJsonContext(AspNet)]` class exists and already
+has at least one `[JsonSerializable]` entry, the generator also checks that every required root
+(response type and explicit `[FromBody]` parameter, plus nested `Request` records by convention)
+is registered. Missing roots appear as individual type names in the error message, making it
+possible to fix the context without guesswork.
+
+When the context exists but has zero `[JsonSerializable]` entries, SLICE071 fires only for the
+context-missing case (all roots listed) because an empty context could be intentional.
+
+### Detection scope and limitations
+
+The generator can detect the following roots automatically:
+
+- **Response types** — all targets.
+- **Explicit `[FromBody]` parameters** — all targets.
+- **Nested `Request` records** (type starts with `FeatureClass.`) — POST/PUT/PATCH convention body; detected without registering the type in the DI container.
+
+The following cannot be detected at compile time:
+
+- **Unannotated complex body parameters** that are not nested types of the feature class — the compiler cannot distinguish them from DI services without explicit `[FromBody]`.
+
+### `slicefx json-context`
+
+The CLI provides a workflow companion for the generator diagnostics:
+
+```bash
+# Report missing entries (non-zero exit on any gap — suitable for CI)
+slicefx json-context --check [--target aspnet|wasi|all] [--project path/to/app.csproj]
+
+# Insert the missing [JsonSerializable] entries in-place
+slicefx json-context --fix [--target aspnet|wasi|all] [--project path/to/app.csproj]
+```
+
+`--check` and `--fix` can be combined: `--check --fix` reports and patches in a single pass.
+When no flag is specified, `--check` is implied.
+
+**Note:** The CLI operates on the source-generated route manifest when the project has been
+built; otherwise it falls back to scanning `Features/**/*.cs`. In fallback mode, return
+types appear as short names (the text in the source file), so registered FQN entries are
+matched by suffix. Build the project first for accurate per-type results.
 
 ### Validation
 
