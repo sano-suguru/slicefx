@@ -42,7 +42,7 @@
           PackagePath="analyzers/dotnet/cs"
           Visible="false" />
     <!-- Pack the code fix DLL alongside the generator; Workspaces is NOT included (provided by IDE). -->
-    <None Include="$(OutputPath)..\SliceFx.SourceGenerator.CodeFixes\SliceFx.SourceGenerator.CodeFixes.dll"
+    <None Include="$(MSBuildProjectDirectory)\..\SliceFx.SourceGenerator.CodeFixes\bin\$(Configuration)\netstandard2.0\SliceFx.SourceGenerator.CodeFixes.dll"
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
           Visible="false" />
