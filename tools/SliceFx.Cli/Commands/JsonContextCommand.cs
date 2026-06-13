@@ -69,6 +69,16 @@ internal static class JsonContextCommand
         var discovery = RouteCatalog.DiscoverDetailed(ctx);
         var routes = discovery.Routes;
 
+        // --fix requires a built project so the source generator can resolve fully-qualified type names.
+        // In source-scan mode (no compiled manifest) type names are unqualified syntax strings; prepending
+        // global:: would produce unresolvable [JsonSerializable] entries. Refuse early and guide the user.
+        if (fix && !discovery.HasGeneratedMetadata)
+        {
+            Console.Error.WriteLine("error: '--fix' requires a built project. Run 'dotnet build' first, then re-run 'slicefx json-context --fix'.");
+            Console.Error.WriteLine("       (In source-scan mode, user-defined types cannot be fully qualified and automatic insertion would produce unresolvable entries.)");
+            return 1;
+        }
+
         var contexts = DiscoverContextClasses(ctx.ProjectDirectory.FullName);
         if (contexts.Length == 0)
         {
@@ -381,9 +391,15 @@ internal static class JsonContextCommand
         const string globalValueTask = "global::System.Threading.Tasks.ValueTask<";
         const string bareTask = "System.Threading.Tasks.Task";
         const string bareValueTask = "System.Threading.Tasks.ValueTask";
+        // Unqualified forms emitted by source-scan (ReturnType.ToString() from syntax, no FQN).
+        // StartsWith("Task<", Ordinal) safely rejects "MyNs.Task<T>", "Tasks.Task<T>",
+        // "MyTask<T>" etc. because they don't start with the bare prefix.
+        const string bareGenericTask = "Task<";
+        const string bareGenericValueTask = "ValueTask<";
 
         if (typeFqn is "void" or "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask"
-            or "global::System.Threading.Tasks.Task" or "global::System.Threading.Tasks.ValueTask")
+            or "global::System.Threading.Tasks.Task" or "global::System.Threading.Tasks.ValueTask"
+            or "Task" or "ValueTask")
         {
             return null;
         }
@@ -406,6 +422,16 @@ internal static class JsonContextCommand
         if (typeFqn.StartsWith(globalValueTask, StringComparison.Ordinal) && typeFqn.EndsWith('>'))
         {
             return StripTaskWrapper(typeFqn[globalValueTask.Length..^1]);
+        }
+
+        if (typeFqn.StartsWith(bareGenericValueTask, StringComparison.Ordinal) && typeFqn.EndsWith('>'))
+        {
+            return StripTaskWrapper(typeFqn[bareGenericValueTask.Length..^1]);
+        }
+
+        if (typeFqn.StartsWith(bareGenericTask, StringComparison.Ordinal) && typeFqn.EndsWith('>'))
+        {
+            return StripTaskWrapper(typeFqn[bareGenericTask.Length..^1]);
         }
 
         // Unwrap IResult / Task / ValueTask without type argument
