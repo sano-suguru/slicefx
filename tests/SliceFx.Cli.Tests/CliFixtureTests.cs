@@ -3738,6 +3738,73 @@ public class CliFixtureTests
         Assert.Equal(0, exitCode);
     }
 
+    [Fact]
+    public async Task Json_context_fix_inserts_correct_fqn_entries_in_manifest_mode()
+    {
+        // Verifies the --fix happy path: with a built project (manifest mode) the command
+        // inserts fully-qualified [JsonSerializable] entries that actually compile.
+        using var fixture = CliProjectFixture.Create(
+            "json-ctx-fix-manifest-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>Json.Ctx.Fix.Manifest.App</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Orders/CreateOrder.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            namespace Json.Ctx.Fix.Manifest.App.Features.Orders;
+
+            [Feature("POST /orders")]
+            public static class CreateOrder
+            {
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1));
+
+                public sealed record Request(string ProductId);
+                public sealed record Response(int OrderId);
+            }
+            """);
+        var contextPath = Path.Combine(fixture.Directory.FullName, "AotJsonContext.cs");
+        File.WriteAllText(contextPath,
+            """
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [SliceJsonContext(SliceJsonTarget.AspNet)]
+            [JsonSerializable(typeof(Json.Ctx.Fix.Manifest.App.Features.Orders.CreateOrder.Request))]
+            internal partial class AotJsonContext : JsonSerializerContext { }
+            """);
+
+        // Build first so the source generator emits the manifest (manifest mode).
+        await fixture.BuildAsync();
+
+        // --fix must succeed and insert the missing Response entry.
+        var fixExitCode = await JsonContextCommand.Build()
+            .Parse(["--fix", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, fixExitCode);
+
+        // The inserted entry must be the correct FQN, not a bare global:: short name.
+        var contextSource = await File.ReadAllTextAsync(contextPath, TestContext.Current.CancellationToken);
+        Assert.Contains("global::Json.Ctx.Fix.Manifest.App.Features.Orders.CreateOrder.Response", contextSource);
+        Assert.DoesNotContain("global::Response", contextSource);
+
+        // The updated context file must compile successfully.
+        await fixture.BuildAsync();
+    }
+
     private sealed class StubHttpHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;
