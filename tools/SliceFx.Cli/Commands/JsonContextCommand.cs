@@ -424,7 +424,11 @@ internal static class JsonContextCommand
             return true;
         }
 
-        if (JsonContextRootHelpers.IsFrameworkType(typeFqn))
+        // Exclude types whose entire type tree is framework types (built-in STJ support /
+        // transitive coverage). A framework generic container wrapping a user type — e.g.
+        // List<MyDto> — is NOT excluded: the container itself needs an explicit
+        // [JsonSerializable] entry, matching the source generator's missing-root detection.
+        if (!JsonContextRootHelpers.RequiresJsonSerializableRegistration(typeFqn))
         {
             return true;
         }

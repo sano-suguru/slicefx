@@ -83,12 +83,11 @@ internal static class SourceGenerationHelpers
     public static bool IsSimpleType(string typeFqn)
         => s_simpleTypes.Contains(typeFqn) || IsSimpleNullableType(typeFqn);
 
+    // Single source of truth for framework-type detection, shared with the CLI. Delegating here
+    // (rather than re-implementing) keeps the C# keyword-alias handling (string/int/object/byte/…)
+    // consistent across body/request classification and JSON-root detection.
     public static bool IsFrameworkType(string typeFqn)
-    {
-        var value = TrimGlobalAlias(typeFqn);
-        return value.StartsWith("System.", StringComparison.Ordinal)
-            || value.StartsWith("Microsoft.", StringComparison.Ordinal);
-    }
+        => JsonContextRootHelpers.IsFrameworkType(typeFqn);
 
     public static bool IsRequestLikeParameter(HandleParamModel parameter)
         => parameter.BindingSource is not ("route" or "query" or "header" or "services" or "keyedServices" or "parameters")

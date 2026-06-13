@@ -503,9 +503,12 @@ internal static class JsonContextPlanner
         var missing = ImmutableArray.CreateBuilder<JsonRootType>();
         foreach (var root in roots)
         {
-            // Framework types (System.*, Microsoft.*) have built-in STJ converters and do not
-            // require explicit [JsonSerializable] entries — skip them in missing-root detection.
-            if (JsonContextRootHelpers.IsFrameworkType(root.TypeFqn))
+            // Skip roots whose entire type tree is framework types (built-in STJ support, or
+            // covered transitively). A framework generic container that wraps a user type — e.g.
+            // List<MyDto> — needs the container itself registered, so it is NOT skipped here:
+            // the emitter asks for __JsonTypeInfo<List<MyDto>>(), so the container FQN is the
+            // missing root reported verbatim (not its element type).
+            if (!JsonContextRootHelpers.RequiresJsonSerializableRegistration(root.TypeFqn))
             {
                 continue;
             }

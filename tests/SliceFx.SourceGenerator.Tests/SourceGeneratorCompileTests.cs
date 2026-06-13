@@ -5174,6 +5174,192 @@ public class SourceGeneratorCompileTests
         Assert.Contains("Response", slice021.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Generator_reports_SLICE071_for_generic_collection_response_when_only_element_type_registered()
+    {
+        // Regression: a feature returning Task<List<Todo>> needs List<Todo> ITSELF registered.
+        // Registering only the element type (Todo) is insufficient — the emitter asks for
+        // __JsonTypeInfo<List<Todo>>(), so the container is the missing root. Previously the
+        // generic container was wrongly skipped as a System.* framework type (false negative,
+        // surfacing only as an AOT runtime serialization failure).
+        var source = """
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [assembly: global::SliceFx.SliceAspNetAot]
+
+            namespace AotApp
+            {
+                // Element type Todo is registered, but the List<Todo> container is NOT.
+                [SliceJsonContext(SliceJsonTarget.AspNet)]
+                [JsonSerializable(typeof(global::AotApp.Features.Todos.Todo))]
+                public sealed partial class AotContext : global::System.Text.Json.Serialization.JsonSerializerContext { }
+            }
+
+            namespace AotApp.Features.Todos
+            {
+                public record Todo(int Id, string Title);
+
+                [Feature("GET /todos")]
+                public static class ListTodos
+                {
+                    public static Task<List<Todo>> Handle() => Task.FromResult(new List<Todo>());
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("AotApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiags, TestContext.Current.CancellationToken);
+
+        Assert.Contains(generatorDiags, d => d.Id == "SLICE071" && d.Severity == DiagnosticSeverity.Error);
+        var slice071 = generatorDiags.First(d => d.Id == "SLICE071");
+        Assert.Contains("List", slice071.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_does_not_report_SLICE071_for_generic_collection_response_when_container_registered()
+    {
+        // The container List<Todo> is registered verbatim — no SLICE071, and the generated
+        // __JsonTypeInfo<List<Todo>>() resolves against the STJ-generated context (no errors).
+        var source = """
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [assembly: global::SliceFx.SliceAspNetAot]
+
+            namespace AotApp
+            {
+                [SliceJsonContext(SliceJsonTarget.AspNet)]
+                [JsonSerializable(typeof(global::System.Collections.Generic.List<global::AotApp.Features.Todos.Todo>))]
+                public sealed partial class AotContext : global::System.Text.Json.Serialization.JsonSerializerContext { }
+            }
+
+            namespace AotApp.Features.Todos
+            {
+                public record Todo(int Id, string Title);
+
+                [Feature("GET /todos")]
+                public static class ListTodos
+                {
+                    public static Task<List<Todo>> Handle() => Task.FromResult(new List<Todo>());
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("AotApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var generatorDiags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(generatorDiags, d => d.Id == "SLICE071");
+        Assert.DoesNotContain(output.GetDiagnostics(TestContext.Current.CancellationToken), d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Generator_does_not_report_SLICE071_for_framework_only_generic_and_array_responses()
+    {
+        // Guard against new false positives: byte[], List<string>, and Memory<byte> are
+        // framework-only type trees (built-in STJ support / transitive coverage) and must NOT
+        // require an explicit [JsonSerializable] entry, even though they are constructed/array
+        // System.* types. RequiresJsonSerializableRegistration only flags type trees that
+        // reference a user-defined type.
+        var source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [assembly: global::SliceFx.SliceAspNetAot]
+
+            namespace AotApp
+            {
+                [SliceJsonContext(SliceJsonTarget.AspNet)]
+                [JsonSerializable(typeof(global::AotApp.Features.Data.Marker))]
+                public sealed partial class AotContext : global::System.Text.Json.Serialization.JsonSerializerContext { }
+            }
+
+            namespace AotApp.Features.Data
+            {
+                public record Marker(int Value);
+
+                [Feature("GET /marker")]
+                public static class GetMarker
+                {
+                    public static Marker Handle() => new(1);
+                }
+
+                [Feature("GET /bytes")]
+                public static class GetBytes
+                {
+                    public static Task<byte[]> Handle() => Task.FromResult(Array.Empty<byte>());
+                }
+
+                [Feature("GET /names")]
+                public static class GetNames
+                {
+                    public static Task<List<string>> Handle() => Task.FromResult(new List<string>());
+                }
+
+                [Feature("GET /buffer")]
+                public static class GetBuffer
+                {
+                    public static Memory<byte> Handle() => Memory<byte>.Empty;
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("AotApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(generatorDiags, d => d.Id == "SLICE071");
+    }
+
+    [Fact]
+    public void Generator_reports_SLICE021_for_generic_collection_response_when_only_element_type_registered()
+    {
+        // WASI counterpart of the AspNet collection test. A Wasi context EXISTS and registers the
+        // element Item (so Count>0 / explicitContextFqn != null → the per-type CollectMissingRoots
+        // path runs, NOT the context-absent branch), but the List<Item> container is missing.
+        // On the unfixed generator List<Item> was skipped as a System.* framework type → no SLICE021.
+        var source = """
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            namespace WasiCollectionApp
+            {
+                [SliceFx.SliceJsonContext(SliceFx.SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(global::WasiCollectionApp.Features.Items.Item))]
+                public partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
+            }
+
+            namespace WasiCollectionApp.Features.Items
+            {
+                public record Item(int Id, string Name);
+
+                [Feature("GET /items")]
+                public static class ListItems
+                {
+                    public static Task<List<Item>> Handle() => Task.FromResult(new List<Item>());
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiCollectionApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiags, TestContext.Current.CancellationToken);
+
+        var slice021 = Assert.Single(generatorDiags, d => d.Id == "SLICE021" && d.Severity == DiagnosticSeverity.Warning);
+        Assert.Contains("List", slice021.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
     private sealed class SourceGeneratorTestLambdaLogger : ILambdaLogger
     {
         public void Log(string message)

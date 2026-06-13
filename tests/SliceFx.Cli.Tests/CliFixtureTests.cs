@@ -3539,6 +3539,90 @@ public class CliFixtureTests
         Assert.Equal(0, checkExitCode);
     }
 
+    [Fact]
+    public async Task Json_context_check_reports_missing_generic_collection_container()
+    {
+        // A feature returning a generic collection of a user type needs the CONTAINER registered.
+        // Registering only the element (Todo) is insufficient — List<Todo> itself is the root the
+        // AOT/WASI emitter asks for. The return type is written fully-qualified and synchronous so
+        // the source-scan root string is "System.Collections.Generic.List<Todo>": the unfixed CLI
+        // excluded it as a System.* framework type (exit 0); the fix flags it (exit 1).
+        using var fixture = CliProjectFixture.Create("json-ctx-collection-app");
+        fixture.WriteFeature(
+            "Features/Todos/ListTodos.cs",
+            """
+            using SliceFx;
+            namespace Json.Ctx.Collection.App.Features.Todos;
+
+            [Feature("GET /todos")]
+            public static class ListTodos
+            {
+                public static System.Collections.Generic.List<Todo> Handle() => new();
+            }
+
+            public sealed record Todo(int Id, string Title);
+            """);
+        // Context registers only the element type Todo, NOT the List<Todo> container.
+        fixture.WriteFeature(
+            "AotJsonContext.cs",
+            """
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [SliceJsonContext(SliceJsonTarget.AspNet)]
+            [JsonSerializable(typeof(Json.Ctx.Collection.App.Features.Todos.Todo))]
+            internal partial class AotJsonContext : JsonSerializerContext { }
+            """);
+
+        var exitCode = await JsonContextCommand.Build()
+            .Parse(["--check", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, exitCode);
+    }
+
+    [Fact]
+    public async Task Json_context_check_passes_when_generic_collection_container_is_registered()
+    {
+        // Registering the List<Todo> container itself (identical text to the scanned root) clears
+        // the missing-root — guards that the fix is satisfiable, not just noisier.
+        using var fixture = CliProjectFixture.Create("json-ctx-collection-ok-app");
+        fixture.WriteFeature(
+            "Features/Todos/ListTodos.cs",
+            """
+            using SliceFx;
+            namespace Json.Ctx.Collection.Ok.App.Features.Todos;
+
+            [Feature("GET /todos")]
+            public static class ListTodos
+            {
+                public static System.Collections.Generic.List<Todo> Handle() => new();
+            }
+
+            public sealed record Todo(int Id, string Title);
+            """);
+        // Register the container with text identical to the scanned root
+        // "System.Collections.Generic.List<Todo>" (short Todo resolved via the using), so the
+        // CLI's exact-match registration check is satisfied.
+        fixture.WriteFeature(
+            "AotJsonContext.cs",
+            """
+            using System.Text.Json.Serialization;
+            using SliceFx;
+            using Json.Ctx.Collection.Ok.App.Features.Todos;
+
+            [SliceJsonContext(SliceJsonTarget.AspNet)]
+            [JsonSerializable(typeof(System.Collections.Generic.List<Todo>))]
+            internal partial class AotJsonContext : JsonSerializerContext { }
+            """);
+
+        var exitCode = await JsonContextCommand.Build()
+            .Parse(["--check", "--target", "aspnet", "--project", fixture.ProjectFile.FullName])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+    }
+
     private sealed class StubHttpHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;

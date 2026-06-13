@@ -24,6 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Expose internal shared helpers (e.g. JsonContextRootHelpers) for direct unit testing. -->
+    <InternalsVisibleTo Include="SliceFx.SourceGenerator.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\Shared\SliceRouteManifestSchema.cs"
              Link="Shared\SliceRouteManifestSchema.cs" />
     <Compile Include="..\Shared\JsonContextRootHelpers.cs"

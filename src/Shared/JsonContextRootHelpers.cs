@@ -18,10 +18,6 @@ internal static class JsonContextRootHelpers
     private const string GlobalPrefix = "global::";
     private const string SystemPrefix = "System.";
     private const string MicrosoftPrefix = "Microsoft.";
-    private const string SliceResultPrefix = "global::SliceFx.SliceResult<";
-    private const string SliceResultNonGenericFqn = "global::SliceFx.SliceResult";
-    private const string TaskPrefix = "global::System.Threading.Tasks.Task<";
-    private const string ValueTaskPrefix = "global::System.Threading.Tasks.ValueTask<";
 
     // Roslyn's FullyQualifiedFormat retains C# keyword aliases (e.g. "string", "int") inside
     // generic arguments such as Task<string>.  These are built-in types with native STJ converters
@@ -49,56 +45,6 @@ internal static class JsonContextRootHelpers
     }
 
     /// <summary>
-    /// Unwraps <c>Task&lt;T&gt;</c>, <c>ValueTask&lt;T&gt;</c>, and <c>SliceResult&lt;T&gt;</c>
-    /// recursively to reach the payload type FQN.  Returns <c>null</c> when the type is
-    /// <c>Task</c> / <c>ValueTask</c> (void), <c>SliceResult</c> (non-generic), or a raw
-    /// <c>IResult</c>-family type (pass-through).
-    /// </summary>
-    public static string? UnwrapReturnType(string? returnTypeFqn)
-    {
-        if (returnTypeFqn is null)
-        {
-            return null;
-        }
-
-        // Unwrap Task<T> and ValueTask<T>
-        if (returnTypeFqn.StartsWith(TaskPrefix, StringComparison.Ordinal))
-        {
-            var inner = returnTypeFqn.Substring(TaskPrefix.Length).TrimEnd('>');
-            return UnwrapReturnType(inner);
-        }
-
-        if (returnTypeFqn.StartsWith(ValueTaskPrefix, StringComparison.Ordinal))
-        {
-            var inner = returnTypeFqn.Substring(ValueTaskPrefix.Length).TrimEnd('>');
-            return UnwrapReturnType(inner);
-        }
-
-        // SliceResult<T> → unwrap to T
-        if (returnTypeFqn.StartsWith(SliceResultPrefix, StringComparison.Ordinal))
-        {
-            var inner = returnTypeFqn.Substring(SliceResultPrefix.Length).TrimEnd('>');
-            return UnwrapReturnType(inner);
-        }
-
-        // Non-generic SliceResult (status-only) — no JSON root.
-        if (string.Equals(returnTypeFqn, SliceResultNonGenericFqn, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        // Bare Task / ValueTask — void
-        if (string.Equals(returnTypeFqn, "global::System.Threading.Tasks.Task", StringComparison.Ordinal)
-            || string.Equals(returnTypeFqn, "global::System.Threading.Tasks.ValueTask", StringComparison.Ordinal)
-            || string.Equals(returnTypeFqn, "void", StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        return returnTypeFqn;
-    }
-
-    /// <summary>
     /// Returns true when <paramref name="typeFqn"/> is a framework type that has built-in
     /// STJ serializer support and does not require an explicit <c>[JsonSerializable]</c> entry.
     /// Covers:
@@ -120,6 +66,57 @@ internal static class JsonContextRootHelpers
         return bare.StartsWith(SystemPrefix, StringComparison.Ordinal)
             || bare.StartsWith(MicrosoftPrefix, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Returns true when <paramref name="typeFqn"/> (a JSON root) needs an explicit
+    /// <c>[JsonSerializable(typeof(T))]</c> entry because its type tree references any
+    /// user-defined (non-framework) type. The check recurses through generic type arguments
+    /// and array/tuple element types: a constructed framework container that wraps a user type
+    /// (e.g. <c>List&lt;MyDto&gt;</c>, <c>Dictionary&lt;string, MyDto&gt;</c>) needs the
+    /// <em>container itself</em> registered, so it returns true. Pure framework constructions
+    /// (<c>System.Int32</c>, <c>byte[]</c>, <c>List&lt;string&gt;</c>, <c>Memory&lt;byte&gt;</c>, …)
+    /// have built-in STJ support or are covered transitively and return false (skip) — matching the
+    /// pre-existing behavior for scalar framework roots and avoiding spurious missing-root diagnostics.
+    /// </summary>
+    public static bool RequiresJsonSerializableRegistration(string typeFqn)
+    {
+        foreach (var leaf in EnumerateLeafTypeNames(typeFqn))
+        {
+            if (!IsFrameworkType(leaf))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Splits a fully-qualified type name into its leaf type-name tokens by treating generic-argument,
+    // array, and tuple punctuation (plus whitespace) as separators. The dotted namespace inside a
+    // single token is preserved; the leading global:: alias is left for IsFrameworkType to strip.
+    private static IEnumerable<string> EnumerateLeafTypeNames(string typeFqn)
+    {
+        var start = 0;
+        for (var i = 0; i <= typeFqn.Length; i++)
+        {
+            if (i == typeFqn.Length || IsTypeNameSeparator(typeFqn[i]))
+            {
+                if (i > start)
+                {
+                    var token = typeFqn.Substring(start, i - start);
+                    if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        yield return token;
+                    }
+                }
+
+                start = i + 1;
+            }
+        }
+    }
+
+    private static bool IsTypeNameSeparator(char c)
+        => c is '<' or '>' or ',' or '[' or ']' or '(' or ')' or ' ' or '\t' or '\n' or '\r';
 
     /// <summary>Strips the <c>global::</c> alias from a fully-qualified type name.</summary>
     public static string TrimGlobalAlias(string typeFqn)
