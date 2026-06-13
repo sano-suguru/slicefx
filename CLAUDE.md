@@ -214,6 +214,8 @@ var app = builder.Build();
 SpinCronDispatcher.DispatchAsync(app, context, ct).GetAwaiter().GetResult();
 ```
 
+> **WASI 0.3 migration is upstream-blocked** (componentize-dotnet has no 0.3 C# guest support as of 2026-06-13). See [`docs/wasi-0.3-migration.md`](docs/wasi-0.3-migration.md) for unblock conditions, monitoring targets, and the full file-level change inventory.
+
 ### SliceFx.TestHost (`src/SliceFx.TestHost/`)
 
 Creates an in-process test server via `WebApplicationFactory<TEntryPoint>`. The optional

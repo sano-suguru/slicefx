@@ -52,7 +52,7 @@ Current version: `0.1.0-preview.5` (2026-05-30). Previous: `0.1.0-preview.4` (20
 - [x] Align docs and samples with the preview scope.
   - `README.md` quick start and status table.
   - `docs/product-direction.md` product claims and non-goals.
-  - `CHANGELOG.md` release notes for the chosen preview version.
+  - `CHANGELOG.md` is intentionally kept as a stub during the preview phase; the canonical change history is the git log and GitHub Releases. Consolidated release notes will be written here once SliceFx leaves preview.
   - Sample ports, commands, and expected outputs.
   - WASI docs distinguish experimental `SliceFx.Wasi` package APIs from the unstable upstream WASI build/transpile toolchain.
   - WASI docs and CLI help do not imply per-feature packaging support; current WASI deployment is one `wasi:http` component with generated in-process route dispatch.
