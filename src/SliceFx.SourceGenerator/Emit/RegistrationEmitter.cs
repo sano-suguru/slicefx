@@ -554,30 +554,14 @@ internal static class RegistrationEmitter
             sb.AppendLine("        return __result.HostResponse;");
             sb.AppendLine("    }");
             sb.AppendLine();
+            // Delegate to SliceAotFilterContextBuilder.Create so that both the AOT and non-AOT
+            // paths share a single implementation.  The builder caches the context in
+            // HttpContext.Items so that multiple [SliceFilter<T>] filters on the same route all
+            // share the same SliceFilterContext (and the same ResponseHeaders dictionary), and
+            // Response.OnStarting is registered only once per request.
             sb.AppendLine("    private static global::SliceFx.SliceFilterContext __BuildSliceFilterContext(");
             sb.AppendLine("        global::Microsoft.AspNetCore.Http.EndpointFilterInvocationContext ctx)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        var __headers = new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase);");
-            sb.AppendLine("        foreach (var __h in ctx.HttpContext.Request.Headers)");
-            sb.AppendLine("        {");
-            sb.AppendLine("            __headers[__h.Key] = __h.Value.ToString();");
-            sb.AppendLine("        }");
-            sb.AppendLine();
-            sb.AppendLine("        var __routeValues = new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase);");
-            sb.AppendLine("        foreach (var __rv in ctx.HttpContext.Request.RouteValues)");
-            sb.AppendLine("        {");
-            sb.AppendLine("            if (__rv.Value is not null)");
-            sb.AppendLine("                __routeValues[__rv.Key] = __rv.Value.ToString() ?? string.Empty;");
-            sb.AppendLine("        }");
-            sb.AppendLine();
-            sb.AppendLine("        return new global::SliceFx.SliceFilterContext(");
-            sb.AppendLine("            ctx.HttpContext.Request.Method,");
-            sb.AppendLine("            ctx.HttpContext.Request.Path,");
-            sb.AppendLine("            __headers,");
-            sb.AppendLine("            __routeValues,");
-            sb.AppendLine("            ctx.HttpContext.RequestServices,");
-            sb.AppendLine("            ctx.HttpContext.RequestAborted);");
-            sb.AppendLine("    }");
+            sb.AppendLine("        => global::SliceFx.SliceAotFilterContextBuilder.Create(ctx.HttpContext);");
         }
 
         sb.AppendLine();

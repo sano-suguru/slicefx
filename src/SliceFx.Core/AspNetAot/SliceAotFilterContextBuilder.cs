@@ -14,18 +14,32 @@ namespace SliceFx;
 /// </remarks>
 public static class SliceAotFilterContextBuilder
 {
+    // HttpContext.Items key for the cached SliceFilterContext.  Using a private static object
+    // as the key avoids string key conflicts with other middleware.
+    private static readonly object ContextItemsKey = new();
+
     /// <summary>
-    /// Creates a <see cref="SliceFilterContext"/> from the current <see cref="HttpContext"/>.
-    /// Converts <c>IHeaderDictionary</c> to
-    /// <c>IReadOnlyDictionary&lt;string, string&gt;</c> and
-    /// <c>RouteValueDictionary</c> to
-    /// <c>IReadOnlyDictionary&lt;string, string&gt;</c> as required by
-    /// <see cref="SliceFilterContext"/>.
+    /// Returns the <see cref="SliceFilterContext"/> for the current request, creating it on
+    /// the first call and caching it in <see cref="HttpContext.Items"/> for subsequent calls.
     /// </summary>
+    /// <remarks>
+    /// Caching ensures that all <c>[SliceFilter&lt;T&gt;]</c> filters on a single route
+    /// (which are registered as separate <c>AddEndpointFilter</c> calls on the non-AOT path)
+    /// share the same <see cref="SliceFilterContext.ResponseHeaders"/> dictionary.
+    /// <c>Response.OnStarting</c> is also registered only once per request so that headers
+    /// written by any neutral filter are flushed when the response starts — including for
+    /// short-circuit (e.g. 429) responses.
+    /// </remarks>
     /// <param name="ctx">The current HTTP context.</param>
-    /// <returns>A <see cref="SliceFilterContext"/> populated from the request.</returns>
+    /// <returns>The (possibly cached) <see cref="SliceFilterContext"/> for this request.</returns>
     public static SliceFilterContext Create(HttpContext ctx)
     {
+        if (ctx.Items.TryGetValue(ContextItemsKey, out var cached) &&
+            cached is SliceFilterContext existing)
+        {
+            return existing;
+        }
+
         var headers = new Dictionary<string, string>(
             ctx.Request.Headers.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var header in ctx.Request.Headers)
@@ -39,12 +53,33 @@ public static class SliceAotFilterContextBuilder
             routeValues[key] = value?.ToString() ?? string.Empty;
         }
 
-        return new SliceFilterContext(
+        var filterCtx = new SliceFilterContext(
             ctx.Request.Method,
             ctx.Request.Path.Value ?? string.Empty,
             headers,
             routeValues,
             ctx.RequestServices,
             ctx.RequestAborted);
+
+        ctx.Items[ContextItemsKey] = filterCtx;
+
+        // Register OnStarting once so ResponseHeaders are flushed before the response is
+        // committed, covering both pass-through and short-circuit paths.
+        ctx.Response.OnStarting(static state =>
+        {
+            var (responseHeaders, response) = ((IDictionary<string, string>, HttpResponse))state;
+            foreach (var (key, value) in responseHeaders)
+            {
+                // Do not overwrite headers already set by the handler or other middleware.
+                if (!response.Headers.ContainsKey(key))
+                {
+                    response.Headers[key] = value;
+                }
+            }
+
+            return Task.CompletedTask;
+        }, (filterCtx.ResponseHeaders, ctx.Response));
+
+        return filterCtx;
     }
 }

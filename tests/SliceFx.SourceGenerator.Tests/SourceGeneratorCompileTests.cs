@@ -4727,6 +4727,311 @@ public class SourceGeneratorCompileTests
         Assert.Contains("Alice", withKey, StringComparison.Ordinal);
     }
 
+    // ── ResponseHeaders: #29 ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Generator_delegates_BuildSliceFilterContext_to_SliceAotFilterContextBuilder()
+    {
+        // Verify that the generated non-AOT helper delegates to SliceAotFilterContextBuilder.Create
+        // so both paths share the same Items-caching / OnStarting-once implementation.
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace ResponseHeaderApp.Features.Items;
+
+            [Feature("GET /items/{id}")]
+            [SliceFilter<ApiKeyFilter>]
+            public static class GetItem
+            {
+                public static string Handle(string id) => id;
+            }
+
+            public sealed class ApiKeyFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    => next(context);
+            }
+            """;
+
+        var compilation = CreateHostCompilation("ResponseHeaderApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var aspNetSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        // Must delegate to the shared builder rather than inline the context construction.
+        Assert.Contains("SliceAotFilterContextBuilder.Create", aspNetSource, StringComparison.Ordinal);
+        Assert.Contains("ctx.HttpContext", aspNetSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generator_emits_ResponseHeaders_merge_in_wasi_filter_chain()
+    {
+        // Verify the generated WASI code merges __sliceFilterCtx.ResponseHeaders into the
+        // returned WasiResponse (both short-circuit and pass-through paths).
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiRespHeaderApp.Features.Items;
+
+            [Feature("DELETE /items/{id}")]
+            [SliceFilter<RateLimitFilter>]
+            public static class DeleteItem
+            {
+                public static void Handle(string id) { }
+            }
+
+            public sealed class RateLimitFilter : ISliceFilter
+            {
+                public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                {
+                    context.ResponseHeaders["Retry-After"] = "5";
+                    return next(context);
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiRespHeaderApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+        var wasiSource = GetGeneratedSource(driver, "SliceWasiRegistrations.g.cs");
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        // Merge block: reads filter context headers and adds absent keys to a new dict.
+        Assert.Contains("__filterRespHeaders", wasiSource, StringComparison.Ordinal);
+        Assert.Contains("__mergedHeaders", wasiSource, StringComparison.Ordinal);
+        // Handler headers must take priority (ContainsKey guard).
+        Assert.Contains("ContainsKey", wasiSource, StringComparison.Ordinal);
+        // Final response rebuilt from merged headers.
+        Assert.Contains("__wasiResp with { Headers = __mergedHeaders }", wasiSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Generated_wasi_routes_filter_response_headers_appear_in_pass_through_response()
+    {
+        // End-to-end: a pass-through filter writes Retry-After; it must appear in the WasiResponse.
+        var source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiPassHeaderApp
+            {
+                public static class RuntimeHarness
+                {
+                    public static async Task<string> DispatchAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "DELETE", "/items/42",
+                            new Dictionary<string, string>(), null, []));
+                        var hasRetryAfter = response.Headers.TryGetValue("Retry-After", out var ra);
+                        return response.Status + "|" + (hasRetryAfter ? ra : "missing");
+                    }
+                }
+            }
+
+            namespace WasiPassHeaderApp.Features.Items
+            {
+                [Feature("DELETE /items/{id}")]
+                [SliceFilter<RateLimitFilter>]
+                public static class DeleteItem
+                {
+                    public static void Handle(string id) { }
+                }
+            }
+
+            namespace WasiPassHeaderApp
+            {
+                public sealed class RateLimitFilter : ISliceFilter
+                {
+                    public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    {
+                        context.ResponseHeaders["Retry-After"] = "5";
+                        return next(context);
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiPassHeaderApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+
+        using var assemblyStream = CompileGeneratedAssembly(compilation);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harness = assembly.GetType("WasiPassHeaderApp.RuntimeHarness", throwOnError: true)!;
+        var result = await (Task<string>)harness.GetMethod("DispatchAsync")!.Invoke(null, null)!;
+
+        // Handler response is 204 No Content (void handler) with Retry-After header merged from the filter context.
+        Assert.Equal("204|5", result);
+    }
+
+    [Fact]
+    public async Task Generated_wasi_routes_filter_response_headers_appear_in_short_circuit_response()
+    {
+        // End-to-end: a short-circuiting filter (429) writes Retry-After; it must appear even
+        // when the pipeline is terminated early.
+        var source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiShortCircuitHeaderApp
+            {
+                public static class RuntimeHarness
+                {
+                    public static async Task<string> DispatchAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "DELETE", "/items/99",
+                            new Dictionary<string, string>(), null, []));
+                        var hasRetryAfter = response.Headers.TryGetValue("Retry-After", out var ra);
+                        return response.Status + "|" + (hasRetryAfter ? ra : "missing");
+                    }
+                }
+            }
+
+            namespace WasiShortCircuitHeaderApp.Features.Items
+            {
+                [Feature("DELETE /items/{id}")]
+                [SliceFilter<ThrottleFilter>]
+                public static class DeleteItem
+                {
+                    public static void Handle(string id) { }
+                }
+            }
+
+            namespace WasiShortCircuitHeaderApp
+            {
+                public sealed class ThrottleFilter : ISliceFilter
+                {
+                    public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    {
+                        context.ResponseHeaders["Retry-After"] = "30";
+                        return ValueTask.FromResult(
+                            SliceFilterResult.ShortCircuit(SliceResult.Problem(429, "Too Many Requests")));
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiShortCircuitHeaderApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+
+        using var assemblyStream = CompileGeneratedAssembly(compilation);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harness = assembly.GetType("WasiShortCircuitHeaderApp.RuntimeHarness", throwOnError: true)!;
+        var result = await (Task<string>)harness.GetMethod("DispatchAsync")!.Invoke(null, null)!;
+
+        // Short-circuit at 429 with Retry-After header merged from the filter context.
+        Assert.Equal("429|30", result);
+    }
+
+    [Fact]
+    public async Task Generated_wasi_routes_handler_headers_are_not_overwritten_by_filter_response_headers()
+    {
+        // Handler sets "X-Source: handler"; filter also sets "X-Source: filter".
+        // Handler's value must take priority.
+        var source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace WasiHeaderPriorityApp
+            {
+                public static class RuntimeHarness
+                {
+                    public static async Task<string> DispatchAsync()
+                    {
+                        var builder = WasiHost.CreateBuilder();
+                        builder.AddSlice();
+                        await using var app = builder.Build();
+                        var response = await app.DispatchAsync(new WasiRequest(
+                            "GET", "/items",
+                            new Dictionary<string, string>(), null, []));
+                        var hasSource = response.Headers.TryGetValue("X-Source", out var src);
+                        return response.Status + "|" + (hasSource ? src : "missing");
+                    }
+                }
+            }
+
+            namespace WasiHeaderPriorityApp.Features.Items
+            {
+                [Feature("GET /items")]
+                [SliceFilter<AnnotatingFilter>]
+                public static class ListItems
+                {
+                    public static WasiResponse Handle()
+                        => new WasiResponse(200,
+                            new System.Collections.Generic.Dictionary<string, string>
+                            {
+                                ["X-Source"] = "handler",
+                            },
+                            System.Text.Encoding.UTF8.GetBytes("ok"));
+                }
+            }
+
+            namespace WasiHeaderPriorityApp
+            {
+                public sealed class AnnotatingFilter : ISliceFilter
+                {
+                    public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                    {
+                        context.ResponseHeaders["X-Source"] = "filter";
+                        return next(context);
+                    }
+                }
+            }
+            """;
+
+        var compilation = CreateHostCompilation("WasiHeaderPriorityApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(generatorDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+
+        using var assemblyStream = CompileGeneratedAssembly(compilation);
+        var assembly = Assembly.Load(assemblyStream.ToArray());
+        var harness = assembly.GetType("WasiHeaderPriorityApp.RuntimeHarness", throwOnError: true)!;
+        var result = await (Task<string>)harness.GetMethod("DispatchAsync")!.Invoke(null, null)!;
+
+        // Handler-set "X-Source: handler" must NOT be overwritten by filter's "X-Source: filter".
+        Assert.Equal("200|handler", result);
+    }
+
     // -------------------------------------------------------------------------
     // AspNet NativeAOT (SliceAspNetAot) — baseline regression tests
     // These verify the current behavior before any per-type detection changes.

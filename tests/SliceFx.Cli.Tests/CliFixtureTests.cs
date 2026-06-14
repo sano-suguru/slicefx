@@ -1083,7 +1083,10 @@ public class CliFixtureTests
             !parameter.GetProperty("required").GetBoolean());
 
         var schemas = root.GetProperty("components").GetProperty("schemas");
-        var request = schemas.GetProperty("Request");
+        // Schemas now use parent-qualified names (e.g. "CreateItem_Request") so bare names such as
+        // "Request" are never claimed by whichever feature happens to be processed first.
+        Assert.False(schemas.TryGetProperty("Request", out _), "Bare 'Request' schema name should not exist; expected parent-qualified name.");
+        var request = schemas.GetProperty("CreateItem_Request");
         var required = request.GetProperty("required").EnumerateArray()
             .Select(static item => item.GetString())
             .ToArray();
@@ -1105,6 +1108,84 @@ public class CliFixtureTests
         Assert.Equal("string", priority.GetProperty("type").GetString());
         Assert.Contains(priority.GetProperty("enum").EnumerateArray(), static item => item.GetString() == "High");
         Assert.Contains(priority.GetProperty("x-enumNames").EnumerateArray(), static item => item.GetString() == "High");
+    }
+
+    [Fact]
+    public async Task Openapi_command_schema_names_are_qualified_and_order_independent()
+    {
+        // Regression: two features with same-named nested types (both called "Request") must both
+        // receive parent-qualified component names regardless of which feature is processed first.
+        using var fixture = CliProjectFixture.Create(
+            "openapi-ordering-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>OpenApi.Ordering.App</RootNamespace>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Orders/CreateOrder.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace OpenApi.Ordering.App.Features.Orders;
+
+            [Feature("POST /orders")]
+            public static class CreateOrder
+            {
+                public sealed record Request(string Name);
+                public sealed record Response(int Id, string Name);
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1, req.Name));
+            }
+            """);
+        fixture.WriteFeature(
+            "Features/Products/CreateProduct.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace OpenApi.Ordering.App.Features.Products;
+
+            [Feature("POST /products")]
+            public static class CreateProduct
+            {
+                public sealed record Request(string Title);
+                public sealed record Response(int Id, string Title);
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1, req.Title));
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "openapi.json");
+        var exitCode = await GenerateOpenApiCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken));
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        // Both features have a "Request" and "Response" nested type.
+        // Neither should claim the bare name; both must get parent-qualified names.
+        Assert.False(schemas.TryGetProperty("Request", out _), "Bare 'Request' must not exist.");
+        Assert.False(schemas.TryGetProperty("Response", out _), "Bare 'Response' must not exist.");
+        Assert.True(schemas.TryGetProperty("CreateOrder_Request", out _), "Expected 'CreateOrder_Request'.");
+        Assert.True(schemas.TryGetProperty("CreateOrder_Response", out _), "Expected 'CreateOrder_Response'.");
+        Assert.True(schemas.TryGetProperty("CreateProduct_Request", out _), "Expected 'CreateProduct_Request'.");
+        Assert.True(schemas.TryGetProperty("CreateProduct_Response", out _), "Expected 'CreateProduct_Response'.");
     }
 
     [Fact]
@@ -3270,8 +3351,9 @@ public class CliFixtureTests
     [Fact]
     public async Task Csharp_client_generates_typed_method_for_SliceResultOfT_routes_and_void_for_non_generic()
     {
-        // SliceResult<T>-returning routes must produce Task<T> methods (not Task<SliceResult<T>>).
-        // Non-generic SliceResult routes must produce void (Task) methods, not Task<WasiResponse>.
+        // SliceResult<T>-returning routes must produce Task<__SliceClientResponse<T>> methods so that
+        // the caller can observe StatusCode and Location (e.g. Created 201 Location header).
+        // Non-generic SliceResult routes must produce Task<__SliceClientResponse> (status-only, no body).
         // Also verifies that namespace-qualified "SliceFx.SliceResult<T>" unwraps correctly (#2/#11).
         using var fixture = CliProjectFixture.Create(
             "slice-result-client-app",
@@ -3338,18 +3420,88 @@ public class CliFixtureTests
         Assert.Equal(0, exitCode);
         var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
 
-        // SliceResult<T> route: typed Task<GetItemResponse> must appear
+        // SliceResult<T> route: Task<__SliceClientResponse<GetItemResponse>> must appear.
         Assert.Contains("GetItemAsync", client);
+        Assert.Contains("__SliceClientResponse<", client);
         Assert.Contains("GetItem.GetItemResponse", client);
 
-        // Non-generic SliceResult route: void Task must appear (no return type, just await)
+        // Non-generic SliceResult route: Task<__SliceClientResponse> must appear (no body, status + location).
         Assert.Contains("DeleteItemAsync", client);
-        Assert.Contains("async Task DeleteItemAsync", client);
+        Assert.Contains("async Task<SliceApiClient.__SliceClientResponse> DeleteItemAsync", client);
 
-        // The SliceResult<T> / SliceResult wrapper must NOT appear as a return type (only the payload must)
+        // The raw SliceResult<T> / SliceResult wrapper must NOT appear as a return type.
         Assert.DoesNotContain("Task<SliceResult<", client, StringComparison.Ordinal);
         Assert.DoesNotContain("Task<SliceFx.SliceResult", client, StringComparison.Ordinal);
         Assert.DoesNotContain("Task<WasiResponse>", client, StringComparison.Ordinal);
+
+        // The struct types must be emitted in the client file.
+        Assert.Contains("readonly struct __SliceClientResponse<T>", client, StringComparison.Ordinal);
+        Assert.Contains("readonly struct __SliceClientResponse", client, StringComparison.Ordinal);
+
+        // Created (201) Location must be observable: .Location and .StatusCode on the wrapper.
+        Assert.Contains(".StatusCode", client, StringComparison.Ordinal);
+        Assert.Contains(".Location", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Csharp_client_SliceResult_wrapper_surfaces_created_location()
+    {
+        // Regression: SliceResult<T>.Created(value, location) previously dropped the Location header.
+        // After the fix, the generated client returns __SliceClientResponse<T> with a Location property.
+        using var fixture = CliProjectFixture.Create(
+            "created-location-client-app",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>CreatedLocationApp</RootNamespace>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature(
+            "Features/Links/CreateLink.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace CreatedLocationApp.Features.Links;
+
+            [Feature("POST /links")]
+            public static class CreateLink
+            {
+                public sealed record Request(string TargetUrl);
+                public sealed record Response(int Id, string Code);
+
+                public static Task<SliceResult<Response>> Handle(Request req, CancellationToken ct)
+                {
+                    var resp = new Response(1, "abc1234");
+                    return Task.FromResult(SliceResult<Response>.Created(resp, "/r/abc1234"));
+                }
+            }
+            """);
+
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+
+        // CreateLink returns SliceResult<Response> → must produce Task<__SliceClientResponse<Response>>.
+        Assert.Contains("async Task<SliceApiClient.__SliceClientResponse<CreatedLocationApp.Features.Links.CreateLink.Response>>", client, StringComparison.Ordinal);
+        // The method must capture statusCode and location before disposing the response.
+        Assert.Contains("var __statusCode = (int)__response.StatusCode;", client, StringComparison.Ordinal);
+        Assert.Contains("var __location = __response.Headers.Location;", client, StringComparison.Ordinal);
+        // The result must be returned as the wrapper struct.
+        Assert.Contains("return new SliceApiClient.__SliceClientResponse<", client, StringComparison.Ordinal);
     }
 
     [Fact]

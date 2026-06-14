@@ -73,6 +73,57 @@ internal static partial class ClientGenerationHelpers
         return type;
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> when the declared return type (after stripping the async
+    /// Task/ValueTask wrapper) is a <c>SliceResult&lt;T&gt;</c> or non-generic <c>SliceResult</c>.
+    /// </summary>
+    /// <param name="returnType">The raw return type string from the manifest.</param>
+    /// <param name="payload">
+    /// When this method returns <see langword="true"/>: the inner payload type string
+    /// (<c>T</c>) for generic <c>SliceResult&lt;T&gt;</c>, or <see langword="null"/> for
+    /// non-generic <c>SliceResult</c>.
+    /// </param>
+    internal static bool TryGetSliceResultPayload(string returnType, out string? payload)
+    {
+        returnType = RouteCatalog.NormalizeWhitespace(returnType);
+
+        // Strip the async Task/ValueTask wrapper (same logic as UnwrapReturnType step 1).
+        if (TryUnwrapGeneric(returnType, "Task", out var inner) ||
+            TryUnwrapGeneric(returnType, "System.Threading.Tasks.Task", out inner) ||
+            TryUnwrapGeneric(returnType, "ValueTask", out inner) ||
+            TryUnwrapGeneric(returnType, "System.Threading.Tasks.ValueTask", out inner))
+        {
+            returnType = inner;
+        }
+        else if (returnType is "Task" or "System.Threading.Tasks.Task" or
+                 "ValueTask" or "System.Threading.Tasks.ValueTask")
+        {
+            // Plain Task (no generic arg) — not a SliceResult.
+            payload = null;
+            return false;
+        }
+
+        var stripped = StripGlobal(returnType);
+
+        // Generic SliceResult<T> — payload = T.
+        if (TryUnwrapGeneric(stripped, "SliceFx.SliceResult", out var p) ||
+            TryUnwrapGeneric(stripped, "SliceResult", out p))
+        {
+            payload = p;
+            return true;
+        }
+
+        // Non-generic SliceResult — status-only, no response body.
+        if (stripped is "SliceFx.SliceResult" or "SliceResult")
+        {
+            payload = null;
+            return true;
+        }
+
+        payload = null;
+        return false;
+    }
+
     internal static bool TryUnwrapGeneric(string type, string wrapper, out string inner)
     {
         var prefix = wrapper + "<";

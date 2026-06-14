@@ -237,6 +237,49 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine("            Problem = problem;");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
+        sb.AppendLine();
+        // __SliceClientResponse<T> — wraps the typed body with StatusCode + Location so that
+        // Created(201) and redirect responses surface their Location header to callers.
+        // Note: Redirect(3xx) Location is only observable when HttpClient.AllowAutoRedirect=false;
+        // the default (true) transparently follows 3xx so __response is the final 2xx response.
+        // The reserved __ prefix prevents collision with user-defined feature Response types.
+        sb.AppendLine("    /// <summary>Carries a typed response body together with the HTTP status code and optional Location header.</summary>");
+        sb.AppendLine("    public readonly struct __SliceClientResponse<T>");
+        sb.AppendLine("    {");
+        sb.AppendLine("        /// <summary>The deserialized response body.</summary>");
+        sb.AppendLine("        public T Value { get; }");
+        sb.AppendLine("        /// <summary>The HTTP status code (e.g. 200, 201).</summary>");
+        sb.AppendLine("        public int StatusCode { get; }");
+        sb.AppendLine("        /// <summary>The Location header value, or <see langword=\"null\"/> when absent.</summary>");
+        sb.AppendLine("        public Uri? Location { get; }");
+        sb.AppendLine("        /// <param name=\"value\">Deserialized response body.</param>");
+        sb.AppendLine("        /// <param name=\"statusCode\">HTTP status code.</param>");
+        sb.AppendLine("        /// <param name=\"location\">Location header (e.g. for 201 Created responses).</param>");
+        sb.AppendLine("        public __SliceClientResponse(T value, int statusCode, Uri? location)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            Value = value;");
+        sb.AppendLine("            StatusCode = statusCode;");
+        sb.AppendLine("            Location = location;");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        // __SliceClientResponse (non-generic) — for non-generic SliceResult routes that have no
+        // response body but may carry a Location header (e.g. Created(string location)).
+        sb.AppendLine("    /// <summary>Carries the HTTP status code and optional Location header for status-only responses.</summary>");
+        sb.AppendLine("    public readonly struct __SliceClientResponse");
+        sb.AppendLine("    {");
+        sb.AppendLine("        /// <summary>The HTTP status code (e.g. 204).</summary>");
+        sb.AppendLine("        public int StatusCode { get; }");
+        sb.AppendLine("        /// <summary>The Location header value, or <see langword=\"null\"/> when absent.</summary>");
+        sb.AppendLine("        public Uri? Location { get; }");
+        sb.AppendLine("        /// <param name=\"statusCode\">HTTP status code.</param>");
+        sb.AppendLine("        /// <param name=\"location\">Location header.</param>");
+        sb.AppendLine("        public __SliceClientResponse(int statusCode, Uri? location)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            StatusCode = statusCode;");
+        sb.AppendLine("            Location = location;");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
 
         if (autoEmitContext)
@@ -277,7 +320,13 @@ internal static partial class GenerateCSharpClientCommand
 
     private static void EmitRouteMethod(StringBuilder sb, string outerClassName, SliceRouteInfo route, string contextRef)
     {
-        var responseType = ToClientType(route, ClientGenerationHelpers.UnwrapReturnType(route.ReturnType));
+        // payloadType: the inner payload type after unwrapping SliceResult<T> (or "void").
+        var payloadType = ToClientType(route, ClientGenerationHelpers.UnwrapReturnType(route.ReturnType));
+
+        // isSliceResult: true when the feature declares SliceResult<T> or non-generic SliceResult.
+        // slicePayloadRaw: non-null when generic (SliceResult<T>), null when non-generic.
+        var isSliceResult = ClientGenerationHelpers.TryGetSliceResultPayload(route.ReturnType, out _);
+
         var bodyParameter = ClientGenerationHelpers.FindBodyParameter(route);
         var routeParameters = ClientGenerationHelpers.FindRouteParameters(route);
         var queryParameters = ClientGenerationHelpers.FindQueryParameters(route, routeParameters, bodyParameter);
@@ -292,14 +341,21 @@ internal static partial class GenerateCSharpClientCommand
         }
 
         methodParameters.Add("CancellationToken cancellationToken = default");
-        var returnType = responseType == "void" ? "Task" : $"Task<{responseType}>";
+
+        // Determine return type: SliceResult<T> → Task<__SliceClientResponse<T>>,
+        // non-generic SliceResult → Task<__SliceClientResponse>, plain T → Task<T>, void → Task.
+        var returnType = isSliceResult && payloadType != "void"
+            ? $"Task<{outerClassName}.__SliceClientResponse<{payloadType}>>"
+            : isSliceResult
+                ? $"Task<{outerClassName}.__SliceClientResponse>"
+                : payloadType == "void" ? "Task" : $"Task<{payloadType}>";
 
         sb.AppendLine(CultureInfo.InvariantCulture, $"        public async {returnType} {route.FeatureName}Async({string.Join(", ", methodParameters)})");
         sb.AppendLine("        {");
         sb.AppendLine(CultureInfo.InvariantCulture, $"            var __url = {BuildPathExpression(outerClassName, route.Pattern, routeParameters)};");
         EmitQueryString(sb, outerClassName, queryParameters);
 
-        if (route.Method == "GET" && bodyParameter is null && responseType != "void")
+        if (route.Method == "GET" && bodyParameter is null && payloadType != "void")
         {
             sb.AppendLine("            using var __message = new HttpRequestMessage(HttpMethod.Get, __url);");
             sb.AppendLine("            _prepareRequest(__message);");
@@ -308,9 +364,23 @@ internal static partial class GenerateCSharpClientCommand
             sb.AppendLine("            {");
             sb.AppendLine(CultureInfo.InvariantCulture, $"                await {outerClassName}.__ThrowApiException(__response, \"{route.FeatureName}\", cancellationToken).ConfigureAwait(false);");
             sb.AppendLine("            }");
-            var getPropName = ComputeTypeInfoPropertyName(responseType);
-            sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync({contextRef}.Default.{getPropName}, cancellationToken).ConfigureAwait(false)");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
+            if (isSliceResult)
+            {
+                // Capture status/location before the response is disposed.
+                sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
+                sb.AppendLine("            var __location = __response.Headers.Location;");
+                var getPropName = ComputeTypeInfoPropertyName(payloadType);
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            var __body = await __response.Content.ReadFromJsonAsync({contextRef}.Default.{getPropName}, cancellationToken).ConfigureAwait(false)");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            return new {outerClassName}.__SliceClientResponse<{payloadType}>(__body, __statusCode, __location);");
+            }
+            else
+            {
+                var getPropName = ComputeTypeInfoPropertyName(payloadType);
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync({contextRef}.Default.{getPropName}, cancellationToken).ConfigureAwait(false)");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
+            }
+
             sb.AppendLine("        }");
             return;
         }
@@ -329,14 +399,37 @@ internal static partial class GenerateCSharpClientCommand
         sb.AppendLine(CultureInfo.InvariantCulture, $"                await {outerClassName}.__ThrowApiException(__response, \"{route.FeatureName}\", cancellationToken).ConfigureAwait(false);");
         sb.AppendLine("            }");
 
-        if (responseType == "void")
+        if (isSliceResult)
+        {
+            // Capture status/location before the response is disposed.
+            sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
+            sb.AppendLine("            var __location = __response.Headers.Location;");
+            if (payloadType != "void")
+            {
+                // SliceResult<T> — deserialize body and wrap with status + location.
+                var postPropName = ComputeTypeInfoPropertyName(payloadType);
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            var __body = await __response.Content.ReadFromJsonAsync({contextRef}.Default.{postPropName}, cancellationToken).ConfigureAwait(false)");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            return new {outerClassName}.__SliceClientResponse<{payloadType}>(__body, __statusCode, __location);");
+            }
+            else
+            {
+                // Non-generic SliceResult — no body, return status + location only.
+                sb.AppendLine(CultureInfo.InvariantCulture, $"            return new {outerClassName}.__SliceClientResponse(__statusCode, __location);");
+            }
+
+            sb.AppendLine("        }");
+            return;
+        }
+
+        if (payloadType == "void")
         {
             sb.AppendLine("        }");
             return;
         }
 
-        var postPropName = ComputeTypeInfoPropertyName(responseType);
-        sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync({contextRef}.Default.{postPropName}, cancellationToken).ConfigureAwait(false)");
+        var propName = ComputeTypeInfoPropertyName(payloadType);
+        sb.AppendLine(CultureInfo.InvariantCulture, $"            return await __response.Content.ReadFromJsonAsync({contextRef}.Default.{propName}, cancellationToken).ConfigureAwait(false)");
         sb.AppendLine(CultureInfo.InvariantCulture, $"                ?? throw new HttpRequestException(\"Route '{route.EndpointName}' returned an empty response body.\");");
         sb.AppendLine("        }");
     }

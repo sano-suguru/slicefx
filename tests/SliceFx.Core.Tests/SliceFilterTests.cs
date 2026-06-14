@@ -74,6 +74,53 @@ public class SliceFilterContextTests
         Assert.Equal("42", ctx.RouteValues["id"]);
         Assert.Same(services, ctx.Services);
         Assert.Equal(cts.Token, ctx.CancellationToken);
+        // ResponseHeaders starts empty.
+        Assert.Empty(ctx.ResponseHeaders);
+    }
+
+    [Fact]
+    public void ResponseHeaders_starts_empty_writable_and_is_case_insensitive()
+    {
+        var ctx = new SliceFilterContext(
+            "GET", "/items",
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            new TestServiceProvider(),
+            CancellationToken.None);
+
+        // Initially empty
+        Assert.Empty(ctx.ResponseHeaders);
+
+        // Writable
+        ctx.ResponseHeaders["Retry-After"] = "5";
+        Assert.Equal("5", ctx.ResponseHeaders["Retry-After"]);
+
+        // Case-insensitive key lookup
+        Assert.Equal("5", ctx.ResponseHeaders["retry-after"]);
+        Assert.Equal("5", ctx.ResponseHeaders["RETRY-AFTER"]);
+
+        // Multiple distinct keys
+        ctx.ResponseHeaders["X-RateLimit-Limit"] = "100";
+        Assert.Equal(2, ctx.ResponseHeaders.Count);
+        Assert.Equal("100", ctx.ResponseHeaders["x-ratelimit-limit"]);
+    }
+
+    [Fact]
+    public void ResponseHeaders_overwrites_existing_key()
+    {
+        var ctx = new SliceFilterContext(
+            "POST", "/items",
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            new TestServiceProvider(),
+            CancellationToken.None);
+
+        ctx.ResponseHeaders["X-Custom"] = "first";
+        ctx.ResponseHeaders["x-custom"] = "second";
+
+        // Last write wins (same case-insensitive key)
+        Assert.Single(ctx.ResponseHeaders);
+        Assert.Equal("second", ctx.ResponseHeaders["X-Custom"]);
     }
 
     private sealed class TestServiceProvider : IServiceProvider

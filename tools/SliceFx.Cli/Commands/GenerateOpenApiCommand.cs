@@ -191,6 +191,26 @@ internal static partial class GenerateOpenApiCommand
         string openApiVersion)
     {
         var schemaRegistry = new OpenApiSchemaRegistry(reader, openApiVersion);
+
+        // Pre-assign component names for all top-level route types in sorted order so that name
+        // allocation is independent of the route processing order.  This prevents the first route
+        // (alphabetically by pattern) from claiming bare single-segment names like "Request".
+        var topLevelTypeNames = routes
+            .SelectMany(static route =>
+            {
+                var body = ClientGenerationHelpers.FindBodyParameter(route);
+                var returnType = ClientGenerationHelpers.UnwrapReturnType(route.ReturnType);
+                return new[]
+                {
+                    body?.Type,
+                    returnType is "void" ? null : returnType,
+                }
+                .Where(static t => t is not null)
+                .Select(static t => t!);
+            })
+            .Distinct(StringComparer.Ordinal);
+        schemaRegistry.PrimeComponentNames(topLevelTypeNames);
+
         var paths = new SortedDictionary<string, SortedDictionary<string, OpenApiOperation>>(StringComparer.Ordinal);
 
         foreach (var route in routes.OrderBy(static route => route.Pattern, StringComparer.Ordinal)
@@ -592,6 +612,24 @@ internal static partial class GenerateOpenApiCommand
             return normalized;
         }
 
+        /// <summary>
+        /// Pre-assigns component names for a set of known top-level type names in sorted order so
+        /// that the allocation is independent of the route processing order.  All names start from
+        /// at least two segments (parent.TypeName) so that bare single-segment names such as
+        /// "Request" or "Response" are never claimed.  Lazily-discovered nested property types
+        /// that are not in the pre-assigned set also benefit from the two-segment minimum in
+        /// <see cref="GetComponentName"/>.
+        /// </summary>
+        internal void PrimeComponentNames(IEnumerable<string> typeNames)
+        {
+            foreach (var typeName in typeNames.OrderBy(static t => t, StringComparer.Ordinal))
+            {
+                // Calling GetComponentName populates _componentNamesByType and _usedComponentNames
+                // idempotently; duplicate type names are safe because the cache short-circuits.
+                GetComponentName(typeName);
+            }
+        }
+
         private string GetComponentName(string typeName)
         {
             var normalized = NormalizeTypeName(typeName).TrimEnd('?');
@@ -601,7 +639,10 @@ internal static partial class GenerateOpenApiCommand
             }
 
             var segments = normalized.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            for (var count = 1; count <= segments.Length; count++)
+            // Start from at least two segments so that bare single-segment names (e.g. "Request",
+            // "Response") are never claimed by the first feature that happens to be processed.
+            // This mirrors GenerateTypeScriptClientCommand.CreateUniqueInterfaceName.
+            for (var count = Math.Min(2, segments.Length); count <= segments.Length; count++)
             {
                 var candidate = ComponentName(string.Join(".", segments[^count..]));
                 if (_usedComponentNames.Add(candidate))

@@ -496,9 +496,28 @@ internal static class WasiRegistrationEmitter
             }
 
             // Decode result: short-circuit → ToWasiResponse; pass-through → unbox WasiResponse.
-            sb.AppendLine("                    if (__filterResult.IsShortCircuit)");
-            sb.AppendLine("                        return __filterResult.ShortCircuitResult!.Value.ToWasiResponse();");
-            sb.AppendLine("                    return (global::SliceFx.Wasi.WasiResponse)__filterResult.HostResponse!;");
+            // Merge ResponseHeaders written by filters into the final WasiResponse.
+            // Handler-set headers (already in WasiResponse.Headers) take priority; filter headers
+            // are only added for keys absent from the handler response.  s_emptyHeaders is never
+            // mutated — we always construct a new dict when merging.
+            sb.AppendLine("                    var __wasiResp = __filterResult.IsShortCircuit");
+            sb.AppendLine("                        ? __filterResult.ShortCircuitResult!.Value.ToWasiResponse()");
+            sb.AppendLine("                        : (global::SliceFx.Wasi.WasiResponse)__filterResult.HostResponse!;");
+            sb.AppendLine("                    var __filterRespHeaders = __sliceFilterCtx.ResponseHeaders;");
+            sb.AppendLine("                    if (__filterRespHeaders.Count > 0)");
+            sb.AppendLine("                    {");
+            sb.AppendLine("                        var __mergedHeaders = new global::System.Collections.Generic.Dictionary<string, string>(");
+            sb.AppendLine("                            global::System.StringComparer.Ordinal);");
+            sb.AppendLine("                        foreach (var __kv in __wasiResp.Headers)");
+            sb.AppendLine("                            __mergedHeaders[__kv.Key] = __kv.Value;");
+            sb.AppendLine("                        foreach (var __kv in __filterRespHeaders)");
+            sb.AppendLine("                        {");
+            sb.AppendLine("                            if (!__mergedHeaders.ContainsKey(__kv.Key))");
+            sb.AppendLine("                                __mergedHeaders[__kv.Key] = __kv.Value;");
+            sb.AppendLine("                        }");
+            sb.AppendLine("                        __wasiResp = __wasiResp with { Headers = __mergedHeaders };");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                    return __wasiResp;");
         }
 
         sb.AppendLine($"                }};");

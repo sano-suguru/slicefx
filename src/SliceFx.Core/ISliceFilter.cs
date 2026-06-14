@@ -40,9 +40,12 @@ public delegate ValueTask<SliceFilterResult> SliceFilterDelegate(SliceFilterCont
 ///   <item><description>Short-circuit responses use the body-less <see cref="SliceResult"/>
 ///     struct (Problem Details: status + title + optional detail). For structured
 ///     field-level validation errors use <c>ISliceValidator&lt;T&gt;</c> instead.</description></item>
-///   <item><description>Post-handler response mutation (adding headers, transforming the body)
-///     is not supported. <see cref="SliceFilterResult.Status"/> provides read-only status
-///     observation after the inner pipeline completes.</description></item>
+///   <item><description>Post-handler response header <em>addition</em> is supported via
+///     <see cref="SliceFilterContext.ResponseHeaders"/>; response body mutation is not
+///     supported. Single-valued headers only; multi-valued headers such as
+///     <c>Set-Cookie</c> require <c>IEndpointFilter</c> on ASP.NET.
+///     <see cref="SliceFilterResult.Status"/> provides read-only status observation after
+///     the inner pipeline completes.</description></item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -94,6 +97,29 @@ public sealed class SliceFilterContext
     public CancellationToken CancellationToken { get; }
 
     /// <summary>
+    /// Gets a writable dictionary of headers to add to the response.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Entries written here are merged into the host response before it is sent:
+    /// on the ASP.NET path via <c>Response.OnStarting</c>, and on the WASI path via
+    /// header merge into the final <c>WasiResponse</c>.  This applies to both short-circuit
+    /// and pass-through results, so a filter that returns a 429 can still include
+    /// <c>Retry-After</c>.
+    /// </para>
+    /// <para>
+    /// Only single-valued headers are supported.  For multi-valued headers such as
+    /// <c>Set-Cookie</c>, use host-specific APIs (<c>IEndpointFilter</c> on ASP.NET).
+    /// </para>
+    /// <para>
+    /// Key comparison is case-insensitive.  Entries written by filter code take precedence
+    /// over headers already set by the handler for absent keys; existing handler-set headers
+    /// are not overwritten on the WASI path.
+    /// </para>
+    /// </remarks>
+    public IDictionary<string, string> ResponseHeaders { get; }
+
+    /// <summary>
     /// Initializes a new <see cref="SliceFilterContext"/> with the specified request metadata.
     /// </summary>
     public SliceFilterContext(
@@ -110,6 +136,7 @@ public sealed class SliceFilterContext
         RouteValues = routeValues;
         Services = services;
         CancellationToken = cancellationToken;
+        ResponseHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 }
 
