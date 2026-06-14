@@ -277,12 +277,15 @@ internal static class WasiRegistrationEmitter
             }
 
             // Build neutral filter context from the WASI invoker context.
+            // ClientIp is null on the WASI path: wasi:http@0.2 IncomingRequest does not
+            // expose peer address information.
             sb.AppendLine("                    var __sliceFilterCtx = new global::SliceFx.SliceFilterContext(");
             sb.AppendLine("                        ctx.Request.Method,");
             sb.AppendLine("                        ctx.Request.Path,");
             sb.AppendLine("                        ctx.Request.Headers,");
             sb.AppendLine("                        ctx.RouteValues,");
             sb.AppendLine("                        ctx.Services,");
+            sb.AppendLine("                        clientIp: null,");
             sb.AppendLine("                        ctx.CancellationToken);");
             sb.AppendLine();
 

@@ -59,6 +59,7 @@ public static class SliceAotFilterContextBuilder
             headers,
             routeValues,
             ctx.RequestServices,
+            ctx.Connection.RemoteIpAddress?.ToString(),
             ctx.RequestAborted);
 
         ctx.Items[ContextItemsKey] = filterCtx;

@@ -66,13 +66,14 @@ public class SliceFilterContextTests
         var services = new TestServiceProvider();
         using var cts = new CancellationTokenSource();
 
-        var ctx = new SliceFilterContext("GET", "/items/42", headers, routeValues, services, cts.Token);
+        var ctx = new SliceFilterContext("GET", "/items/42", headers, routeValues, services, "1.2.3.4", cts.Token);
 
         Assert.Equal("GET", ctx.Method);
         Assert.Equal("/items/42", ctx.Path);
         Assert.Equal("bar", ctx.Headers["X-Foo"]);
         Assert.Equal("42", ctx.RouteValues["id"]);
         Assert.Same(services, ctx.Services);
+        Assert.Equal("1.2.3.4", ctx.ClientIp);
         Assert.Equal(cts.Token, ctx.CancellationToken);
         // ResponseHeaders starts empty.
         Assert.Empty(ctx.ResponseHeaders);
@@ -86,6 +87,7 @@ public class SliceFilterContextTests
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
             new TestServiceProvider(),
+            clientIp: null,
             CancellationToken.None);
 
         // Initially empty
@@ -113,6 +115,7 @@ public class SliceFilterContextTests
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
             new TestServiceProvider(),
+            clientIp: null,
             CancellationToken.None);
 
         ctx.ResponseHeaders["X-Custom"] = "first";
@@ -126,5 +129,48 @@ public class SliceFilterContextTests
     private sealed class TestServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
+    }
+}
+
+public class SliceAotFilterContextBuilderTests
+{
+    [Fact]
+    public void Create_maps_RemoteIpAddress_to_ClientIp()
+    {
+        var httpCtx = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpCtx.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.168.1.1");
+        httpCtx.Request.Method = "GET";
+        httpCtx.Request.Path = "/items";
+
+        var filterCtx = SliceAotFilterContextBuilder.Create(httpCtx);
+
+        Assert.Equal("192.168.1.1", filterCtx.ClientIp);
+    }
+
+    [Fact]
+    public void Create_sets_ClientIp_null_when_RemoteIpAddress_not_set()
+    {
+        var httpCtx = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        // RemoteIpAddress is null by default on DefaultHttpContext
+        httpCtx.Request.Method = "GET";
+        httpCtx.Request.Path = "/items";
+
+        var filterCtx = SliceAotFilterContextBuilder.Create(httpCtx);
+
+        Assert.Null(filterCtx.ClientIp);
+    }
+
+    [Fact]
+    public void Create_returns_cached_context_on_second_call()
+    {
+        var httpCtx = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpCtx.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("10.0.0.1");
+        httpCtx.Request.Method = "GET";
+        httpCtx.Request.Path = "/items";
+
+        var first = SliceAotFilterContextBuilder.Create(httpCtx);
+        var second = SliceAotFilterContextBuilder.Create(httpCtx);
+
+        Assert.Same(first, second);
     }
 }

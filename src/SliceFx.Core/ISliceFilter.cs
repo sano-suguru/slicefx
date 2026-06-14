@@ -46,6 +46,10 @@ public delegate ValueTask<SliceFilterResult> SliceFilterDelegate(SliceFilterCont
 ///     <c>Set-Cookie</c> require <c>IEndpointFilter</c> on ASP.NET.
 ///     <see cref="SliceFilterResult.Status"/> provides read-only status observation after
 ///     the inner pipeline completes.</description></item>
+///   <item><description><see cref="SliceFilterContext.ClientIp"/> is populated on the ASP.NET
+///     host (from <c>HttpContext.Connection.RemoteIpAddress</c>, respecting
+///     <c>UseForwardedHeaders</c>), but is always <c>null</c> on the WASI host because
+///     <c>wasi:http@0.2</c> does not expose peer address information.</description></item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -93,6 +97,28 @@ public sealed class SliceFilterContext
     /// <summary>Gets the scoped service provider for the current request.</summary>
     public IServiceProvider Services { get; }
 
+    /// <summary>
+    /// Gets the validated remote client IP address, or <c>null</c> when the host cannot determine it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On the ASP.NET host this is sourced from <c>HttpContext.Connection.RemoteIpAddress</c>.
+    /// If the application has configured <c>UseForwardedHeaders</c>, that middleware runs before
+    /// the filter pipeline and rewrites <c>RemoteIpAddress</c> to the de-forwarded client IP,
+    /// so <see cref="ClientIp"/> transparently reflects that configuration.
+    /// </para>
+    /// <para>
+    /// On the WASI host this property is always <c>null</c>: the <c>wasi:http@0.2</c> incoming
+    /// handler interface does not expose peer address information.
+    /// </para>
+    /// <para>
+    /// <strong>Note:</strong> Filters that key on <see cref="ClientIp"/> (e.g. rate limiters)
+    /// will see every request as <c>null</c>/"unknown" on the WASI host and therefore cannot
+    /// enforce per-client limits on that path.
+    /// </para>
+    /// </remarks>
+    public string? ClientIp { get; }
+
     /// <summary>Gets the cancellation token associated with the current request.</summary>
     public CancellationToken CancellationToken { get; }
 
@@ -128,6 +154,7 @@ public sealed class SliceFilterContext
         IReadOnlyDictionary<string, string> headers,
         IReadOnlyDictionary<string, string> routeValues,
         IServiceProvider services,
+        string? clientIp,
         CancellationToken cancellationToken)
     {
         Method = method;
@@ -135,6 +162,7 @@ public sealed class SliceFilterContext
         Headers = headers;
         RouteValues = routeValues;
         Services = services;
+        ClientIp = clientIp;
         CancellationToken = cancellationToken;
         ResponseHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
