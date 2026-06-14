@@ -1,130 +1,134 @@
 # AOT-safe scoped services and cross-cutting concerns
 
-SliceFx runs on full-trim NativeAOT hosts (WASI via componentize-dotnet, Lambda NativeAOT custom
-runtime). Reflection-based activation used by the default DI container for concrete types can cause
-trimming issues at publish time. This guide shows how to register scoped services in a way that is
-safe under all three hosting paths.
+SliceFx runs on ASP.NET Core NativeAOT, WASI via componentize-dotnet, and Lambda NativeAOT custom
+runtime. Each hosting path has different trimming characteristics. This guide shows how to register
+scoped services safely and wire up cross-cutting concerns via `ISliceFilter`.
 
-## The problem with default activation
+## Registration: when are factory lambdas needed?
 
-When you register a concrete type with only `AddScoped<MyService>()`, the default
-`IServiceProvider` activates it via `ActivatorUtilities`, which may use reflection to locate
-and call the constructor. Under full-trim NativeAOT this reflection call may fail or emit a warning.
-
-## The solution: factory-lambda registration
-
-Register every scoped (or transient) concrete type with an explicit **factory lambda** that calls
-`new` directly. The DI container never needs to reflect on the type:
+**ASP.NET NativeAOT** (the primary path): `Microsoft.Extensions.DependencyInjection` is
+AOT-annotated, so standard type-based registration is safe without factory lambdas:
 
 ```csharp
-// ✓ AOT-safe — the constructor call is compiled as a direct call
-builder.Services.AddScoped<CurrentWorkspace>(sp =>
-{
-    // Resolve dependencies explicitly; no reflection, no hidden activation
-    var auth = sp.GetRequiredService<IAuthenticator>();
-    return new CurrentWorkspace(auth);
-});
+// ✓ AOT-safe on ASP.NET NativeAOT — no IL3050
+builder.Services.AddScoped<ICurrentWorkspace, CurrentWorkspace>();
 ```
 
-Singleton services are unaffected because they are typically activated once at startup where
-startup-time reflection does not impact the hot path. But for completeness, prefer factory lambdas
-for singletons too when possible.
+Only add a factory lambda if the compiler emits `IL3050` for a specific registration. Prefer the
+simple form above as the default.
+
+**WASI / Lambda NativeAOT-LLVM** (full-trim paths): `ActivatorUtilities` may use reflection for
+parameterised constructors under full trim. For those hosts, prefer an explicit factory lambda:
+
+```csharp
+// ✓ Safe under full-trim NativeAOT-LLVM
+builder.Services.AddScoped<ICurrentWorkspace>(_ => new CurrentWorkspace());
+```
 
 ## Canonical pattern: authentication via `[SliceFilter<T>]` + scoped context
 
 A common cross-cutting concern is authentication: read a token from the request, validate it, and
-make the resolved identity available to every handler that needs it.
+make the resolved identity available to every handler in the same request scope.
 
-### 1. Define the scoped context
+### 1. Define the scoped context (mutable)
+
+The context **must be mutable** so the filter can write the resolved identity back into it. Handlers
+then read the populated value directly from DI.
 
 ```csharp
-// Stores the resolved workspace for the current request.
-public sealed class CurrentWorkspace
+public interface ICurrentWorkspace
 {
-    public string WorkspaceId { get; }
-    public CurrentWorkspace(string workspaceId) => WorkspaceId = workspaceId;
+    string? WorkspaceId { get; set; }
+}
+
+// Mutable scoped holder — populated by WorkspaceAuthFilter before the handler runs.
+public sealed class CurrentWorkspace : ICurrentWorkspace
+{
+    public string? WorkspaceId { get; set; }
 }
 ```
 
 ### 2. Implement the filter
 
+`ISliceFilter.InvokeAsync` takes **two parameters** (`SliceFilterContext`, `SliceFilterDelegate`).
+The cancellation token is available as `context.CancellationToken`.
+
 ```csharp
-// Fail-closed: if authentication fails, short-circuit with 401. The resolved workspace
-// is stored in the scoped CurrentWorkspace service so handlers can inject it directly.
-public sealed class WorkspaceAuthFilter : ISliceFilter
+// Fail-closed: if authentication fails, short-circuits with 401 before the handler runs.
+public sealed class WorkspaceAuthFilter(IAuthenticator auth) : ISliceFilter
 {
-    private readonly IAuthenticator _auth;
-    private readonly CurrentWorkspace? _workspace; // null until resolved
-
-    // ISliceFilter receives its own dependencies from DI.
-    public WorkspaceAuthFilter(IAuthenticator auth)
-        => _auth = auth;
-
     public async ValueTask<SliceFilterResult> InvokeAsync(
-        SliceFilterContext ctx,
-        SliceFilterDelegate next,
-        CancellationToken ct)
+        SliceFilterContext context,
+        SliceFilterDelegate next)
     {
-        var token = ctx.Headers.TryGetValue("Authorization", out var h) ? h : null;
-        var ws = await _auth.ResolveAsync(token, ct);
-        if (ws is null)
-            return SliceFilterResult.ShortCircuit(SliceResult.Unauthorized("Invalid or missing token."));
+        context.Headers.TryGetValue("Authorization", out var token);
 
-        // Store the resolved workspace in the scoped CurrentWorkspace service.
-        // Handlers that inject CurrentWorkspace will receive this instance.
-        var scoped = ctx.Services.GetRequiredService<CurrentWorkspace>();
-        // (see note below on mutable context pattern)
-        return await next(ctx);
+        var workspaceId = await auth.ResolveAsync(token, context.CancellationToken)
+                                    .ConfigureAwait(false);
+        if (workspaceId is null)
+        {
+            return SliceFilterResult.ShortCircuit(SliceResult.Unauthorized("Invalid or missing token."));
+        }
+
+        // Write the resolved identity into the scoped holder so handlers can inject it directly.
+        var current = context.Services.GetRequiredService<ICurrentWorkspace>();
+        current.WorkspaceId = workspaceId;
+
+        return await next(context).ConfigureAwait(false);
     }
 }
 ```
 
-> **Mutable context note**: the pattern above works best when `CurrentWorkspace` is mutable or
-> when the filter stores the resolved value via a setter/init. Alternatively, use
-> `IHttpContextAccessor`-style keyed storage via `ctx.Services` to thread the value through to
-> handlers.
-
-### 3. Register everything with factory lambdas
+### 3. Register everything
 
 ```csharp
-// In Program.cs / WasiHost setup:
-
-// IAuthenticator — inject your real implementation (e.g. a HMAC verifier or DB lookup).
+// In Program.cs:
 builder.Services.AddScoped<IAuthenticator, MyAuthenticator>();
 
-// CurrentWorkspace is a request-scoped holder; register with a factory lambda (AOT-safe).
-// The filter populates it; handlers read from it.
-builder.Services.AddScoped<CurrentWorkspace>(_ => new CurrentWorkspace(string.Empty));
+// Register the interface → concrete class (AOT-safe on ASP.NET NativeAOT).
+// For WASI/NativeAOT-LLVM full-trim, use a factory lambda instead:
+//   builder.Services.AddScoped<ICurrentWorkspace>(_ => new CurrentWorkspace());
+builder.Services.AddScoped<ICurrentWorkspace, CurrentWorkspace>();
 ```
 
 ### 4. Decorate protected features
 
+Use `[SliceFilter<T>]` (not `[Filter<T>]`) for host-neutral filters that should run on both
+ASP.NET and WASI paths.
+
 ```csharp
 [Feature("GET /items/{id}")]
-[Filter<WorkspaceAuthFilter>]          // ← fail-closed: no filter = no access
+[SliceFilter<WorkspaceAuthFilter>]    // ← [SliceFilter] for ISliceFilter; [Filter] is for IEndpointFilter
 public static class GetItem
 {
     public static Task<SliceResult<ItemResponse>> Handle(
         string id,
-        CurrentWorkspace ws,           // ← injected from scoped context
+        ICurrentWorkspace ws,         // ← injected from the scoped context; always populated here
         IItemStore store,
         CancellationToken ct)
-        => store.GetAsync(ws.WorkspaceId, id, ct);
+        => store.GetAsync(ws.WorkspaceId!, id, ct);
 }
 ```
 
+> **`[Filter<T>]` vs `[SliceFilter<T>]`**
+> - `[SliceFilter<T>]` declares a host-neutral `ISliceFilter` — runs on ASP.NET *and* WASI.
+> - `[Filter<T>]` declares an ASP.NET-only `IEndpointFilter` — not executed in WASI dispatch.
+>
+> For cross-cutting concerns like authentication that must run on both paths, always use
+> `[SliceFilter<T>]`.
+
 ### 5. Fail-closed discipline
 
-Adding `[Filter<WorkspaceAuthFilter>]` is **opt-in per feature**, which means a missing attribute
-means fail-open (unauthenticated access). Prevent accidental omissions by:
+Adding `[SliceFilter<WorkspaceAuthFilter>]` is **opt-in per feature**, which means a missing
+attribute means fail-open (unauthenticated access). Prevent accidental omissions by:
 
 - Treating the attribute as **mandatory on every non-public feature** (code-review checklist).
 - Writing a manifest-based test that walks all registered `SliceRouteDescriptor` instances and
-  asserts that every route not on an explicit allowlist carries the filter. (Reflection on the
-  manifest record is generated code, not per-request reflection, so it is safe.)
+  asserts that every route not on an explicit allowlist carries the filter. (Reading the manifest
+  record uses generated code, not per-request reflection, so it is AOT-safe.)
 
 ```csharp
-// Example meta-test (MSTest / xUnit, runs in CI)
+// Example meta-test (xUnit, runs in CI)
 [Fact]
 public void All_protected_routes_have_WorkspaceAuthFilter()
 {
@@ -134,7 +138,7 @@ public void All_protected_routes_have_WorkspaceAuthFilter()
         "GET /shares/{token}",
     };
 
-    var routes = MyApp.GetSliceRoutesGenerated(); // generated method
+    var routes = MyApp.GetSliceRoutesGenerated(); // source-generated method
     foreach (var route in routes)
     {
         if (publicRoutes.Contains(route.Route))
