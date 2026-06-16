@@ -141,6 +141,26 @@ public readonly struct SliceResult<T>
     public static SliceResult<T> BadRequest(string? detail = null) =>
         new(400, isSuccess: false, hasBody: false, value: default, location: null, problemTitle: "Bad Request", detail);
 
+    /// <summary>Creates a 403 Forbidden error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult<T> Forbidden(string? detail = null) =>
+        new(403, isSuccess: false, hasBody: false, value: default, location: null, problemTitle: "Forbidden", detail);
+
+    /// <summary>Creates a 409 Conflict error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult<T> Conflict(string? detail = null) =>
+        new(409, isSuccess: false, hasBody: false, value: default, location: null, problemTitle: "Conflict", detail);
+
+    /// <summary>Creates a 422 Unprocessable Entity error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult<T> UnprocessableEntity(string? detail = null) =>
+        new(422, isSuccess: false, hasBody: false, value: default, location: null, problemTitle: "Unprocessable Entity", detail);
+
+    /// <summary>Creates a 503 Service Unavailable error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult<T> ServiceUnavailable(string? detail = null) =>
+        new(503, isSuccess: false, hasBody: false, value: default, location: null, problemTitle: "Service Unavailable", detail);
+
     /// <summary>
     /// Creates an error result with an explicit status code, title, and optional detail (Problem Details).
     /// </summary>
@@ -299,6 +319,26 @@ public readonly struct SliceResult
     /// <param name="detail">Optional detail about the specific problem occurrence.</param>
     public static SliceResult BadRequest(string? detail = null) =>
         new(400, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Bad Request", detail);
+
+    /// <summary>Creates a 403 Forbidden error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult Forbidden(string? detail = null) =>
+        new(403, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Forbidden", detail);
+
+    /// <summary>Creates a 409 Conflict error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult Conflict(string? detail = null) =>
+        new(409, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Conflict", detail);
+
+    /// <summary>Creates a 422 Unprocessable Entity error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult UnprocessableEntity(string? detail = null) =>
+        new(422, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Unprocessable Entity", detail);
+
+    /// <summary>Creates a 503 Service Unavailable error result (Problem Details, <c>application/problem+json</c>).</summary>
+    /// <param name="detail">Optional detail about the specific problem occurrence.</param>
+    public static SliceResult ServiceUnavailable(string? detail = null) =>
+        new(503, isSuccess: false, SliceResultKind.StatusOnly, location: null, contentType: null, body: null, problemTitle: "Service Unavailable", detail);
 
     /// <summary>
     /// Creates an error result with an explicit status code, title, and optional detail (Problem Details).

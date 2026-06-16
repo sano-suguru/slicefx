@@ -106,6 +106,62 @@ public sealed class SliceResultExtensionsTests
         Assert.Equal("Try again later.", doc.RootElement.GetProperty("detail").GetString());
     }
 
+    [Fact]
+    public void Generic_ServiceUnavailable_produces_503_problem_json_no_body()
+    {
+        // Verifies that the new named factory delegates to Problem and the error path writes
+        // Problem Details (not the typed body) via ToWasiResponse.
+        var result = SliceResult<ExtTestDto>.ServiceUnavailable("db is down");
+
+        var response = result.ToWasiResponse(ExtTestJsonContext.Default.ExtTestDto);
+
+        Assert.Equal(503, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Service Unavailable", doc.RootElement.GetProperty("title").GetString());
+        Assert.Equal(503, doc.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("db is down", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public void Generic_Conflict_produces_409_problem_json()
+    {
+        var result = SliceResult<ExtTestDto>.Conflict("code already taken");
+
+        var response = result.ToWasiResponse(ExtTestJsonContext.Default.ExtTestDto);
+
+        Assert.Equal(409, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Conflict", doc.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public void Generic_Forbidden_produces_403_problem_json()
+    {
+        var result = SliceResult<ExtTestDto>.Forbidden("not your resource");
+
+        var response = result.ToWasiResponse(ExtTestJsonContext.Default.ExtTestDto);
+
+        Assert.Equal(403, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Forbidden", doc.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public void Generic_UnprocessableEntity_produces_422_problem_json()
+    {
+        var result = SliceResult<ExtTestDto>.UnprocessableEntity("private IP not allowed");
+
+        var response = result.ToWasiResponse(ExtTestJsonContext.Default.ExtTestDto);
+
+        Assert.Equal(422, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Unprocessable Entity", doc.RootElement.GetProperty("title").GetString());
+    }
+
     // ── Non-generic SliceResult.ToWasiResponse() ─────────────────────────────
 
     [Fact]
@@ -179,6 +235,59 @@ public sealed class SliceResultExtensionsTests
         using var doc = JsonDocument.Parse(response.Body);
         Assert.Equal("Conflict", doc.RootElement.GetProperty("title").GetString());
         Assert.Equal("Item already exists.", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public void NonGeneric_ServiceUnavailable_produces_503_problem_json()
+    {
+        var result = SliceResult.ServiceUnavailable("db unreachable");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(503, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Service Unavailable", doc.RootElement.GetProperty("title").GetString());
+        Assert.Equal("db unreachable", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public void NonGeneric_Conflict_produces_409_problem_json()
+    {
+        var result = SliceResult.Conflict("code already taken");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(409, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Conflict", doc.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public void NonGeneric_Forbidden_produces_403_problem_json()
+    {
+        var result = SliceResult.Forbidden("access denied");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(403, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Forbidden", doc.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public void NonGeneric_UnprocessableEntity_produces_422_problem_json()
+    {
+        var result = SliceResult.UnprocessableEntity("private IP not allowed");
+
+        var response = result.ToWasiResponse();
+
+        Assert.Equal(422, response.Status);
+        Assert.Equal("application/problem+json", response.Headers["Content-Type"]);
+        using var doc = JsonDocument.Parse(response.Body);
+        Assert.Equal("Unprocessable Entity", doc.RootElement.GetProperty("title").GetString());
     }
 
     // ── Non-generic Redirect / Html / Text / Content / Bytes ─────────────────────

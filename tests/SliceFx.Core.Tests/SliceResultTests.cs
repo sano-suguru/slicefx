@@ -79,6 +79,57 @@ public sealed class SliceResultTests
         Assert.Equal("overloaded", r.ProblemDetail);
     }
 
+    [Fact]
+    public void ServiceUnavailable_is_error_with_503()
+    {
+        var r = SliceResult.ServiceUnavailable("db is down");
+        Assert.Equal(SliceResultKind.StatusOnly, r.Kind);
+        Assert.False(r.IsSuccess);
+        Assert.Equal(503, r.Status);
+        Assert.Equal("Service Unavailable", r.ProblemTitle);
+        Assert.Equal("db is down", r.ProblemDetail);
+    }
+
+    [Fact]
+    public void Conflict_is_error_with_409()
+    {
+        var r = SliceResult.Conflict("code already exists");
+        Assert.Equal(SliceResultKind.StatusOnly, r.Kind);
+        Assert.False(r.IsSuccess);
+        Assert.Equal(409, r.Status);
+        Assert.Equal("Conflict", r.ProblemTitle);
+        Assert.Equal("code already exists", r.ProblemDetail);
+    }
+
+    [Fact]
+    public void Forbidden_is_error_with_403()
+    {
+        var r = SliceResult.Forbidden("not your resource");
+        Assert.Equal(SliceResultKind.StatusOnly, r.Kind);
+        Assert.False(r.IsSuccess);
+        Assert.Equal(403, r.Status);
+        Assert.Equal("Forbidden", r.ProblemTitle);
+        Assert.Equal("not your resource", r.ProblemDetail);
+    }
+
+    [Fact]
+    public void UnprocessableEntity_is_error_with_422()
+    {
+        var r = SliceResult.UnprocessableEntity("target URL is a private IP");
+        Assert.Equal(SliceResultKind.StatusOnly, r.Kind);
+        Assert.False(r.IsSuccess);
+        Assert.Equal(422, r.Status);
+        Assert.Equal("Unprocessable Entity", r.ProblemTitle);
+        Assert.Equal("target URL is a private IP", r.ProblemDetail);
+    }
+
+    [Fact]
+    public void ServiceUnavailable_default_detail_is_null()
+    {
+        var r = SliceResult.ServiceUnavailable();
+        Assert.Null(r.ProblemDetail);
+    }
+
     // ── Redirect ────────────────────────────────────────────────────────────────
 
     [Fact]

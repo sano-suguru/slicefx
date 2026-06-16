@@ -98,7 +98,14 @@ app.MapGroup("/api")
 
 ASP.NET path では generated code は plain Minimal API です。binding annotation は付与しません。ASP.NET Core は built-in `IServiceProviderIsService` check により、登録済み service (concrete / interface) を DI から解決します。`[FromServices]` はここでは不要で、raw Minimal API と同じ動きです。
 
-> **Portability note:** ASP.NET、WASI、Lambda across portable にしたい場合は、concrete service parameter に `[FromServices]`、keyed service に `[FromKeyedServices(key)]` を付けてください。portable-dispatch generator は compile-time heuristic を使い DI container を probe できないため、annotation なしの concrete service は second body candidate とみなされ、portable route table から除外されます (SLICE023/SLICE033)。
+> **Portability note:** ASP.NET、WASI、Lambda across portable にしたい場合は、concrete service parameter に `[FromServices]`、keyed service に `[FromKeyedServices(key)]` を付けてください。portable-dispatch generator は compile-time heuristic を使い DI container を probe できないため、annotation なしの concrete service は second body candidate とみなされ、portable route table から除外されます（SLICE023/SLICE033）。
+>
+> **ASP.NET NativeAOT (`[assembly: SliceAspNetAot]`)** も同じ compile-time heuristic を使います。
+> `[SliceJsonContext(AspNet)]` に登録された concrete service が body verb（POST/PUT/PATCH）の handler に
+> あると second body candidate とみなされ **SLICE070（Error）** でビルドが失敗します。
+> WASI/Lambda の除外（SLICE023/033）とは異なり、**ビルドエラー**です。`[FromServices]` を付けるか
+> interface 型を使うことで回避できます。JSON context に登録されていない型は verb に関わらず DI service
+> として解決されるため annotation は不要です。
 >
 > 詳細は [Parameter binding across hosting targets](parameter-binding.md) を参照してください。
 

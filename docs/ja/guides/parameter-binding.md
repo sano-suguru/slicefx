@@ -6,11 +6,11 @@
 
 SliceFx は同じ `Handle` signature を supported host ごとに map します。ただし host ごとに parameter resolution が異なるため、binding rule も target によって変わります。重要な違いは以下です。
 
-| 観点 | ASP.NET Core | Portable (WASI / Lambda) |
-|---|---|---|
-| binding の決定主体 | ASP.NET Core runtime binder | source generator at compile time |
-| concrete DI service, no attribute | raw Minimal API と同じく DI から解決 | body candidate とみなされ、annotation がないと route excluded (SLICE023/033) |
-| `[FromServices]` は必要か | 不要。optional / harmless | concrete service type では必要 |
+| 観点 | ASP.NET Core (JIT / Kestrel) | ASP.NET NativeAOT (`SliceAspNetAot`) | Portable (WASI / Lambda) |
+|---|---|---|---|
+| binding の決定主体 | ASP.NET Core **runtime** binder | source generator at **compile time** | source generator at **compile time** |
+| concrete DI service, no attribute | `IServiceProviderIsService` 経由で DI 解決（JSON-context 不問） | JSON-context 登録 + body verb → body candidate → **SLICE070 Error**（要 annotation） | body candidate とみなされ route excluded（**SLICE023/033**）（要 annotation） |
+| `[FromServices]` は必要か | 不要。optional / harmless | concrete service が JSON context に載っており body verb なら必要 | concrete service type では必要 |
 
 ## ASP.NET Core (Kestrel / TestHost)
 
@@ -30,6 +30,33 @@ public static Task<Response> Handle(Request req, AuditLog audit, CancellationTok
 ```
 
 generated DataAnnotations validation filter は runtime の `IServiceProviderIsService` で gate し、registered service として解決される parameter は skip します。つまり ASP.NET が request body から bind する parameter だけを validate します。`ISliceValidator<T>` filter は compile time に request-like (body) parameter にだけ attach されます。
+
+## ASP.NET NativeAOT (`[assembly: SliceAspNetAot]`)
+
+`[assembly: SliceAspNetAot]` を付けると、source generator は ASP.NET 登録パスも **compile-time binding** に切り替えます（runtime の `IServiceProviderIsService` 推論は使用しません）。binding convention は Portable dispatch と同じ `ResolveConventionBinding`（`SourceGenerationHelpers.cs`、`AspNetAotRegistrationEmitter` で共用）で、以下の順序で解決します。
+
+1. explicit attribute（`[FromRoute]`、`[FromQuery]`、`[FromHeader]`、`[FromBody]`、`[FromServices]`、`[FromKeyedServices(key)]`）— そのまま尊重
+2. `CancellationToken` → service
+3. interface / abstract complex type → DI service（annotation 不要）
+4. **`[SliceJsonContext(AspNet)]` に登録された concrete 非 framework 型 が POST / PUT / PATCH 上にある → request body candidate**
+   - JSON context に登録されていない concrete 型 → verb に関わらず常に DI service（診断なし）
+   - GET / HEAD / DELETE（body なし）上の concrete 型 → 常に DI service（診断なし）
+5. simple type → matching `{token}` があれば route、それ以外は query string
+
+body candidate が2つになると **SLICE070（Error）** が出ます（`"multiple body parameters are not supported"`）。WASI の SLICE023（Warning）/ Lambda の SLICE033（Warning）とは **ID・severity が異なりビルドエラー**になります。`[FromServices]` を付けるか、interface 型を使うことで回避できます。
+
+```csharp
+// NpgsqlDataSource は [SliceJsonContext(AspNet)] に未登録 → GET でも POST でも常に DI service
+// → [FromServices] 不要
+public static async Task<SliceResult> Handle(NpgsqlDataSource db, CancellationToken ct) { ... }
+
+// AuditLog が [SliceJsonContext(AspNet)] に登録済み かつ POST → body candidate → SLICE070
+// 回避: [FromServices] を付けるか interface 型にする
+public static async Task<SliceResult<Response>> Handle(
+    Request req,
+    [FromServices] AuditLog audit,
+    CancellationToken ct) { ... }
+```
 
 ## Portable dispatch (WASI / Lambda function-per-feature)
 

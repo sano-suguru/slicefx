@@ -119,6 +119,13 @@ behaves identically to raw Minimal API.
 > and cannot probe the DI container; an un-annotated concrete service becomes a second body
 > candidate and the feature is excluded from the portable route table (SLICE023/SLICE033).
 >
+> **ASP.NET NativeAOT (`[assembly: SliceAspNetAot]`)** uses the same compile-time heuristic.
+> If a concrete service is registered in `[SliceJsonContext(AspNet)]` and the handler is on a
+> body verb (POST/PUT/PATCH), it becomes a second body candidate and the feature emits
+> **SLICE070 (Error)** — a build failure, not just an exclusion. Fix: `[FromServices]` or
+> use an interface type. Concrete types *not* in the JSON context are always resolved from DI
+> regardless of verb, so no annotation is needed for them.
+>
 > See [Parameter binding across hosting targets](parameter-binding.md) for the full rules.
 
 `samples/SliceFx.Sample/Features/Users/PromoteUser.cs` demonstrates the pattern.

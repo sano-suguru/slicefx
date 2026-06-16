@@ -5,11 +5,11 @@
 SliceFx maps the same `Handle` signature to every supported host. Because each host resolves
 parameters differently, binding rules differ by target. The key distinction:
 
-| Question | ASP.NET Core | Portable (WASI / Lambda) |
-|---|---|---|
-| Who decides binding? | ASP.NET Core's runtime binder | Source generator at compile time |
-| Concrete DI service, no attribute | Resolved from DI — same as raw Minimal API | Treated as a body candidate → route excluded (SLICE023/033) unless annotated |
-| `[FromServices]` required? | No — optional / harmless | Yes, for concrete service types |
+| Question | ASP.NET Core (JIT / Kestrel) | ASP.NET NativeAOT (`SliceAspNetAot`) | Portable (WASI / Lambda) |
+|---|---|---|---|
+| Who decides binding? | ASP.NET Core's **runtime** binder | Source generator at **compile time** | Source generator at **compile time** |
+| Concrete DI service, no attribute | Resolved from DI via `IServiceProviderIsService` (JSON-context irrelevant) | JSON-context member + body verb → body candidate → **SLICE070 Error** unless annotated | Treated as a body candidate → route excluded (**SLICE023/033**) unless annotated |
+| `[FromServices]` required? | No — optional / harmless | Yes, if concrete service is in JSON context and on a body verb | Yes, for concrete service types |
 
 ## ASP.NET Core (Kestrel / TestHost)
 
@@ -37,6 +37,41 @@ The generated DataAnnotations validation filter gates on `IServiceProviderIsServ
 and skips any parameter that resolves as a registered service, so it only validates parameters
 ASP.NET binds from the request body. `ISliceValidator<T>` filters are attached at compile time
 only to request-like (body) parameters — neither validator fires against a DI-resolved service.
+
+## ASP.NET NativeAOT (`[assembly: SliceAspNetAot]`)
+
+When `[assembly: SliceAspNetAot]` is set, the source generator switches the ASP.NET registration
+path to **compile-time binding** — runtime `IServiceProviderIsService` inference is not used.
+The binding convention is the same as Portable dispatch (`ResolveConventionBinding` in
+`SourceGenerationHelpers.cs`, shared by `AspNetAotRegistrationEmitter`):
+
+1. Explicit attributes (`[FromRoute]`, `[FromQuery]`, `[FromHeader]`, `[FromBody]`,
+   `[FromServices]`, `[FromKeyedServices(key)]`) — honored exactly.
+2. `CancellationToken` → resolved as a service.
+3. Interface or abstract complex type → resolved as a DI service (no annotation needed).
+4. **Concrete, non-framework complex type registered in `[SliceJsonContext(AspNet)]` on POST / PUT / PATCH → request body candidate.**
+   - Concrete type **not** in the JSON context on any verb → always resolved as a DI service, no diagnostic.
+   - Concrete type in the JSON context on GET / HEAD / DELETE (no body verb) → always a DI service, no diagnostic.
+5. Simple types → route (if matching `{token}`) or query string.
+
+When two body candidates arise, the feature emits **SLICE070 (Error)**:
+`"multiple body parameters are not supported"`. Unlike SLICE023 (WASI Warning) and SLICE033
+(Lambda Warning), SLICE070 is an **Error** — the build fails. Fix by annotating the concrete
+service with `[FromServices]`, or by using an interface type (rule 3 always routes interfaces to DI).
+
+```csharp
+// [assembly: SliceAspNetAot] is set — compile-time binding.
+// NpgsqlDataSource is NOT in [SliceJsonContext(AspNet)], so it's always a DI service.
+// No [FromServices] needed.
+public static async Task<SliceResult> Handle(NpgsqlDataSource db, CancellationToken ct) { ... }
+
+// AuditLog IS in [SliceJsonContext(AspNet)] AND this is POST → body candidate → SLICE070.
+// Fix: use interface or add [FromServices].
+public static async Task<SliceResult<Response>> Handle(
+    Request req,
+    [FromServices] AuditLog audit,   // without [FromServices] → SLICE070 on POST
+    CancellationToken ct) { ... }
+```
 
 ## Portable dispatch (WASI / Lambda function-per-feature)
 
