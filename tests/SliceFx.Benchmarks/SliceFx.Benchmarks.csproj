@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <!-- BenchmarkDotNet 0.15.8 requires CodeAnalysis.CSharp 4.14.0; local
+         benchmark project only (not shipped), so it overrides the 4.11.0 floor. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" />
   </ItemGroup>
 
