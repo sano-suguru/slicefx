@@ -437,7 +437,7 @@ internal static partial class GenerateCSharpClientCommand
     private static void EmitAutoJsonContext(StringBuilder sb, string className, SliceRouteInfo[] routes)
     {
         var types = CollectJsonSerializableTypes(routes, className).ToArray();
-        sb.AppendLine("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]");
+        sb.AppendLine("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]");
         foreach (var (typeExpr, explicitPropName) in types)
         {
             if (explicitPropName is not null)

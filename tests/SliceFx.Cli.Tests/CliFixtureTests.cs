@@ -2404,6 +2404,7 @@ public class CliFixtureTests
         Assert.Contains("class SliceProblemDetails", client);
         Assert.Contains("if (!__response.IsSuccessStatusCode)", client);
         Assert.Contains("PropertyNameCaseInsensitive = true", client);
+        Assert.Contains("PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase", client);
         Assert.Contains("application/problem+json", client);
         Assert.Contains("application/json", client);
         Assert.DoesNotContain("__response.EnsureSuccessStatusCode();", client);
@@ -2739,6 +2740,98 @@ public class CliFixtureTests
     }
 
     [Fact]
+    public async Task Generated_csharp_client_serializes_request_body_as_camelCase()
+    {
+        // Regression test: the auto-emitted JsonContext must include PropertyNamingPolicy = CamelCase so
+        // request bodies are serialized as camelCase (matching ASP.NET / Web-defaults / SliceFx AOT convention).
+        // Previously only PropertyNameCaseInsensitive = true was emitted, which only affects deserialization,
+        // causing servers configured with CamelCase to receive null-bound request properties.
+        using var fixture = CliProjectFixture.Create(
+            "client-camelcase-body",
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <RootNamespace>CamelCaseBody</RootNamespace>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.Core", "SliceFx.Core.csproj")}}" />
+                <ProjectReference Include="{{Path.Combine(FindRepoRoot(), "src", "SliceFx.SourceGenerator", "SliceFx.SourceGenerator.csproj")}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.WriteFeature("Features/Items/CreateItem.cs",
+            """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using SliceFx;
+
+            namespace CamelCaseBody.Features.Items;
+
+            [Feature("POST /items")]
+            public static class CreateItem
+            {
+                public sealed record Request(string Name);
+                public sealed record Response(int Id);
+                public static Task<Response> Handle(Request req, CancellationToken ct)
+                    => Task.FromResult(new Response(1));
+            }
+            """);
+        await fixture.BuildAsync();
+
+        var outputFile = Path.Combine(fixture.Directory.FullName, "SliceApiClient.g.cs");
+        var exitCode = await GenerateCSharpClientCommand.Build()
+            .Parse(["--project", fixture.ProjectFile.FullName, "--output", outputFile, "--force"])
+            .InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(0, exitCode);
+
+        // Static assertion: the generated context attribute must include the camelCase naming policy.
+        var client = await File.ReadAllTextAsync(outputFile, TestContext.Current.CancellationToken);
+        Assert.Contains("PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase", client);
+
+        await fixture.BuildAsync();
+
+        var dllPath = Path.Combine(fixture.Directory.FullName, "bin", "Debug", "net10.0", "client-camelcase-body.dll");
+        var assembly = Assembly.LoadFrom(dllPath);
+
+        string? capturedBody = null;
+        var okJson = /*lang=json,strict*/ "{\"id\":1}";
+        var stubResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(okJson, System.Text.Encoding.UTF8, "application/json"),
+        };
+        using var handler = new CapturingHttpHandler(stubResponse, req =>
+        {
+            capturedBody = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+        });
+
+        var clientType = assembly.GetTypes().Single(static t => t.Name == "SliceApiClient" && !t.IsNested);
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://test") };
+        var ctor = clientType.GetConstructor([typeof(HttpClient)])!;
+        var clientInstance = ctor.Invoke([httpClient])!;
+
+        var groupProp = clientType.GetProperties().First(static p => p.PropertyType.Name.EndsWith("Client", StringComparison.Ordinal));
+        var groupClientInstance = groupProp.GetValue(clientInstance)!;
+        var method = groupClientInstance.GetType().GetMethod("CreateItemAsync")!;
+
+        // Construct the generated Request type (first nested type named "Request").
+        var requestType = assembly.GetTypes().Single(static t => t.Name == "Request" && t.IsNested);
+        var requestInstance = Activator.CreateInstance(requestType, ["TestName"]);
+        var task = (Task)method.Invoke(groupClientInstance, [requestInstance, CancellationToken.None])!;
+        await task;
+
+        // Runtime assertion: the captured JSON body must be camelCase.
+        Assert.NotNull(capturedBody);
+        using var doc = JsonDocument.Parse(capturedBody);
+        Assert.True(doc.RootElement.TryGetProperty("name", out _),
+            $"Expected camelCase key 'name' in serialized body, got: {capturedBody}");
+        Assert.False(doc.RootElement.TryGetProperty("Name", out _),
+            $"Expected no PascalCase key 'Name' in serialized body, got: {capturedBody}");
+    }
+
+    [Fact]
     public async Task Csharp_client_default_emits_internal_json_context_for_trim_safety()
     {
         using var fixture = CliProjectFixture.Create(
@@ -2810,7 +2903,7 @@ public class CliFixtureTests
 
         // Auto-emitted context class
         Assert.Contains("internal sealed partial class SliceApiClientJsonContext : JsonSerializerContext", client);
-        Assert.Contains("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]", client);
+        Assert.Contains("[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]", client);
         Assert.Contains("[JsonSerializable(typeof(TrimSafe.Client.App.Contracts.CreateItemRequest))]", client);
         Assert.Contains("[JsonSerializable(typeof(TrimSafe.Client.App.Contracts.CreateItemResponse))]", client);
         Assert.Contains("TypeInfoPropertyName = \"ItemSummaryList\"", client);
@@ -3963,6 +4056,22 @@ public class CliFixtureTests
         internal StubHttpHandler(HttpResponseMessage response) => _response = response;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
             => Task.FromResult(_response);
+    }
+
+    private sealed class CapturingHttpHandler : HttpMessageHandler
+    {
+        private readonly HttpResponseMessage _response;
+        private readonly Action<HttpRequestMessage> _capture;
+        internal CapturingHttpHandler(HttpResponseMessage response, Action<HttpRequestMessage> capture)
+        {
+            _response = response;
+            _capture = capture;
+        }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            _capture(request);
+            return Task.FromResult(_response);
+        }
     }
 
     private sealed class CliProjectFixture : IDisposable
