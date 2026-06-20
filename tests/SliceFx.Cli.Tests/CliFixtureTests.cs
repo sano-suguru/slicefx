@@ -1865,6 +1865,16 @@ public class CliFixtureTests
         Assert.Contains("Amazon.Lambda.RuntimeSupport", projectXml);
         Assert.Contains("Amazon.Lambda.Serialization.SystemTextJson", projectXml);
 
+        // CPM opt-out: ManagePackageVersionsCentrally=false must appear AFTER the Sdk.props import
+        // so it overrides any ManagePackageVersionsCentrally=true inherited from a consumer repository's
+        // Directory.Packages.props (which is imported by Sdk.props). Placing it before Sdk.props would
+        // be silently overwritten (error NU1008 at restore time in CPM repos).
+        var mpvcIndex = projectXml.IndexOf("<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>", StringComparison.Ordinal);
+        var sdkPropsIndex = projectXml.IndexOf("<Import Project=\"Sdk.props\"", StringComparison.Ordinal);
+        Assert.True(mpvcIndex > 0, "bootstrap.csproj must opt out of Central Package Management.");
+        Assert.True(mpvcIndex > sdkPropsIndex,
+            "ManagePackageVersionsCentrally=false must appear after the Sdk.props import to override an inherited Directory.Packages.props.");
+
         var programSource = await File.ReadAllTextAsync(healthProgram, TestContext.Current.CancellationToken);
         Assert.Contains("JsonTypeInfoProvider = static type => LambdaFeatureJsonContext.Default.GetTypeInfo(type);", programSource);
         Assert.Contains("SourceGeneratorLambdaJsonSerializer<LambdaFeatureJsonContext>", programSource);

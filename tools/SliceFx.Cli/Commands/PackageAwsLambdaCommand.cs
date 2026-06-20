@@ -440,6 +440,11 @@ internal static class PackageAwsLambdaCommand
               </PropertyGroup>
               <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
               <PropertyGroup>
+                <!-- Opt out of Central Package Management: this project is self-contained with pinned
+                     PackageReference Version attributes and must not inherit Directory.Packages.props
+                     from the consumer repository. Placed after Sdk.props import to take precedence
+                     over any ManagePackageVersionsCentrally=true set by the inherited props file. -->
+                <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
                 <OutputType>Exe</OutputType>
                 <TargetFramework>net10.0</TargetFramework>
                 <AssemblyName>bootstrap</AssemblyName>
