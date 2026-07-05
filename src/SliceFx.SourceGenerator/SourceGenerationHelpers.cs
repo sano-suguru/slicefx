@@ -100,35 +100,125 @@ internal static class SourceGenerationHelpers
         FeatureModel feature,
         HashSet<string>? knownSerializableTypes = null)
     {
-        var parameters = feature.GetParams();
-        if (parameters.IsEmpty)
-        {
-            return [];
-        }
-
-        var builder = ImmutableArray.CreateBuilder<HandleParamModel>();
-        foreach (var parameter in parameters)
-        {
-            var binding = ResolveParameterBinding(
-                parameter,
-                feature.HttpMethod,
-                feature.Pattern,
-                knownSerializableTypes);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                builder.Add(parameter);
-            }
-        }
-
-        return builder.ToImmutable();
+        var body = SelectBodyParameter(feature, knownSerializableTypes).Body;
+        return body is null ? [] : [body];
     }
 
     public static HandleParamModel? FindSingleBodyParameter(
         FeatureModel feature,
         HashSet<string>? knownSerializableTypes = null)
+        => SelectBodyParameter(feature, knownSerializableTypes).Body;
+
+    /// <summary>
+    /// Single-authority selector for the request body parameter of a feature handler. Applies,
+    /// in order: (1) explicit <c>[FromBody]</c> on any verb, (2) a nested type of the feature
+    /// class on inferred-body verbs (POST/PUT/PATCH), (3) the sole JSON-context-registered
+    /// candidate (or arity fallback when the registered-type set is unknown). Pure function over
+    /// <paramref name="feature"/> and <paramref name="knownSerializableTypes"/> — no Roslyn
+    /// <c>ISymbol</c> access — to preserve incremental-generator caching.
+    /// </summary>
+    /// <param name="feature">The feature whose handler parameters are being classified.</param>
+    /// <param name="knownSerializableTypes">
+    /// The compile-time JSON-context membership set (WASI/Lambda/AOT paths), or <c>null</c> when
+    /// the registered-type set is unknown (falls back to arity).
+    /// </param>
+    /// <returns>The selected body parameter, or an ambiguous second candidate when 2+ tie at the same precedence.</returns>
+    public static BodySelectionResult SelectBodyParameter(
+        FeatureModel feature,
+        HashSet<string>? knownSerializableTypes)
     {
-        var bodyParameters = FindBodyParameters(feature, knownSerializableTypes);
-        return bodyParameters.Length == 1 ? bodyParameters[0] : null;
+        var parameters = feature.GetParams();
+
+        // Precedence 1: explicit [FromBody], on any verb.
+        HandleParamModel? explicitBody = null;
+        foreach (var p in parameters)
+        {
+            if (p.BindingSource == "body")
+            {
+                if (explicitBody is not null)
+                {
+                    return new BodySelectionResult(explicitBody, p); // 2+ [FromBody] → ambiguous
+                }
+
+                explicitBody = p;
+            }
+        }
+
+        if (explicitBody is not null)
+        {
+            return new BodySelectionResult(explicitBody, null);
+        }
+
+        // Precedences 2 & 3 apply only on inferred-body verbs (POST/PUT/PATCH).
+        if (!IsInferredBodyMethod(feature.HttpMethod))
+        {
+            return new BodySelectionResult(null, null);
+        }
+
+        // Candidate set: request-like concrete params (IsRequestLikeParameter already excludes
+        // route/query/header/services/keyedServices/parameters, CancellationToken, framework,
+        // interface/abstract, and simple types).
+        var candidates = ImmutableArray.CreateBuilder<HandleParamModel>();
+        foreach (var p in parameters)
+        {
+            if (IsRequestLikeParameter(p))
+            {
+                candidates.Add(p);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return new BodySelectionResult(null, null);
+        }
+
+        // Precedence 2: nested type of the feature class (canonical Request record).
+        // Does NOT require JSON-context membership; serializability is enforced downstream.
+        HandleParamModel? nested = null;
+        foreach (var p in candidates)
+        {
+            if (JsonContextRootHelpers.IsNestedTypeOf(p.TypeFqn, feature.FullyQualifiedTypeName))
+            {
+                if (nested is not null)
+                {
+                    return new BodySelectionResult(nested, p); // 2+ nested → ambiguous
+                }
+
+                nested = p;
+            }
+        }
+
+        if (nested is not null)
+        {
+            return new BodySelectionResult(nested, null);
+        }
+
+        // Precedence 3: a body must be serializable. When the set is known, the body is the sole
+        // candidate registered in the JSON context; 2+ registered → ambiguous; 0 → all DI.
+        if (knownSerializableTypes is not null)
+        {
+            HandleParamModel? serializable = null;
+            foreach (var p in candidates)
+            {
+                if (knownSerializableTypes.Contains(p.TypeFqn))
+                {
+                    if (serializable is not null)
+                    {
+                        return new BodySelectionResult(serializable, p);
+                    }
+
+                    serializable = p;
+                }
+            }
+
+            return new BodySelectionResult(serializable, null);
+        }
+
+        // Unknown serializable set (e.g. manifest union empty): fall back to arity, matching the
+        // pre-change null-path behavior (single candidate = body; multiple = ambiguous).
+        return candidates.Count == 1
+            ? new BodySelectionResult(candidates[0], null)
+            : new BodySelectionResult(null, candidates[1]);
     }
 
     public static bool IsRouteParam(string name, string pattern)
@@ -164,11 +254,19 @@ internal static class SourceGenerationHelpers
         return false;
     }
 
+    // httpMethod and knownSerializableTypes are no longer read directly by this method — the
+    // convention/body decision now lives entirely in SelectBodyParameter — but the parameters
+    // stay on the signature for call-site compatibility across the many existing callers
+    // (emitters, JsonContextPlanner) that still pass them positionally. Task 2 threads
+    // selectedBody uniformly through those callers and can drop the now-vestigial parameters then.
+#pragma warning disable IDE0060 // Remove unused parameter
     public static HandlerParameterBinding ResolveParameterBinding(
         HandleParamModel parameter,
         string httpMethod,
         string pattern,
-        HashSet<string>? knownSerializableTypes = null)
+        HashSet<string>? knownSerializableTypes = null,
+        HandleParamModel? selectedBody = null)
+#pragma warning restore IDE0060
     {
         var wireName = string.IsNullOrWhiteSpace(parameter.BindingName) ? parameter.Name : parameter.BindingName!;
         return parameter.BindingSource switch
@@ -180,7 +278,7 @@ internal static class SourceGenerationHelpers
             "services" => new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null),
             "keyedServices" => new HandlerParameterBinding(HandlerParameterBindingSource.KeyedServices, wireName, null, parameter.BindingKeyLiteral),
             "parameters" => Unsupported(wireName, "[AsParameters] is not supported in generated WASI/Lambda dispatch; ASP.NET routes are unaffected"),
-            _ => ResolveConventionBinding(parameter, httpMethod, pattern, wireName, knownSerializableTypes),
+            _ => ResolveConventionBinding(parameter, pattern, wireName, selectedBody),
         };
     }
 
@@ -311,10 +409,9 @@ internal static class SourceGenerationHelpers
 
     private static HandlerParameterBinding ResolveConventionBinding(
         HandleParamModel parameter,
-        string httpMethod,
         string pattern,
         string wireName,
-        HashSet<string>? knownSerializableTypes = null)
+        HandleParamModel? selectedBody)
     {
         if (parameter.TypeFqn == "global::System.Threading.CancellationToken")
         {
@@ -323,26 +420,13 @@ internal static class SourceGenerationHelpers
 
         if (!IsSimpleType(parameter.TypeFqn))
         {
-            if (IsInferredBodyMethod(httpMethod) && IsRequestLikeParameter(parameter))
-            {
-                // When a compile-time JSON-context membership set is provided (WASI/Lambda paths),
-                // use it to distinguish body params (registered) from DI services (not registered).
-                // This matches ASP.NET Minimal API's runtime IServiceProviderIsService semantics
-                // without any per-request reflection. When no set is provided (ASP.NET path), fall
-                // back to the original pure-syntax body inference.
-                if (knownSerializableTypes is not null)
-                {
-                    return knownSerializableTypes.Contains(parameter.TypeFqn)
-                        ? new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null)
-                        : new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
-                }
-
-                return new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null);
-            }
-
-            return new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
+            // Body is chosen centrally by SelectBodyParameter; here we only reflect it.
+            return selectedBody is not null && parameter.Name == selectedBody.Name
+                ? new HandlerParameterBinding(HandlerParameterBindingSource.Body, wireName, null)
+                : new HandlerParameterBinding(HandlerParameterBindingSource.Services, wireName, null);
         }
 
+        // Route/query branch: unchanged from the original.
         return IsRouteParam(wireName, pattern)
             ? new HandlerParameterBinding(HandlerParameterBindingSource.Route, wireName, null)
             : new HandlerParameterBinding(HandlerParameterBindingSource.Query, wireName, null);
@@ -399,3 +483,7 @@ internal readonly record struct HandlerParameterBinding(
     string WireName,
     string? UnsupportedReason,
     string? KeyLiteral = null);
+
+internal readonly record struct BodySelectionResult(
+    HandleParamModel? Body,
+    HandleParamModel? AmbiguousWith);
