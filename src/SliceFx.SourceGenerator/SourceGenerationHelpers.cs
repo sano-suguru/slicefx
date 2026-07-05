@@ -254,19 +254,10 @@ internal static class SourceGenerationHelpers
         return false;
     }
 
-    // httpMethod and knownSerializableTypes are no longer read directly by this method — the
-    // convention/body decision now lives entirely in SelectBodyParameter — but the parameters
-    // stay on the signature for call-site compatibility across the many existing callers
-    // (emitters, JsonContextPlanner) that still pass them positionally. Task 2 threads
-    // selectedBody uniformly through those callers and can drop the now-vestigial parameters then.
-#pragma warning disable IDE0060 // Remove unused parameter
     public static HandlerParameterBinding ResolveParameterBinding(
         HandleParamModel parameter,
-        string httpMethod,
         string pattern,
-        HashSet<string>? knownSerializableTypes = null,
         HandleParamModel? selectedBody = null)
-#pragma warning restore IDE0060
     {
         var wireName = string.IsNullOrWhiteSpace(parameter.BindingName) ? parameter.Name : parameter.BindingName!;
         return parameter.BindingSource switch

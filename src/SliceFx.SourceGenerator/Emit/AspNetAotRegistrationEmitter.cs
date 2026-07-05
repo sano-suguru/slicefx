@@ -160,7 +160,7 @@ internal static class AspNetAotRegistrationEmitter
             }
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
-                p, feature.HttpMethod, feature.Pattern, serializableTypes, selection.Body);
+                p, feature.Pattern, selection.Body);
 
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {
@@ -406,7 +406,7 @@ internal static class AspNetAotRegistrationEmitter
         var innerInd = hasSliceFilters ? ind + "    " : ind;
 
         EmitHandlerCore(sb, f, validators, @params, bodyParam, bodyValidation,
-            serializableTypes, endpointFilters, innerInd);
+            endpointFilters, innerInd);
 
         if (hasSliceFilters)
         {
@@ -445,7 +445,6 @@ internal static class AspNetAotRegistrationEmitter
         ImmutableArray<HandleParamModel> @params,
         HandleParamModel? bodyParam,
         ValidationParameterModel? bodyValidation,
-        HashSet<string>? serializableTypes,
         ImmutableArray<string> endpointFilters,
         string ind)
     {
@@ -534,7 +533,7 @@ internal static class AspNetAotRegistrationEmitter
             }
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
-                p, f.HttpMethod, f.Pattern, serializableTypes, bodyParam);
+                p, f.Pattern, bodyParam);
 
             if (binding.Source == HandlerParameterBindingSource.Route)
             {

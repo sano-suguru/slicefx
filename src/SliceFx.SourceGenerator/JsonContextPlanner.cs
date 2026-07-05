@@ -563,9 +563,7 @@ internal static class JsonContextPlanner
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
-                feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes,
                 selection.Body);
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {

@@ -194,9 +194,7 @@ internal static class WasiRegistrationEmitter
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
-                feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes,
                 selection.Body);
 
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
@@ -348,9 +346,7 @@ internal static class WasiRegistrationEmitter
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
-                f.HttpMethod,
                 f.Pattern,
-                serializableTypes,
                 bodyParam);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {

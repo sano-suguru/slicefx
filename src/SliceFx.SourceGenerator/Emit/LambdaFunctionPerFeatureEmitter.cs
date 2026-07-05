@@ -171,9 +171,7 @@ internal static class LambdaFunctionPerFeatureEmitter
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
-                feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes,
                 bodyParam);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
@@ -309,9 +307,7 @@ internal static class LambdaFunctionPerFeatureEmitter
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
                 p,
-                feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes,
                 selection.Body);
 
             if (binding.Source == HandlerParameterBindingSource.Unsupported)

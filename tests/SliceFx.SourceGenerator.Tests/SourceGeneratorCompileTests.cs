@@ -1201,6 +1201,236 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void NonBody_verbs_never_select_a_body_parameter()
+    {
+        // Filter is on a GET → must be DI, never body; id binds from route. Request is nested
+        // but the verb gate prevents body inference on GET — precedence 2/3 never run.
+        var source = """
+            using Microsoft.AspNetCore.Http;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using SliceFx;
+
+            [assembly: SliceAspNetAot]
+
+            namespace VerbApp
+            {
+                public sealed record Filter(string Q);
+
+                namespace Features.Items
+                {
+                    [Feature("GET /items/{id}")]
+                    public static class GetItem
+                    {
+                        public sealed record Request(string Id);   // nested, but GET → not a body
+                        public static string Handle(string id, global::VerbApp.Filter filter) => id + filter.Q;
+                    }
+                }
+
+                [SliceJsonContext(SliceJsonTarget.AspNet)]
+                [JsonSerializable(typeof(global::VerbApp.Filter))]
+                public sealed partial class AotJsonContext : JsonSerializerContext { }
+            }
+            """;
+        var compilation = CreateHostCompilation("VerbApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(diags, d => d.Id == "SLICE070");
+        Assert.DoesNotContain(diags, d => d.Id == "SLICE071");
+        var aotSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+        Assert.Contains("GetRequiredService(__ctx.RequestServices, typeof(global::VerbApp.Filter))", aotSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Manifest_classifies_shortlink_shape_portable_when_no_wasi_or_lambda()
+    {
+        // A plain ASP.NET app (no WASI/Lambda reference → union serializable set empty/null):
+        // nested Request + concrete serializable service on POST classifies portable, not partial.
+        var source = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            namespace ManifestApp
+            {
+                public sealed record AppSettings(string Region);
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public sealed record Request(string Sku);
+                        public static string Handle(Request req, global::ManifestApp.AppSettings s) => req.Sku + s.Region;
+                    }
+                }
+            }
+            """;
+        var compilation = CreateHostCompilation("ManifestApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(diags, static d => d.Severity == DiagnosticSeverity.Error);
+        var manifest = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+        // RequestType resolves to the nested Request; portability is not the multi-body 'partial'.
+        Assert.Contains("CreateOrder.Request", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("multiple body parameters", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain(SourceGenerationHelpers.PortabilityPartial, manifest, StringComparison.Ordinal);
+        Assert.Contains(SourceGenerationHelpers.PortabilityPortable, manifest, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Manifest_reports_ambiguous_body_partial_via_SliceFilter_structural_check()
+    {
+        // [SliceFilter<T>] on a feature with two same-precedence nested-type candidates forces
+        // ClassifyPortability through GetWasiStructuralSkipReason (the second body-selection loop
+        // this task converges onto SelectBodyParameter). Pre-convergence, that loop's own bodyCount
+        // tally called ResolveParameterBinding without a selectedBody argument, so the convention
+        // path never resolved *any* parameter to Body (only explicit [FromBody] could) — the
+        // genuinely ambiguous two-nested-candidate shape silently passed as having no body at all
+        // instead of being reported partial with the SLICE023 reason. No [assembly: SliceAspNetAot],
+        // so the AspNetAot emitter's own SLICE070 diagnostic does not fire here — this isolates the
+        // manifest emitter's own structural check.
+        var source = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            namespace AmbigManifestApp.Features.Orders
+            {
+                [Feature("POST /orders")]
+                [SliceFilter<AuditFilter>]
+                public static class CreateOrder
+                {
+                    public sealed record Request(string A);
+                    public sealed record Extra(string B);
+                    public static string Handle(Request req, Extra extra) => req.A + extra.B;
+                }
+
+                public sealed class AuditFilter : ISliceFilter
+                {
+                    public ValueTask<SliceFilterResult> InvokeAsync(SliceFilterContext context, SliceFilterDelegate next)
+                        => next(context);
+                }
+            }
+            """;
+        var compilation = CreateHostCompilation("AmbigManifestApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(diags, static d => d.Severity == DiagnosticSeverity.Error);
+        var manifest = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+        Assert.Contains("multiple body parameters (SLICE023)", manifest, StringComparison.Ordinal);
+        Assert.Contains(SourceGenerationHelpers.PortabilityPartial, manifest, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SliceResult_of_t_registers_payload_root_and_selects_nested_request_body()
+    {
+        // POST handler returning Task<SliceResult<CreateOrder.Response>> with a nested Request
+        // body and an injected concrete serializable service: Request is the body, Response is
+        // the JSON root (payload, not the wrapper), service is DI, no SLICE070.
+        var source = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            [assembly: SliceAspNetAot]
+
+            namespace SliceResultAotApp
+            {
+                public sealed record AppSettings(string Region);
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public sealed record Request(string Sku);
+                        public sealed record Response(string Id);
+
+                        public static Task<global::SliceFx.SliceResult<Response>> Handle(
+                            Request req, global::SliceResultAotApp.AppSettings settings)
+                        {
+                            return Task.FromResult(global::SliceFx.SliceResult<Response>.Ok(new Response(req.Sku + settings.Region)));
+                        }
+                    }
+                }
+
+                [SliceJsonContext(SliceJsonTarget.AspNet)]
+                [JsonSerializable(typeof(global::SliceResultAotApp.Features.Orders.CreateOrder.Request))]
+                [JsonSerializable(typeof(global::SliceResultAotApp.Features.Orders.CreateOrder.Response))]
+                [JsonSerializable(typeof(global::SliceResultAotApp.AppSettings))]
+                public sealed partial class AotJsonContext : JsonSerializerContext { }
+            }
+            """;
+        var compilation = CreateHostCompilation("SliceResultAotApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(diags, static d => d.Id == "SLICE070");
+        Assert.DoesNotContain(diags, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(outputCompilation.GetDiagnostics(TestContext.Current.CancellationToken), static d => d.Severity == DiagnosticSeverity.Error);
+
+        var aotSource = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+        // Response (the payload) is the JSON root passed to ExecuteAsync, not the SliceResult<T> wrapper.
+        Assert.Contains(
+            "__JsonTypeInfo<global::SliceResultAotApp.Features.Orders.CreateOrder.Response>()",
+            aotSource,
+            StringComparison.Ordinal);
+        // AppSettings resolves from DI, not as a second body parameter.
+        Assert.Contains(
+            "GetRequiredService(__ctx.RequestServices, typeof(global::SliceResultAotApp.AppSettings))",
+            aotSource,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validator_matches_nested_request_on_plain_aspnet_app()
+    {
+        // Plain ASP.NET app (no WASI/Lambda/AOT): a POST feature with a nested Request record
+        // and an ISliceValidator<Request> must still match — the null-set body selection resolves
+        // the nested Request via precedence 2 (which does not consult the serializable set).
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            namespace ValApp.Features.Orders
+            {
+                [Feature("POST /orders")]
+                public static class CreateOrder
+                {
+                    public sealed record Request(string Sku);
+                    public static string Handle(Request req) => req.Sku;
+                }
+
+                public sealed class CreateOrderValidator : ISliceValidator<CreateOrder.Request>
+                {
+                    public ValueTask<SliceValidationResult> ValidateAsync(CreateOrder.Request value, CancellationToken ct)
+                        => new(SliceValidationResult.Success);
+                }
+            }
+            """;
+        var compilation = CreateHostCompilation("ValApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        // No "validator target does not match a discovered request" error (SLICE013).
+        Assert.DoesNotContain(diags, d => d.Id == "SLICE013");
+        Assert.DoesNotContain(diags, d => d.Severity == DiagnosticSeverity.Error);
+        var reg = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+        Assert.Contains("CreateOrderValidator", reg, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_emits_keyed_service_lookup_in_wasi_and_lambda()
     {
         var wasiSource = """
