@@ -1024,6 +1024,183 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void AspNetAot_reports_actionable_slice070_for_two_nested_body_candidates()
+    {
+        var source = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            [assembly: SliceAspNetAot]
+
+            namespace AmbigApp.Features.Orders
+            {
+                [Feature("POST /orders")]
+                public static class CreateOrder
+                {
+                    public sealed record Request(string A);
+                    public sealed record Extra(string B);
+                    public static string Handle(Request req, Extra extra) => req.A + extra.B;
+                }
+            }
+            """;
+        var compilation = CreateHostCompilation("AmbigApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        var slice070 = Assert.Single(diags, d => d.Id == "SLICE070");
+        var slice070Message = slice070.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Contains("at most one request body", slice070Message, StringComparison.Ordinal);
+        Assert.Contains("[FromBody]", slice070Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Body_selection_is_consistent_across_aspnetaot_wasi_and_lambda()
+    {
+        // Same nested-Request + concrete-serializable-service shape compiled with all three
+        // hosting references; none may emit a body-related error/warning, and each must
+        // resolve the service from DI rather than as a second body.
+        var aspNetAotSource = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            [assembly: SliceAspNetAot]
+
+            namespace ConsistentBodyApp
+            {
+                public sealed record AppSettings(string Region);
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public sealed record Request(string Sku);
+                        public sealed record Response(string Id);
+
+                        public static Response Handle(Request req, global::ConsistentBodyApp.AppSettings settings)
+                            => new Response(req.Sku + settings.Region);
+                    }
+                }
+
+                [SliceJsonContext(SliceJsonTarget.AspNet)]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.Features.Orders.CreateOrder.Request))]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.Features.Orders.CreateOrder.Response))]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.AppSettings))]
+                public sealed partial class AotJsonContext : JsonSerializerContext { }
+            }
+            """;
+
+        var aspNetAotCompilation = CreateHostCompilation("ConsistentBodyAotApp", aspNetAotSource);
+        GeneratorDriver aspNetAotDriver = CreateDriver();
+        aspNetAotDriver = aspNetAotDriver.RunGeneratorsAndUpdateCompilation(
+            aspNetAotCompilation, out _, out var aspNetAotDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(aspNetAotDiagnostics, static d => d.Id == "SLICE070");
+        Assert.DoesNotContain(aspNetAotDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        var aspNetAotGeneratedSource = GetGeneratedSource(aspNetAotDriver, "SliceRegistrations.g.cs");
+        Assert.Contains(
+            "GetRequiredService(__ctx.RequestServices, typeof(global::ConsistentBodyApp.AppSettings))",
+            aspNetAotGeneratedSource,
+            StringComparison.Ordinal);
+
+        var wasiSource = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace ConsistentBodyApp
+            {
+                public sealed record AppSettings(string Region);
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public sealed record Request(string Sku);
+                        public sealed record Response(string Id);
+
+                        public static Response Handle(Request req, global::ConsistentBodyApp.AppSettings settings)
+                            => new Response(req.Sku + settings.Region);
+                    }
+                }
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.Features.Orders.CreateOrder.Request))]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.Features.Orders.CreateOrder.Response))]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.AppSettings))]
+                public sealed partial class WasiJsonContext : JsonSerializerContext { }
+            }
+            """;
+
+        var wasiCompilation = CreateHostCompilation("ConsistentBodyWasiApp", wasiSource, includeWasiReference: true);
+        GeneratorDriver wasiDriver = CreateDriver();
+        wasiDriver = wasiDriver.RunGeneratorsAndUpdateCompilation(
+            wasiCompilation, out _, out var wasiDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(wasiDiagnostics, static d => d.Id == "SLICE023");
+        Assert.DoesNotContain(wasiDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        var wasiGeneratedSource = GetGeneratedSource(wasiDriver, "SliceWasiRegistrations.g.cs");
+        Assert.Contains(
+            "GetRequiredService(typeof(global::ConsistentBodyApp.AppSettings))",
+            wasiGeneratedSource,
+            StringComparison.Ordinal);
+
+        var lambdaSource = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using SliceFx;
+            using SliceFx.Lambda.FunctionPerFeature;
+
+            [assembly: LambdaFunctionPerFeature]
+
+            namespace ConsistentBodyApp
+            {
+                public sealed record AppSettings(string Region);
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public sealed record Request(string Sku);
+                        public sealed record Response(string Id);
+
+                        public static Response Handle(Request req, global::ConsistentBodyApp.AppSettings settings)
+                            => new Response(req.Sku + settings.Region);
+                    }
+                }
+
+                [SliceJsonContext(SliceJsonTarget.LambdaFunctionPerFeature)]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.Features.Orders.CreateOrder.Request))]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.Features.Orders.CreateOrder.Response))]
+                [JsonSerializable(typeof(global::ConsistentBodyApp.AppSettings))]
+                public sealed partial class LambdaJsonContext : JsonSerializerContext { }
+            }
+            """;
+
+        var lambdaCompilation = CreateHostCompilation("ConsistentBodyLambdaApp", lambdaSource, includeLambdaReference: true);
+        GeneratorDriver lambdaDriver = CreateDriver();
+        lambdaDriver = lambdaDriver.RunGeneratorsAndUpdateCompilation(
+            lambdaCompilation, out _, out var lambdaDiagnostics, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(lambdaDiagnostics, static d => d.Id == "SLICE033");
+        Assert.DoesNotContain(lambdaDiagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        var lambdaGeneratedSource = GetGeneratedSource(lambdaDriver, "SliceLambdaFunctionPerFeatureHandlers.g.cs");
+        Assert.Contains(
+            "GetRequiredService<global::ConsistentBodyApp.AppSettings>()",
+            lambdaGeneratedSource,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generator_emits_keyed_service_lookup_in_wasi_and_lambda()
     {
         var wasiSource = """

@@ -175,7 +175,16 @@ internal static class WasiRegistrationEmitter
             return new WasiSkipReason("SLICE022", "DataAnnotations validation requires reflection");
         }
 
-        var bodyCount = 0;
+        var selection = SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes);
+        if (selection.AmbiguousWith is not null)
+        {
+            return new WasiSkipReason(
+                "SLICE023",
+                "multiple body parameters are not supported",
+                selection.AmbiguousWith.Name,
+                SourceGenerationHelpers.TrimGlobalAlias(selection.AmbiguousWith.TypeFqn));
+        }
+
         foreach (var p in feature.GetParams())
         {
             if (p.TypeFqn == "global::System.Threading.CancellationToken")
@@ -187,19 +196,8 @@ internal static class WasiRegistrationEmitter
                 p,
                 feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                bodyCount++;
-                if (bodyCount > 1)
-                {
-                    return new WasiSkipReason(
-                        "SLICE023",
-                        "multiple body parameters are not supported",
-                        p.Name,
-                        SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
-                }
-            }
+                serializableTypes,
+                selection.Body);
 
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {
@@ -352,7 +350,8 @@ internal static class WasiRegistrationEmitter
                 p,
                 f.HttpMethod,
                 f.Pattern,
-                serializableTypes);
+                serializableTypes,
+                bodyParam);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"{ind}if (!global::SliceFx.Wasi.Binding.WasiArgumentBinder");

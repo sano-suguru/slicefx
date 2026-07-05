@@ -173,7 +173,8 @@ internal static class LambdaFunctionPerFeatureEmitter
                 p,
                 feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes);
+                serializableTypes,
+                bodyParam);
             if (binding.Source == HandlerParameterBindingSource.Route)
             {
                 sb.AppendLine($"        if (!global::SliceFx.Lambda.FunctionPerFeature.LambdaArgumentBinder.TryGetFromRoute<{p.TypeFqn}>(ctx, {Str(binding.WireName)}, out var {p.Name}))");
@@ -289,7 +290,16 @@ internal static class LambdaFunctionPerFeatureEmitter
             return new LambdaSkipReason("SLICE034", "DataAnnotations validation requires reflection in the Lambda function-per-feature path");
         }
 
-        var bodyCount = 0;
+        var selection = SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes);
+        if (selection.AmbiguousWith is not null)
+        {
+            return new LambdaSkipReason(
+                "SLICE033",
+                "multiple body parameters are not supported",
+                selection.AmbiguousWith.Name,
+                SourceGenerationHelpers.TrimGlobalAlias(selection.AmbiguousWith.TypeFqn));
+        }
+
         foreach (var p in feature.GetParams())
         {
             if (p.TypeFqn == "global::System.Threading.CancellationToken")
@@ -301,19 +311,8 @@ internal static class LambdaFunctionPerFeatureEmitter
                 p,
                 feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                bodyCount++;
-                if (bodyCount > 1)
-                {
-                    return new LambdaSkipReason(
-                        "SLICE033",
-                        "multiple body parameters are not supported",
-                        p.Name,
-                        SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn));
-                }
-            }
+                serializableTypes,
+                selection.Body);
 
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {

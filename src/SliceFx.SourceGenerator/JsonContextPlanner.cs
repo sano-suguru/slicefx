@@ -548,7 +548,12 @@ internal static class JsonContextPlanner
         FeatureModel feature,
         HashSet<string>? serializableTypes = null)
     {
-        var bodyCount = 0;
+        var selection = SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes);
+        if (selection.AmbiguousWith is not null)
+        {
+            return "multiple body parameters are not supported";
+        }
+
         foreach (var p in feature.GetParams())
         {
             if (p.TypeFqn == "global::System.Threading.CancellationToken")
@@ -560,16 +565,8 @@ internal static class JsonContextPlanner
                 p,
                 feature.HttpMethod,
                 feature.Pattern,
-                serializableTypes);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                bodyCount++;
-                if (bodyCount > 1)
-                {
-                    return "multiple body parameters are not supported";
-                }
-            }
-
+                serializableTypes,
+                selection.Body);
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {
                 return binding.UnsupportedReason;
