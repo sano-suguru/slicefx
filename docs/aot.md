@@ -98,10 +98,16 @@ The generator can detect the following roots automatically:
 - **Response types** — all targets.
 - **Explicit `[FromBody]` parameters** — all targets.
 - **Nested `Request` records** (type starts with `FeatureClass.`) — POST/PUT/PATCH convention body; detected without registering the type in the DI container.
+- **Sole JSON-context-registered candidate** — on POST/PUT/PATCH, when no nested `Request` type
+  is present, the single remaining request-like parameter that is already registered in the
+  `[SliceJsonContext(AspNet)]` context is selected as the body (see
+  [docs/guides/parameter-binding.md#body-selection-compile-time-paths](guides/parameter-binding.md#body-selection-compile-time-paths)).
 
 The following cannot be detected at compile time:
 
-- **Unannotated complex body parameters** that are not nested types of the feature class — the compiler cannot distinguish them from DI services without explicit `[FromBody]`.
+- **Unannotated complex body parameters** that are neither a nested type of the feature class nor
+  already registered in the JSON context — the compiler cannot distinguish these from DI
+  services without explicit `[FromBody]`.
 
 ### `slicefx json-context`
 
@@ -217,4 +223,14 @@ mapping, status codes). The publish step is the only gate that catches trim/AOT-
 
 - **No Accepts/Produces inference**: `RequestDelegate`-registered endpoints do not emit parameter-type-based metadata. Use `slicefx openapi` for an accurate OpenAPI document.
 - **Group-level filters**: `MapGroup(…).AddEndpointFilter(…)` wraps the `RequestDelegate` with an empty `Arguments` list; `[SliceFilter<T>]` and `[Filter<T>]` declared on the feature itself compose correctly.
-- **body/DI disambiguation**: determined at compile time by the `[JsonSerializable]` root set. A type registered in both the DI container and the context will be bound from the body in AOT mode; in non-AOT mode it is resolved from DI. Avoid ambiguous registrations.
+- **body/DI disambiguation**: determined at compile time by precedence — `[FromBody]`, then a
+  nested `Request` type of the feature class, then the sole remaining request-like parameter
+  registered in the `[SliceJsonContext(AspNet)]` context (POST/PUT/PATCH only); everything else
+  resolves from DI. Idiomatic handlers (a nested `Request` plus any number of injected concrete
+  services) now compile without annotation — the nested type claims the body slot and the
+  services fall through to DI automatically. **SLICE070** fires only when two parameters
+  genuinely tie at the same precedence level (e.g. two candidates both registered in the JSON
+  context with no nested `Request` to break the tie); its message identifies the second
+  candidate and asks you to disambiguate with `[FromBody]`/`[FromServices]`. See
+  [docs/guides/parameter-binding.md#body-selection-compile-time-paths](guides/parameter-binding.md#body-selection-compile-time-paths)
+  for the full precedence and residual edge cases.
