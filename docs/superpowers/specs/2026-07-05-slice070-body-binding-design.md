@@ -29,18 +29,26 @@ This is a pre-1.0 behavior change, accepted because it is a correctness improvem
 
 ### Body selection rule
 
-Introduce a single authority: `SourceGenerationHelpers.SelectBodyParameter(FeatureModel feature, HashSet<string>? knownSerializableTypes) -> HandleParamModel?`. It examines the full parameter list and returns the one body parameter, or `null` if the handler has no body. Precedence, evaluated over parameters that are not already bound to `route`/`query`/`header`/`services`/`keyedServices` and are not `CancellationToken`/framework types/interfaces/abstract:
+Introduce a single authority: `SourceGenerationHelpers.SelectBodyParameter(FeatureModel feature, HashSet<string>? knownSerializableTypes) -> HandleParamModel?`. It examines the full parameter list and returns the one body parameter, or `null` if the handler has no body.
 
-1. **`[FromBody]` explicit** — if any parameter carries `[FromBody]`, it is the body. (More than one `[FromBody]` remains a user error → falls through to the ambiguity diagnostic.)
-2. **Convention** — otherwise, if a parameter's type is a **nested type of the feature class** (`IsNestedTypeOf`), it is the body. (The canonical SliceFx `Request` record.)
-3. **Sole serializable candidate** — otherwise, if exactly one remaining request-like candidate exists **and it is registered in the JSON context** (`knownSerializableTypes.Contains`), it is the body. Covers the non-nested shared-contract request pattern (`docs/cli.md`) used by Blazor clients.
-4. Otherwise → no body from these candidates; each such parameter binds as `Services` (DI).
+First, form the **candidate set**: parameters that are not already bound to `route`/`query`/`header`/`services`/`keyedServices`/`parameters`, are not `CancellationToken`/framework types/interfaces/abstract, and are not `[FromBody]` (handled separately in precedence 1). Then:
 
-A parameter binds to `Body` **iff** it is the parameter returned by `SelectBodyParameter`. All other request-like concrete parameters bind to `Services`.
+1. **`[FromBody]` explicit** — if exactly one parameter carries `[FromBody]` (`BindingSource == "body"`), it is the body, on **any** verb (explicit intent). Two or more `[FromBody]` → ambiguity (diagnostic). This step is evaluated before and independently of the candidate set.
+2. **Convention (body verbs only)** — otherwise, **only when `IsInferredBodyMethod(feature.HttpMethod)` is true** (`POST`/`PUT`/`PATCH`): if exactly one candidate's type is a **nested type of the feature class** (`IsNestedTypeOf`), it is the body. (The canonical SliceFx `Request` record.) If two or more candidates are nested types → ambiguity (diagnostic).
+3. **Sole serializable candidate (body verbs only)** — otherwise, **only when `IsInferredBodyMethod` is true**: if exactly one candidate exists **and it is registered in the JSON context** (`knownSerializableTypes?.Contains`), it is the body. Covers the non-nested shared-contract request pattern (`docs/cli.md`) used by Blazor clients.
+4. Otherwise (including **all** non-body verbs `GET`/`DELETE`/… with no `[FromBody]`) → no body; each candidate binds as `Services` (DI).
+
+A parameter binds to `Body` **iff** it is the parameter returned by `SelectBodyParameter`. All other candidate parameters bind to `Services`.
+
+**Verb gate is load-bearing.** The current per-parameter binder gates body inference on `IsInferredBodyMethod` (`ResolveConventionBinding`, `SourceGenerationHelpers.cs:326`), so on `GET`/`DELETE` a nested/complex type falls through to `Services` today. Precedence 2 and 3 MUST preserve that gate; only precedence 1 (`[FromBody]`) is verb-independent. Dropping the gate would flip `GET` nested-type parameters to `Body` — a regression that also triggers SLICE071 (missing JSON root).
+
+**Multiple nested types** on a body verb are treated as ambiguous (→ diagnostic), not "first wins". This differs from the JSON-root phase-1a heuristic (`JsonContextPlanner.cs:475`, which breaks on the first nested type for *root registration*); binding selection is stricter because picking a body arbitrarily would silently mis-dispatch.
 
 Key consequence: JSON-context membership is demoted from *the* body/DI discriminator to a *necessary condition for serving as a body* (a body must be serializable). Positive body identification comes from `[FromBody]` or the nesting convention. This removes the "concrete service accidentally in the JSON context" misclassification entirely.
 
-When `knownSerializableTypes` is `null` (the non-AOT ASP.NET path, which binds via reflection at runtime), behavior is unchanged: that path does not use `SelectBodyParameter` for registration and defers to Minimal API.
+**Non-AOT runtime dispatch is unaffected**, but the route manifest is not. The non-AOT ASP.NET registration path (`RegistrationEmitter.cs`) binds via Minimal API reflection at runtime and does not consult `SelectBodyParameter` — genuinely unchanged. However, `RouteManifestEmitter` classifies **every** feature's portability and computes its `RequestType` using `FindSingleBodyParameter` / `ClassifyPortability` with the serializable set `BuildUnionSerializableTypes(wasiPlan, lambdaPlan)` (`RouteManifestEmitter.cs:22,199,239`) — the **WASI+Lambda union, not the AspNet-AOT set**, which is `null` only when both are empty. Because `FindSingleBodyParameter` will delegate to `SelectBodyParameter`, the manifest's portability classification and `RequestType` change for affected features **even on the null path**. This is intended: the multi-body case that previously classified a route `partial` (`"multiple body parameters (SLICE023)"`, `RouteManifestEmitter.cs:307`) now resolves to a single body and classifies `portable`. `slicefx routes` / `openapi` / generated clients reflect the improved classification. The change is a correctness improvement, not a silent regression, and is asserted by a dedicated test (Testing case 7).
+
+The CLI's source-scan fallback (`RouteCatalog.FindRequestType`, `tools/SliceFx.Cli/Internal/RouteCatalog.cs:290`) is a **separate** heuristic (used only when the project has not been built and no manifest exists); it keys on `[FromBody]` and `Request`/`*.Request` names and does not converge on `SelectBodyParameter`. Aligning it is out of scope (see Out of scope) — the CLI prefers the generated manifest whenever present.
 
 ### Wiring
 
@@ -49,6 +57,7 @@ When `knownSerializableTypes` is `null` (the non-AOT ASP.NET path, which binds v
 - `SourceGenerationHelpers.FindBodyParameters` / `FindSingleBodyParameter` → return the result of `SelectBodyParameter` (0 or 1 element).
 - `ResolveParameterBinding` for a specific parameter → returns `Body` only when that parameter equals the selected body parameter; otherwise the request-like concrete type resolves to `Services`. (Implementation may pass the pre-selected body parameter down, or have `ResolveConventionBinding` consult `SelectBodyParameter` — chosen at implementation time to keep a single evaluation per feature and preserve incremental-generator caching.)
 - All four emitters currently run their own `bodyCount > 1` loop over `ResolveParameterBinding` (`AspNetAotRegistrationEmitter.cs:157`, `WasiRegistrationEmitter.cs:194`, `LambdaFunctionPerFeatureEmitter.cs:307`, `RouteManifestEmitter.cs:307`) plus their own `FindBodyParam`. Converge all of them onto `SelectBodyParameter`, removing the duplicated body-count logic so ambiguity is decided in exactly one place.
+- **Two loops per emitter, not one.** Each emitter has (a) an *eligibility* loop (the `bodyCount > 1` check above) and (b) an *argument-emission* loop that re-calls `ResolveParameterBinding` per parameter to emit each argument (`AspNetAotRegistrationEmitter.cs:523-606`, `WasiRegistrationEmitter.cs:242`, `LambdaFunctionPerFeatureEmitter.cs:105`). Both must agree on which parameter is the body. Since `ResolveParameterBinding` will return `Body` only for the selected parameter (it internally consults `SelectBodyParameter`), the emission loops stay correct without threading extra state — but the implementation MUST verify that every emission loop routes non-body serializable concrete parameters through the `Services` (`GetRequiredService`) branch, so eligibility (one body) and emission (per-parameter) cannot diverge. This is the single most error-prone part of the change; cover it with the cross-path consistency test.
 
 ### Diagnostics
 
@@ -82,6 +91,10 @@ Cases (asserted across ASP.NET-AOT, WASI, and Lambda-FPF where each path applies
 4. **`[FromServices]` / interface:** concrete `[FromServices]` and interface parameters → DI, never body.
 5. **Genuine ambiguity:** two nested request-like types (or two `[FromBody]`) → SLICE070 with the new reason text.
 6. **Consistency:** the same handler shape yields the same body/DI classification on all three compile-time paths.
+7. **Non-body verbs (regression guard for the verb gate):** `GET` and `DELETE` handlers with a nested type parameter and with a JSON-context-registered concrete type → bind `Services` (DI), **never body**, and produce no SLICE071. This is the primary guard for precedence 2/3's verb gate.
+8. **Manifest / portability (null-path regression):** a project that references neither WASI nor Lambda (union serializable set null) with the shortlink-shaped handler → `slicefx routes` / manifest classifies the route `portable` (previously `partial` "multiple body parameters"), and `RequestType` resolves to the selected body. Guards the corrected non-AOT claim.
+9. **`SliceResult<T>` + nested `Request`:** body selection picks `Request`; `T` is still registered as the JSON root (payload), not the wrapper (interaction with `CollectRoots`).
+10. **Record vs class request type:** nested `Request` as both a `record` and a `class` → identical body selection (documents that `IsNestedTypeOf` / `IsRequestLikeParameter` are shape-agnostic).
 
 Whole-solution gate: `dotnet test SliceFx.slnx --configuration Release`. Build the affected samples green: `SliceFx.AotSample`, `SliceFx.WasiSample` (build only), `SliceFx.LambdaFunctionPerFeatureSample`.
 
@@ -93,10 +106,13 @@ Whole-solution gate: `dotnet test SliceFx.slnx --configuration Release`. Build t
 ## Out of scope
 
 - B4 (WasiSample demonstrating the KV/HttpClient satellites) — separate spec/plan cycle.
-- Runtime (non-AOT) ASP.NET binding — unchanged; Minimal API handles it.
+- Runtime (non-AOT) ASP.NET binding — unchanged; Minimal API handles it (the route manifest it emits *does* change; see Design).
+- The CLI source-scan fallback `RouteCatalog.FindRequestType` (`tools/SliceFx.Cli/Internal/RouteCatalog.cs`) — a separate no-build heuristic; not converged onto `SelectBodyParameter`. The CLI prefers the generated manifest whenever the project is built, so divergence only shows for unbuilt projects. Revisit only if it causes reported confusion.
 - Auto-adding `[FromServices]` via a Roslyn code fix — considered and dropped; the new binding rule removes the friction without needing a code fix.
 
 ## Risks
 
 - A concrete, non-interface type that is genuinely a DI service, is registered in the JSON context, and is the *sole* request-like parameter on a body verb would be selected as body (precedence 3). This matches today's behavior (already misclassified) — not a regression — and is resolved by `[FromServices]` or (preferred) using an interface. Called out in docs.
-- Shared binder change touches all three compile-time paths; mitigated by the cross-path consistency tests (case 6) and the full-solution + sample-build gate.
+- A nested type of the feature class that is actually a DI service (e.g. a nested helper) is selected as body by precedence 2 (name-based `IsNestedTypeOf`, which does not distinguish `Request`/`Response`/other nested types). Not a regression (today's body-verb path misclassifies it too); resolved by `[FromServices]` or a non-nested/interface type. Documented in `docs/guides/parameter-binding.md`.
+- **Compile-time-error → runtime-error shift:** a concrete serializable type that previously tripped SLICE070 (compile error) may now bind to `Services`. If the author never registered it in DI, the code compiles but fails at DI resolution (`GetRequiredService`, `AspNetAotRegistrationEmitter.cs:604`) at startup / first request. This matches ASP.NET Minimal API's own behavior for an unregistered service and affects only the rare "in JSON context but not DI-registered" case; documented as expected.
+- Shared binder change touches all three compile-time paths; mitigated by the cross-path consistency tests (cases 6–8) and the full-solution + sample-build gate.
