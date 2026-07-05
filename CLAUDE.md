@@ -33,7 +33,7 @@ dotnet publish samples/SliceFx.AotSample -c Release    # macOS: osx-arm64 native
 dotnet format SliceFx.slnx --verify-no-changes --severity info --exclude-diagnostics CS1591 xUnit1004  # matches CI; drop --verify-no-changes to apply
 ```
 
-xUnit tests live under `tests/` — runtime tests (`SliceFx.Core.Tests`, `SliceFx.SourceGenerator.Tests`, `SliceFx.TestHost.Tests`, `SliceFx.AotSample.Tests`, `SliceFx.Wasi.Tests`, `SliceFx.Lambda.Tests`, `SliceFx.Lambda.FunctionPerFeature.Tests`, `SliceFx.Cli.Tests`), the `SliceFx.Lambda.NativeAotFixture` support project, and benchmarks (`SliceFx.Benchmarks`, `SliceFx.Benchmarks.Runtime`, plus the `SliceFx.Benchmarks.RuntimeApps/Bench{50,100,200}` size-graded scenario apps). CI runs `dotnet test SliceFx.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test SliceFx.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
+xUnit tests live under `tests/` — runtime tests (`SliceFx.Core.Tests`, `SliceFx.SourceGenerator.Tests`, `SliceFx.TestHost.Tests`, `SliceFx.AotSample.Tests`, `SliceFx.Wasi.Tests`, `SliceFx.Wasi.KeyValue.Tests`, `SliceFx.Wasi.HttpClient.Tests`, `SliceFx.Wasi.Spin.Tests`, `SliceFx.Wasi.IntegrationTests`, `SliceFx.Lambda.Tests`, `SliceFx.Lambda.FunctionPerFeature.Tests`, `SliceFx.Cli.Tests`), the `SliceFx.Lambda.NativeAotFixture` support project, and benchmarks (`SliceFx.Benchmarks`, `SliceFx.Benchmarks.Runtime`, plus the `SliceFx.Benchmarks.RuntimeApps/Bench{50,100,200}` size-graded scenario apps). CI runs `dotnet test SliceFx.slnx` (whole solution); use `dotnet test tests/<Name>` to target one project, or `dotnet test SliceFx.slnx --filter "FullyQualifiedName~<Substring>"` for a single test. Also smoke-test the main sample when behavior changes (app must be running):
 
 ```bash
 curl http://localhost:5099/health
@@ -44,7 +44,7 @@ curl -X DELETE http://localhost:5099/users/{id} -H "X-API-Key: secret"
 
 ## Hard constraints
 
-- **SliceFx.Core stays zero-dependency.** `src/SliceFx.Core/SliceFx.Core.csproj` must never gain a `<PackageReference>`. Enforced in two places: an MSBuild target `ValidateSliceCorePackageReferences` in `Directory.Build.targets` that fails the build locally, and a PowerShell step in `.github/workflows/ci.yml` that fails CI. The only allowed reference is `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Satellite projects (`src/SliceFx.SourceGenerator`, `src/SliceFx.Lambda`, `src/SliceFx.Lambda.FunctionPerFeature`, `src/SliceFx.TestHost`, `src/SliceFx.Wasi`, `tools/SliceFx.Cli`, and their samples) restore from nuget.org normally. `src/Shared/SliceRouteManifestSchema.cs` is `<Compile Include>`-linked into the source generator and the CLI — keep both copies of the schema in sync via that single file.
+- **SliceFx.Core stays zero-dependency.** `src/SliceFx.Core/SliceFx.Core.csproj` must never gain a `<PackageReference>`. Enforced in two places: an MSBuild target `ValidateSliceCorePackageReferences` in `Directory.Build.targets` that fails the build locally, and a PowerShell step in `.github/workflows/ci.yml` that fails CI. The only allowed reference is `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Satellite projects (`src/SliceFx.SourceGenerator`, `src/SliceFx.SourceGenerator.CodeFixes`, `src/SliceFx.Lambda`, `src/SliceFx.Lambda.FunctionPerFeature`, `src/SliceFx.TestHost`, `src/SliceFx.Wasi`, `src/SliceFx.Wasi.KeyValue`, `src/SliceFx.Wasi.HttpClient`, `src/SliceFx.Wasi.Spin`, `tools/SliceFx.Cli`, and their samples) restore from nuget.org normally. `src/Shared/SliceRouteManifestSchema.cs` is `<Compile Include>`-linked into the source generator and the CLI — keep both copies of the schema in sync via that single file.
 - **No new framework abstractions.** SliceFx intentionally avoids `IPipelineBehavior`, `IMediator`, etc. Cross-cutting concerns reuse ASP.NET Core's `IEndpointFilter`.
 - **No per-request reflection.** Anything that runs per-request must avoid reflection. The source generator emits `AddSlice` / `MapSlices` — the sole registration path — which avoids startup reflection entirely (AOT-friendly).
 - **`WebApplication.CreateSlimBuilder` is intentional** (trimming-friendly host). Do not switch to `CreateBuilder` without reason.
@@ -196,6 +196,14 @@ slicefx package aws-lambda --mode function-per-feature --rid linux-x64
 
 See `samples/SliceFx.LambdaFunctionPerFeatureSample/` for the full Program.cs + per-feature startup shape (default Kestrel port 5000). The `tests/SliceFx.Lambda.NativeAotFixture` project is a build-time fixture used by NativeAOT packaging tests, not a runnable app.
 
+### SliceFx.Wasi.KeyValue (`src/SliceFx.Wasi.KeyValue/`)
+
+WASI capability satellite (experimental). Provides `IKeyValueStore` — a byte-oriented key-value abstraction (`GetBytesAsync`, `SetBytesAsync`, `DeleteAsync`, `ExistsAsync`, `ListKeysAsync`) for use inside WASI feature handlers. `KeyValueStoreExtensions` adds `GetStringAsync` / `SetStringAsync` and `GetJsonAsync<T>` / `SetJsonAsync<T>` (the JSON overloads take a `JsonTypeInfo<T>` so they stay reflection-free under NativeAOT-LLVM). Register via `WasiHostBuilderKeyValueExtensions`: `builder.AddKeyValueStore(instance)` or `builder.AddKeyValueStore<TStore>()` — manual DI, no source-generator involvement. On Fermyon Cloud / Spin, implement `IKeyValueStore` over the WIT-generated `wasi:keyvalue/store@0.2.0-draft` bucket bindings; use `InMemoryKeyValueStore` in tests. `slicefx-inbox` is the reference production consumer (multi-tenant KV key scheme, prefix-scan listing).
+
+### SliceFx.Wasi.HttpClient (`src/SliceFx.Wasi.HttpClient/`)
+
+WASI capability satellite (experimental). Provides `IWasiHttpClient.SendAsync(WasiHttpRequest, CancellationToken)` returning `WasiResponse`, for outbound HTTP from WASI feature handlers. `WasiHttpRequest` is a record `(string Method, string Url, IReadOnlyDictionary<string, string>? Headers, byte[]? Body)`; host errors surface as `WasiHttpException`. Register via `WasiHostBuilderHttpClientExtensions`: `builder.AddWasiHttpClient(instance)` or `builder.AddWasiHttpClient<TClient>()`. On Fermyon Cloud / Spin, implement over the WIT-generated `wasi:http/outgoing-handler@0.2.0` bindings, blocking on `FutureIncomingResponse.Subscribe().Block()` (the async surface is synchronous underneath — the NativeAOT-LLVM WASI runtime is single-threaded, so genuine `HttpClient` async is unusable). Use `InMemoryWasiHttpClient` in tests. `slicefx-inbox` consumes this for best-effort `og:title` fetch.
+
 ### SliceFx.Wasi.Spin (`src/SliceFx.Wasi.Spin/`)
 
 Spin-specific WASI satellite (experimental). Provides `ISpinCronHandler` / `SpinCronDispatcher` for Spin cron triggers and `ISpinVariables` for reading Spin application variables. Both are registered via `WasiHostBuilderSpinExtensions` — pure manual DI, no source-generator involvement.
@@ -270,16 +278,22 @@ src/Shared/SliceRouteManifestSchema.cs  # manifest record shared (linked) betwee
 src/SliceFx.Core/           # the framework: FeatureAttribute, FilterAttribute,
                           # ISliceValidator<T>, SliceValidationResult
 src/SliceFx.SourceGenerator/# Roslyn generator emitting AddSlice/MapSlices into namespace SliceFx
+src/SliceFx.SourceGenerator.CodeFixes/ # Roslyn code fix provider (JsonContextCodeFixProvider)
 src/SliceFx.Lambda/         # AWS Lambda hosting adapter over Amazon.Lambda.AspNetCoreServer.Hosting
 src/SliceFx.Lambda.FunctionPerFeature/ # per-feature NativeAOT Lambda packaging (custom runtime)
 src/SliceFx.TestHost/       # in-process test host wrapper over Microsoft.AspNetCore.Mvc.Testing
 src/SliceFx.Wasi/           # WASI / wasi:http adapter (ASP.NET-independent)
                           # WasiHost, WasiApp, WasiRouteTable, WasiResponse, WasiResults
+src/SliceFx.Wasi.KeyValue/  # WASI capability satellite: IKeyValueStore (+ InMemory test double)
+src/SliceFx.Wasi.HttpClient/# WASI capability satellite: IWasiHttpClient outbound HTTP (+ InMemory)
+src/SliceFx.Wasi.Spin/      # Spin-specific satellite: ISpinCronHandler, ISpinVariables
 tools/SliceFx.Cli/          # .NET tool: slicefx new|routes|client|manifest|package|openapi
 tools/gen-bench-features.py # generator for the Bench50/100/200 benchmark scenario apps
 tests/                    # xUnit runtime tests + benchmarks + NativeAOT fixture:
                           #   SliceFx.Core.Tests, SliceFx.SourceGenerator.Tests,
                           #   SliceFx.TestHost.Tests, SliceFx.Wasi.Tests,
+                          #   SliceFx.Wasi.KeyValue.Tests, SliceFx.Wasi.HttpClient.Tests,
+                          #   SliceFx.Wasi.Spin.Tests, SliceFx.Wasi.IntegrationTests,
                           #   SliceFx.Lambda.Tests, SliceFx.Lambda.FunctionPerFeature.Tests,
                           #   SliceFx.Cli.Tests, SliceFx.Lambda.NativeAotFixture,
                           #   SliceFx.Benchmarks (source-gen), SliceFx.Benchmarks.Runtime,

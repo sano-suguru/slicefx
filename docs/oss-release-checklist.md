@@ -129,6 +129,7 @@ dotnet run --project tools\SliceFx.Cli -- client csharp --project samples\SliceF
 - **Verification results**: `dotnet build` (0 warnings, 0 errors), `dotnet test` (219 passed, 0 failed, 0 skipped), `dotnet format --verify-no-changes` (no changes), `dotnet pack` (7 packages produced). `analyzers/dotnet/cs/` placement confirmed in `SliceFx.SourceGenerator.nupkg`. CLI tool structure confirmed in `SliceFx.Cli.nupkg`.
 - **Smoke test results**: main sample `/health`, user create, validation 400 — all pass. TestHost sample — pass. WASI sample build — pass. `slicefx routes`, `slicefx client csharp` — pass.
 - **Known limitations**: WASI per-feature packaging not implemented; `wasi:keyvalue`, outbound HTTP, Spin variables, cron trigger not yet in framework (planned as satellites via dogfooding). Lambda sample not smoke-tested locally this run (not blocking).
+  - _Update (post-preview.1):_ the capability satellites have since shipped — `SliceFx.Wasi.KeyValue` (`wasi:keyvalue`), `SliceFx.Wasi.HttpClient` (outbound `wasi:http`), and `SliceFx.Wasi.Spin` (Spin variables + cron). Each has its own test project and is exercised in production by `slicefx-inbox`. WASI per-feature packaging remains unimplemented.
 - **Recommendation: Go.** All pre-release gates checked, all verifiable smoke tests pass.
 
 ## Final publish actions
