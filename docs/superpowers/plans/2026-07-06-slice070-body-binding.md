@@ -30,6 +30,9 @@
 - `src/SliceFx.SourceGenerator/SourceGenerationHelpers.cs` — home of `SelectBodyParameter`, `BodySelectionResult`, and the refactored `ResolveConventionBinding` / `ResolveParameterBinding` / `FindBodyParameters` / `FindSingleBodyParameter`. Single source of truth for the body decision.
 - `src/SliceFx.SourceGenerator/Diagnostics/SliceDiagnostics.cs` — SLICE070/023/033 reason wording.
 - `src/SliceFx.SourceGenerator/Emit/AspNetAotRegistrationEmitter.cs`, `WasiRegistrationEmitter.cs`, `LambdaFunctionPerFeatureEmitter.cs`, `RouteManifestEmitter.cs` — converge each emitter's eligibility loop and argument-emission loop onto `SelectBodyParameter`.
+- `src/SliceFx.SourceGenerator/JsonContextPlanner.cs` — **the fifth binding site.** `GetParameterBindingSkipReason` (`:547`) has its own `bodyCount > 1` loop; its result flows through `GetWasiStructuralSkipReason`/`GetLambdaStructuralSkipReason` into `StatusForWasi`/`ReasonForWasi`, which `RouteManifestEmitter.BuildRouteManifestEntries` (`:200-201`) reads for the manifest's WASI/Lambda status. Miss it and the manifest's WASI/Lambda classification stays on the old logic while the emitters move — a cross-path inconsistency.
+
+**Complete list of `ResolveParameterBinding` call sites** (all must pass `selectedBody` after Task 1): `AspNetAotRegistrationEmitter.cs:151` (eligibility) + `:540` (emission); `WasiRegistrationEmitter.cs:186` (eligibility) + `:351` (emission); `LambdaFunctionPerFeatureEmitter.cs:300` (eligibility) + `:172` (emission); `RouteManifestEmitter.cs:303` (portability); `JsonContextPlanner.cs:559` (skip reason). Eligibility/skip loops switch to `SelectBodyParameter(...).AmbiguousWith`; emission/portability loops compute `selection` once and pass `selection.Body` as `selectedBody`.
 - `tests/SliceFx.SourceGenerator.Tests/SourceGeneratorCompileTests.cs` — new compile tests.
 - `docs/guides/parameter-binding.md`, `docs/aot.md` — document the precedence and residual risks.
 - `src/SliceFx.SourceGenerator/AnalyzerReleases.Unshipped.md` — SLICE070 description text.
@@ -306,7 +309,7 @@ public static HandleParamModel? FindSingleBodyParameter(
 Run: `dotnet test tests/SliceFx.SourceGenerator.Tests --filter "FullyQualifiedName~AspNetAot_selects_nested_request_as_body" -c Release`
 Expected: PASS.
 
-> The emitters still contain their own `bodyCount > 1` loops calling the old `ResolveParameterBinding` 4-arg overload (no `selectedBody`), which now returns `Services` for every non-simple param. That is corrected in Task 2. The regression test passes already because `Request` (nested) is picked by `SelectBodyParameter`, and the AOT emitter's argument loop — verified in Task 2 — will emit `Request` as body and `AppSettings` via `GetRequiredService`. If Step 6 fails on the `GetRequiredService(...AppSettings...)` assertion, proceed to Task 2 (which threads `selectedBody` through the emission loop) and re-run this test at Task 2 Step 6.
+> Why this already passes at Task 1: the AOT emission loop (`AspNetAotRegistrationEmitter.cs:523`) obtains the body separately via `FindBodyParam` (→ `SelectBodyParameter().Body` = `Request`) and skips it in the per-parameter loop, so `AppSettings` reaches the `Services`/`GetRequiredService` branch. The emitter's own `bodyCount > 1` eligibility loop, still calling the 4-arg `ResolveParameterBinding` (no `selectedBody`), now classifies every non-simple param as `Services` → `bodyCount` stays 0 → no SLICE070. Both effects make this test green before the Task 2 convergence; Task 2 removes the now-redundant loops and threads `selectedBody` uniformly.
 
 - [ ] **Step 7: Add the remaining Task-1 binding tests**
 
@@ -395,7 +398,9 @@ In `SliceDiagnostics.cs`, the SLICE070 descriptor message format keeps `{0}`/`{1
 is a second request-body candidate; a handler binds at most one request body. Annotate the intended body with [FromBody], mark injected services with [FromServices] (or use an interface/abstract type), so only one candidate remains
 ```
 
-No change to the descriptor's static text is required beyond confirming it renders the reason (it does: `... cannot be bound in NativeAOT registration mode: {3}. ...`). For SLICE023 (`WasiRegistrationEmitter`) and SLICE033 (`LambdaFunctionPerFeatureEmitter`), align their multi-body reason strings to the same wording.
+No change to the descriptor's static text is required beyond confirming it renders the reason (it does: `... cannot be bound in NativeAOT registration mode: {3}. ...`).
+
+**Only SLICE070 renders a reason.** SLICE023 (`SliceDiagnostics.cs:187`) and SLICE033 (`:231`) have `{0}{1}{2}`-only format strings — no `{3}` reason placeholder — so their multi-body reason string is used only inside the generated-source `// SLICE0xx:` comment, not in the diagnostic the developer sees. Do **not** claim the WASI/Lambda diagnostics become actionable. For those paths a multi-body feature remains a Warning-level exclusion with the existing message; keep the internal reason string consistent for readability but expect no message change. (Adding `{3}` to SLICE023/033 would touch every emission site for those IDs and is out of scope — see Out of scope in the spec.)
 
 - [ ] **Step 4: Rewrite the AOT eligibility loop to use `SelectBodyParameter`**
 
@@ -421,10 +426,11 @@ Keep the pre-existing per-parameter `Unsupported`-source check (IFormFile/BindAs
 
 In the argument-emission loop (`~523-606`), compute `var selection = SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes);` once, then for each parameter call `ResolveParameterBinding(p, feature.HttpMethod, feature.Pattern, serializableTypes, selection.Body)`. The existing branches (`Body` → read/deserialize; else → `GetRequiredService`) are unchanged; they now receive at most one `Body`. Verify a non-body serializable concrete param (`AppSettings` from Task 1) reaches the `GetRequiredService` branch.
 
-- [ ] **Step 6: Repeat the convergence for WASI and Lambda emitters**
+- [ ] **Step 6: Repeat the convergence for WASI and Lambda emitters and the JsonContextPlanner skip-reason**
 
-- `WasiRegistrationEmitter.cs`: replace the `bodyCount` loop (`~178-198`) with the `SelectBodyParameter` + `AmbiguousWith` pattern, emitting SLICE023 with the aligned reason; thread `selection.Body` into the argument-emission loop (`~242`). Use `wasiPlan`'s serializable set (the set already passed as `serializableTypes` there).
-- `LambdaFunctionPerFeatureEmitter.cs`: same for the `bodyCount` loop (`~292-307`, SLICE033) and the emission loop (`~105-172`).
+- `WasiRegistrationEmitter.cs`: replace the `bodyCount` loop (`~178-198`) with the `SelectBodyParameter` + `AmbiguousWith` pattern (emit SLICE023 as today — no message change per Step 3); at the argument-emission loop (`~351`), compute `selection` once and pass `selection.Body` as the new `selectedBody` argument to `ResolveParameterBinding`. Use the serializable set already passed there.
+- `LambdaFunctionPerFeatureEmitter.cs`: same for the `bodyCount` loop (`~292-307`, SLICE033) and the emission loop (`~172`).
+- `JsonContextPlanner.cs` `GetParameterBindingSkipReason` (`~547-575`): replace its `bodyCount > 1` loop with `if (SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes).AmbiguousWith is not null) return "multiple body parameters are not supported";`, keeping the subsequent `Unsupported` per-parameter check (pass `selection.Body` as `selectedBody` to the `ResolveParameterBinding` call at `:559`). This keeps the manifest's WASI/Lambda status (`StatusForWasi`/`ReasonForWasi`) consistent with the emitters.
 
 - [ ] **Step 7: Add the cross-path consistency test**
 
@@ -588,16 +594,63 @@ public void SliceResult_of_t_registers_payload_root_and_selects_nested_request_b
 
 Fill following an existing `SliceResult<T>` test scaffold (search `SliceResult` in `SourceGeneratorCompileTests.cs`). Assert `SLICE070` absent, the payload type is a JSON root, and the service resolves via DI.
 
+- [ ] **Step 5b: Guard the non-AOT validator request-type path**
+
+`SliceFeatureGenerator.FindSliceRequestTypeFqns` (`SliceFeatureGenerator.cs:1737`) calls `FindBodyParameters(model)` with **no serializable set** (null) to build the request-type set used to match `ISliceValidator<T>` implementations. Confirm the common case is unaffected and lock it:
+
+```csharp
+[Fact]
+public void Validator_matches_nested_request_on_plain_aspnet_app()
+{
+    // Plain ASP.NET app (no WASI/Lambda/AOT): a POST feature with a nested Request record
+    // and an ISliceValidator<Request> must still match — the null-set body selection resolves
+    // the nested Request via precedence 2 (which does not consult the serializable set).
+    var source = """
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Microsoft.AspNetCore.Http;
+        using SliceFx;
+
+        namespace ValApp.Features.Orders
+        {
+            [Feature("POST /orders")]
+            public static class CreateOrder
+            {
+                public sealed record Request(string Sku);
+                public static string Handle(Request req) => req.Sku;
+            }
+
+            public sealed class CreateOrderValidator : ISliceValidator<CreateOrder.Request>
+            {
+                public ValueTask<SliceValidationResult> ValidateAsync(CreateOrder.Request value, CancellationToken ct)
+                    => new(SliceValidationResult.Success);
+            }
+        }
+        """;
+    var compilation = CreateHostCompilation("ValApp", source);
+    GeneratorDriver driver = CreateDriver();
+    driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+    // No "validator target does not match a discovered request" error (SLICE013).
+    Assert.DoesNotContain(diags, d => d.Id == "SLICE013");
+    Assert.DoesNotContain(diags, d => d.Severity == DiagnosticSeverity.Error);
+    var reg = GetGeneratedSource(driver, "SliceRegistrations.g.cs");
+    Assert.Contains("CreateOrderValidator", reg, StringComparison.Ordinal);
+}
+```
+
+This is the regression guard for the spec's corrected claim: the null-path request-type collection is unchanged for nested `Request` records (precedence 2 is set-independent); only the pathological "2+ non-nested candidates" case — which is genuinely ambiguous — now yields no request type instead of two.
+
 - [ ] **Step 6: Run the Task-3 tests**
 
-Run: `dotnet test tests/SliceFx.SourceGenerator.Tests --filter "FullyQualifiedName~Manifest_classifies|FullyQualifiedName~NonBody_verbs|FullyQualifiedName~SliceResult_of_t_registers" -c Release`
+Run: `dotnet test tests/SliceFx.SourceGenerator.Tests --filter "FullyQualifiedName~Manifest_classifies|FullyQualifiedName~NonBody_verbs|FullyQualifiedName~SliceResult_of_t_registers|FullyQualifiedName~Validator_matches_nested_request" -c Release`
 Expected: all PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/SliceFx.SourceGenerator/Emit/RouteManifestEmitter.cs tests/SliceFx.SourceGenerator.Tests/SourceGeneratorCompileTests.cs
-git commit -m "feat(sourcegen): converge route manifest on SelectBodyParameter; verb-gate + SliceResult tests
+git commit -m "feat(sourcegen): converge route manifest on SelectBodyParameter; verb-gate + SliceResult + validator tests
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -704,6 +757,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Self-Review notes (author)
 
-- **Spec coverage:** precedence rule (Task 1), verb gate (Task 1 + Task 3 Step 1 guard), emitter convergence + diagnostics (Task 2), manifest/portability correction (Task 3), SliceResult<T> (Task 3), record-vs-class (Task 1 Step 7.4), docs incl. residual risks (Task 4), full gate (Task 5). Spec Testing cases 1–10 map to: 1→T1S1, 2→T1S7.2, 3→T1S7.1, 4→T1S7.3, 5→T2S1, 6→T2S7, 7→T3S1, 8→T3S4, 9→T3S5, 10→T1S7.4.
+- **Spec coverage:** precedence rule (Task 1), verb gate (Task 1 + Task 3 Step 1 guard), five-site convergence incl. `JsonContextPlanner` + diagnostics (Task 2), manifest/portability correction (Task 3), SliceResult<T> (Task 3), non-AOT validator null-path guard (Task 3 Step 5b), record-vs-class (Task 1 Step 7.4), docs incl. residual risks (Task 4), full gate (Task 5). Spec Testing cases 1–10 map to: 1→T1S1, 2→T1S7.2, 3→T1S7.1, 4→T1S7.3, 5→T2S1, 6→T2S7, 7→T3S1, 8→T3S4, 9→T3S5, 10→T1S7.4. Plus the review-driven guards: verb gate (T3S1), non-AOT validator path (T3S5b).
+- **Binding sites (post rubber-duck):** all five `ResolveParameterBinding` sites are enumerated in File Structure and threaded with `selectedBody`; the `JsonContextPlanner.GetParameterBindingSkipReason` loop (the one the first draft missed) is converged in Task 2 Step 6. Only SLICE070 gains an actionable message; SLICE023/033 stay Warning-level exclusions (Task 2 Step 3).
 - **Placeholder scan:** the three "fill following the existing scaffold" steps (T2S7, T3S5, and the substring-confirmation notes) reference concrete existing tests to copy from and give exact behavioral assertions; they are not open-ended TODOs. The `ResolveConventionBinding` route/query branch is explicitly called out to keep `IsRouteParam(wireName, pattern)` unchanged (the placeholder expression in the code block is flagged NOT to be used).
 - **Type consistency:** `BodySelectionResult(Body, AmbiguousWith)`, `SelectBodyParameter(FeatureModel, HashSet<string>?)`, and `ResolveParameterBinding(..., HandleParamModel? selectedBody)` are used consistently across Tasks 1–3.

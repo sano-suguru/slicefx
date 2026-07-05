@@ -50,6 +50,10 @@ Key consequence: JSON-context membership is demoted from *the* body/DI discrimin
 
 The CLI's source-scan fallback (`RouteCatalog.FindRequestType`, `tools/SliceFx.Cli/Internal/RouteCatalog.cs:290`) is a **separate** heuristic (used only when the project has not been built and no manifest exists); it keys on `[FromBody]` and `Request`/`*.Request` names and does not converge on `SelectBodyParameter`. Aligning it is out of scope (see Out of scope) — the CLI prefers the generated manifest whenever present.
 
+One more non-AOT consumer changes subtly: `SliceFeatureGenerator.FindSliceRequestTypeFqns` collects the request-type set (used to match `ISliceValidator<T>`) via `FindBodyParameters(model)` with a **null** serializable set. For the canonical nested-`Request` feature this is unchanged, because precedence 2 selects the nested type without consulting the set. It differs only for a feature with **two or more non-nested request-like parameters** (the genuinely ambiguous case): the old null path returned all of them as bodies; `SelectBodyParameter`'s null-arity fallback returns no body (ambiguous), so no request type is registered for that feature. This is more correct — such a feature was never bindable — but it means the earlier "non-AOT is unchanged" phrasing applies to *runtime dispatch* only, not to validator request-type collection. Guarded by a test (Testing case: validator matches nested request on a plain ASP.NET app).
+
+Note on set nullness: on the AOT path `knownSerializableTypes` is **never null** — `JsonContextPlan.GetSerializableTypesSet()` returns an empty `HashSet` when no `[SliceJsonContext]` is defined. `SelectBodyParameter` handles the empty set correctly because precedence 2 (nested convention) runs before the membership-based precedence 3. The null-arity fallback is reached only by the manifest's `BuildUnionSerializableTypes` when both the WASI and Lambda plans are empty.
+
 ### Wiring
 
 `SelectBodyParameter` becomes the single source of truth. Refactor callers to delegate:
