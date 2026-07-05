@@ -218,7 +218,7 @@ internal static class SourceGenerationHelpers
         // pre-change null-path behavior (single candidate = body; multiple = ambiguous).
         return candidates.Count == 1
             ? new BodySelectionResult(candidates[0], null)
-            : new BodySelectionResult(null, candidates[1]);
+            : new BodySelectionResult(candidates[0], candidates[1]);
     }
 
     public static bool IsRouteParam(string name, string pattern)
