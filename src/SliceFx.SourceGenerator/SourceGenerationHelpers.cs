@@ -122,7 +122,12 @@ internal static class SourceGenerationHelpers
     /// The compile-time JSON-context membership set (WASI/Lambda/AOT paths), or <c>null</c> when
     /// the registered-type set is unknown (falls back to arity).
     /// </param>
-    /// <returns>The selected body parameter, or an ambiguous second candidate when 2+ tie at the same precedence.</returns>
+    /// <returns>
+    /// A result where <c>Body</c> is the single unambiguous body parameter, or <c>null</c> when
+    /// there is no body or the selection is ambiguous. <c>AmbiguousWith</c> is non-null iff 2+
+    /// candidates tie at the same precedence, in which case <c>Body</c> is always <c>null</c> —
+    /// callers must check <c>AmbiguousWith</c> before trusting <c>Body</c>.
+    /// </returns>
     public static BodySelectionResult SelectBodyParameter(
         FeatureModel feature,
         HashSet<string>? knownSerializableTypes)
@@ -137,7 +142,7 @@ internal static class SourceGenerationHelpers
             {
                 if (explicitBody is not null)
                 {
-                    return new BodySelectionResult(explicitBody, p); // 2+ [FromBody] → ambiguous
+                    return new BodySelectionResult(null, p); // 2+ [FromBody] → ambiguous
                 }
 
                 explicitBody = p;
@@ -181,7 +186,7 @@ internal static class SourceGenerationHelpers
             {
                 if (nested is not null)
                 {
-                    return new BodySelectionResult(nested, p); // 2+ nested → ambiguous
+                    return new BodySelectionResult(null, p); // 2+ nested → ambiguous
                 }
 
                 nested = p;
@@ -204,7 +209,7 @@ internal static class SourceGenerationHelpers
                 {
                     if (serializable is not null)
                     {
-                        return new BodySelectionResult(serializable, p);
+                        return new BodySelectionResult(null, p); // 2+ registered → ambiguous
                     }
 
                     serializable = p;
@@ -218,7 +223,7 @@ internal static class SourceGenerationHelpers
         // pre-change null-path behavior (single candidate = body; multiple = ambiguous).
         return candidates.Count == 1
             ? new BodySelectionResult(candidates[0], null)
-            : new BodySelectionResult(candidates[0], candidates[1]);
+            : new BodySelectionResult(null, candidates[1]);
     }
 
     public static bool IsRouteParam(string name, string pattern)

@@ -1329,6 +1329,111 @@ public class SourceGeneratorCompileTests
     }
 
     [Fact]
+    public void Manifest_does_not_fabricate_request_type_for_ambiguous_top_level_body_candidates()
+    {
+        // Regression guard: a plain ASP.NET app (no [assembly: SliceAspNetAot], no WASI/Lambda
+        // reference → null union serializable set) with a POST handler taking two non-nested,
+        // top-level concrete request-like parameters is genuinely ambiguous — neither [FromBody]
+        // nor a nested-type match disambiguates it, so SelectBodyParameter falls through to the
+        // null-arity fallback with 2 candidates. Before the fix, that branch fabricated
+        // candidates[0] (FooRequest) as Body instead of returning null, so FindRequestType (which
+        // reads .Body without consulting .AmbiguousWith) would register FooRequest as the route's
+        // RequestType even though the selection is ambiguous. The manifest must not carry either
+        // candidate type as RequestType for this route.
+        var source = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+
+            namespace AmbigTopLevelApp
+            {
+                public sealed record FooRequest(string A);
+                public sealed record BarRequest(string B);
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public static string Handle(global::AmbigTopLevelApp.FooRequest a, global::AmbigTopLevelApp.BarRequest b) => a.A + b.B;
+                    }
+                }
+            }
+            """;
+        var compilation = CreateHostCompilation("AmbigTopLevelApp", source);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(diags, static d => d.Severity == DiagnosticSeverity.Error);
+        var manifest = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+        Assert.DoesNotContain("AmbigTopLevelApp.FooRequest", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("AmbigTopLevelApp.BarRequest", manifest, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Manifest_does_not_fabricate_request_type_for_ambiguous_wasi_registered_body_candidates()
+    {
+        // Same two-non-nested-candidate shape as above, but with both candidate types registered
+        // in a [SliceJsonContext(SliceJsonTarget.Wasi)] context, so the union serializable set is
+        // non-null and SelectBodyParameter's precedence-3 "typed" branch (not the null-arity
+        // fallback) is the one that must return Body == null on ambiguity.
+        var source = """
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            using Microsoft.AspNetCore.Http;
+            using SliceFx;
+            using SliceFx.Wasi;
+
+            namespace AmbigWasiApp
+            {
+                public sealed record FooRequest(string A);
+                public sealed record BarRequest(string B);
+
+                [SliceJsonContext(SliceJsonTarget.Wasi)]
+                [JsonSerializable(typeof(AmbigWasiApp.FooRequest))]
+                [JsonSerializable(typeof(AmbigWasiApp.BarRequest))]
+                public sealed class WasiJsonContext : JsonSerializerContext
+                {
+                    public static WasiJsonContext Default { get; } = new();
+
+                    private WasiJsonContext()
+                        : base(null)
+                    {
+                    }
+
+                    protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+
+                    public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                }
+
+                namespace Features.Orders
+                {
+                    [Feature("POST /orders")]
+                    public static class CreateOrder
+                    {
+                        public static string Handle(global::AmbigWasiApp.FooRequest a, global::AmbigWasiApp.BarRequest b) => a.A + b.B;
+                    }
+                }
+            }
+            """;
+        var compilation = CreateHostCompilation("AmbigWasiApp", source, includeWasiReference: true);
+        GeneratorDriver driver = CreateDriver();
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diags, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(diags, static d => d.Severity == DiagnosticSeverity.Error);
+        var manifest = GetGeneratedSource(driver, "SliceRouteManifest.g.cs");
+        Assert.DoesNotContain("AmbigWasiApp.FooRequest", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("AmbigWasiApp.BarRequest", manifest, StringComparison.Ordinal);
+        // WASI eligibility (not ASP.NET portability, since this feature has no [SliceFilter<T>])
+        // is where the precedence-3 typed ambiguity surfaces: ineligible with the shared
+        // GetParameterBindingSkipReason message.
+        Assert.Contains("multiple body parameters are not supported", manifest, StringComparison.Ordinal);
+        Assert.Contains(SourceGenerationHelpers.ManifestIneligible, manifest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SliceResult_of_t_registers_payload_root_and_selects_nested_request_body()
     {
         // POST handler returning Task<SliceResult<CreateOrder.Response>> with a nested Request
