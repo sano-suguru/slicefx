@@ -4131,7 +4131,18 @@ public class CliFixtureTests
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException(
+                    $"'dotnet build {ProjectFile.Name}' did not exit within the timeout.\nstdout:\n{await stdoutTask}\nstderr:\n{await stderrTask}");
+            }
+
             Assert.True(process.ExitCode == 0, await stdoutTask + await stderrTask);
         }
 

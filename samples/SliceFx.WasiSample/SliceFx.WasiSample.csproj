@@ -38,9 +38,9 @@
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- IncomingHandlerImpl.cs uses WIT-generated types that only exist under wasi-wasm. -->
+  <!-- IncomingHandlerExportsImpl.cs uses WIT-generated types that only exist under wasi-wasm. -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' != 'wasi-wasm'">
-    <Compile Remove="IncomingHandlerImpl.cs" />
+    <Compile Remove="IncomingHandlerExportsImpl.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'wasi-wasm'">
