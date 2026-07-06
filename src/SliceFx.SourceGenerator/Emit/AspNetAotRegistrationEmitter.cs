@@ -135,7 +135,18 @@ internal static class AspNetAotRegistrationEmitter
 
         // Check for multiple body params or unsupported param shapes.
         // HttpContext/HttpRequest/HttpResponse/ClaimsPrincipal ARE allowed (direct pass-through).
-        var bodyCount = 0;
+        var selection = SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes);
+        if (selection.AmbiguousWith is not null)
+        {
+            return EquatableDiagnostic.Create(
+                SliceDiagnostics.UnsupportedParameterForAspNetAot,
+                feature.GetDiagnosticLocationModel(),
+                feature.TypeName,
+                selection.AmbiguousWith.Name,
+                SourceGenerationHelpers.TrimGlobalAlias(selection.AmbiguousWith.TypeFqn),
+                "is a second request-body candidate; a handler binds at most one request body. Annotate the intended body with [FromBody], mark injected services with [FromServices] (or use an interface/abstract type), so only one candidate remains");
+        }
+
         foreach (var p in feature.GetParams())
         {
             if (IsAspNetDirectParam(p.TypeFqn))
@@ -149,22 +160,7 @@ internal static class AspNetAotRegistrationEmitter
             }
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
-                p, feature.HttpMethod, feature.Pattern, serializableTypes);
-
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                bodyCount++;
-                if (bodyCount > 1)
-                {
-                    return EquatableDiagnostic.Create(
-                        SliceDiagnostics.UnsupportedParameterForAspNetAot,
-                        feature.GetDiagnosticLocationModel(),
-                        feature.TypeName,
-                        p.Name,
-                        SourceGenerationHelpers.TrimGlobalAlias(p.TypeFqn),
-                        "multiple body parameters are not supported");
-                }
-            }
+                p, feature.Pattern, selection.Body);
 
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {
@@ -410,7 +406,7 @@ internal static class AspNetAotRegistrationEmitter
         var innerInd = hasSliceFilters ? ind + "    " : ind;
 
         EmitHandlerCore(sb, f, validators, @params, bodyParam, bodyValidation,
-            serializableTypes, endpointFilters, innerInd);
+            endpointFilters, innerInd);
 
         if (hasSliceFilters)
         {
@@ -449,7 +445,6 @@ internal static class AspNetAotRegistrationEmitter
         ImmutableArray<HandleParamModel> @params,
         HandleParamModel? bodyParam,
         ValidationParameterModel? bodyValidation,
-        HashSet<string>? serializableTypes,
         ImmutableArray<string> endpointFilters,
         string ind)
     {
@@ -538,7 +533,7 @@ internal static class AspNetAotRegistrationEmitter
             }
 
             var binding = SourceGenerationHelpers.ResolveParameterBinding(
-                p, f.HttpMethod, f.Pattern, serializableTypes);
+                p, f.Pattern, bodyParam);
 
             if (binding.Source == HandlerParameterBindingSource.Route)
             {

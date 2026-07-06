@@ -292,7 +292,12 @@ internal static class RouteManifestEmitter
         FeatureModel feature,
         HashSet<string>? serializableTypes = null)
     {
-        var bodyCount = 0;
+        var selection = SourceGenerationHelpers.SelectBodyParameter(feature, serializableTypes);
+        if (selection.AmbiguousWith is not null)
+        {
+            return "feature has multiple body parameters (SLICE023)";
+        }
+
         foreach (var p in feature.GetParams())
         {
             if (p.TypeFqn == "global::System.Threading.CancellationToken")
@@ -300,16 +305,10 @@ internal static class RouteManifestEmitter
                 continue;
             }
 
-            var binding = SourceGenerationHelpers.ResolveParameterBinding(p, feature.HttpMethod, feature.Pattern, serializableTypes);
-            if (binding.Source == HandlerParameterBindingSource.Body)
-            {
-                bodyCount++;
-                if (bodyCount > 1)
-                {
-                    return "feature has multiple body parameters (SLICE023)";
-                }
-            }
-
+            var binding = SourceGenerationHelpers.ResolveParameterBinding(
+                p,
+                feature.Pattern,
+                selection.Body);
             if (binding.Source == HandlerParameterBindingSource.Unsupported)
             {
                 return binding.UnsupportedReason ?? "parameter binding is unsupported (SLICE023)";

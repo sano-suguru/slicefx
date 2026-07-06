@@ -14,6 +14,10 @@
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+    <!-- Transitive-only pin (via Microsoft.AspNetCore.OpenApi); no direct PackageReference anywhere.
+         Patches GHSA-v5pm-xwqc-g5wc (stack-overflow DoS on circular schema refs). Raise alongside
+         Microsoft.AspNetCore.OpenApi if that package's own Microsoft.OpenApi dependency moves past 2.x. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <!-- Shipped by SliceFx.SourceGenerator; sets the minimum Roslyn version
          consumers' compilers must provide. Raise only when intentionally
          dropping support for older SDKs. See .github/dependabot.yml ignore. -->
