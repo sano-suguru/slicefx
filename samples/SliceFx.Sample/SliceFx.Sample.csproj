@@ -10,6 +10,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Explicit pin to force the patched transitive version (GHSA-v5pm-xwqc-g5wc);
+         Microsoft.AspNetCore.OpenApi alone still resolves to the vulnerable 2.0.0. -->
+    <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 
   <ItemGroup>
