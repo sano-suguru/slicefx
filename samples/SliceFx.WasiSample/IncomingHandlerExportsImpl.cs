@@ -10,7 +10,7 @@ using ITypes = ProxyWorld.wit.Imports.wasi.http.v0_2_0.ITypesImports;
 #pragma warning disable CA1707, CA1711
 namespace ProxyWorld.wit.Exports.wasi.http.v0_2_0;
 
-public class IncomingHandlerImpl : IIncomingHandlerExports
+public class IncomingHandlerExportsImpl : IIncomingHandlerExports
 {
     private const int MaxRequestBodyBytes = 1024 * 1024;
     private const int MaxResponseWriteChunkBytes = 4096;
