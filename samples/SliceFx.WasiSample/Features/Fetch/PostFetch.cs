@@ -10,6 +10,11 @@ namespace SliceFx.WasiSample.Features.Fetch;
 /// of the slicefx-inbox og:title use case. In this sample the client is an in-memory double with
 /// a canned response; on Spin / Cloudflare it is backed by wasi:http/outgoing-handler.
 /// </summary>
+/// <remarks>
+/// The client-supplied URL is forwarded verbatim. Inert against the in-memory double, but a real
+/// wasi:http/outgoing-handler implementation makes this an SSRF surface — a production version must
+/// allowlist the URL, block internal/link-local addresses, and cap the response body size.
+/// </remarks>
 [Feature("POST /fetch", Summary = "Fetch a URL and extract its title")]
 public static class PostFetch
 {

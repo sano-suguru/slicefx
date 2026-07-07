@@ -103,6 +103,13 @@ curl -X POST https://<app>/fetch \
 > HTML — it never makes a real network call. It demonstrates the `IWasiHttpClient` feature shape
 > (inject the client, extract the `<title>`); real outbound HTTP is provided by the host's WIT
 > implementation. Any other URL returns an empty 200 (no title); an upstream non-2xx maps to 502.
+>
+> **Security note for the WIT-bound layer:** `POST /fetch` forwards a client-supplied URL to
+> `IWasiHttpClient`. With the in-memory double this is inert, but a real
+> `wasi:http/outgoing-handler` implementation makes it a Server-Side Request Forgery (SSRF)
+> surface. If you copy this shape into production, validate the URL against an allowlist, block
+> internal/link-local addresses, and cap the response body size before reading it — none of which
+> this demo does.
 
 ## Deploy to Cloudflare Workers (Paid plan)
 
@@ -155,6 +162,7 @@ When reporting issues, include the command that failed, the pinned dependency ve
 - .NET NativeAOT imports `wasi:sockets/tcp` and `wasi:sockets/udp` at the WASM ABI level even when unused. The Cloudflare transpile pipeline stubs these with `stubs/tcp.js` and `stubs/udp.js`; Spin ignores unused socket imports natively.
 - All upstream WASI build/transpile dependencies are pre-release or tightly version-pinned for reproducibility. The NuGet experimental feed is configured via `RestoreAdditionalProjectSources` inside the csproj.
 - `System.Security.Cryptography` is unavailable in NativeAOT-LLVM WASI builds (the namespace is entirely absent). Use a manual XOR-accumulation loop for constant-time comparisons (see `docs/patterns/platform-abstraction.md`).
+- The wasm entry point builds the app once in a static field initializer (`IncomingHandlerExportsImpl._app = CreateApp()`). A failure while wiring the app therefore surfaces as a `TypeInitializationException` at component startup, not as a per-request 500. The in-process tests call `SampleWasiApp.Create()` fresh per test, so they exercise the wiring but not this static-initialization failure boundary.
 
 ## Source map
 
