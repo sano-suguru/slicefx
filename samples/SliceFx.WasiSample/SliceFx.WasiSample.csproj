@@ -33,6 +33,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SliceFx.Core\SliceFx.Core.csproj" />
     <ProjectReference Include="..\..\src\SliceFx.Wasi\SliceFx.Wasi.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.Wasi.KeyValue\SliceFx.Wasi.KeyValue.csproj" />
+    <ProjectReference Include="..\..\src\SliceFx.Wasi.HttpClient\SliceFx.Wasi.HttpClient.csproj" />
     <ProjectReference Include="..\..\src\SliceFx.SourceGenerator\SliceFx.SourceGenerator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />

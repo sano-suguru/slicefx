@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Globalization;
 using System.Text;
-using Microsoft.Extensions.DependencyInjection;
 using SliceFx.Wasi;
 using ITypes = ProxyWorld.wit.Imports.wasi.http.v0_2_0.ITypesImports;
 
@@ -17,13 +16,7 @@ public class IncomingHandlerExportsImpl : IIncomingHandlerExports
 
     private static readonly WasiApp _app = CreateApp();
 
-    private static WasiApp CreateApp()
-    {
-        var builder = WasiHost.CreateBuilder();
-        builder.AddSlice();
-        builder.Services.AddSingleton(TimeProvider.System);
-        return builder.Build();
-    }
+    private static WasiApp CreateApp() => SliceFx.WasiSample.SampleWasiApp.Create();
 
     public static void Handle(ITypes.IncomingRequest request, ITypes.ResponseOutparam responseOut)
     {

@@ -47,6 +47,7 @@
     <Project Path="tests/SliceFx.Wasi.HttpClient.Tests/SliceFx.Wasi.HttpClient.Tests.csproj" />
     <Project Path="tests/SliceFx.Wasi.Spin.Tests/SliceFx.Wasi.Spin.Tests.csproj" />
     <Project Path="tests/SliceFx.Wasi.IntegrationTests/SliceFx.Wasi.IntegrationTests.csproj" />
+    <Project Path="tests/SliceFx.WasiSample.Tests/SliceFx.WasiSample.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/SliceFx.Cli/SliceFx.Cli.csproj" />
