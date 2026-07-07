@@ -17,6 +17,7 @@ namespace SliceFx.WasiSample;
 [JsonSerializable(typeof(Features.Diagnostics.GetSecuredDiagnostics.Response), TypeInfoPropertyName = "GetSecuredDiagnosticsResponse")]
 [JsonSerializable(typeof(Features.Notes.NoteView), TypeInfoPropertyName = "NoteView")]
 [JsonSerializable(typeof(Features.Notes.PutNote.Request), TypeInfoPropertyName = "PutNoteRequest")]
+[JsonSerializable(typeof(Features.Notes.ListNotes.Response), TypeInfoPropertyName = "NoteListResponse")]
 [SliceJsonContext(SliceJsonTarget.Wasi)]
 public sealed partial class WasiJsonContext : JsonSerializerContext
 {
