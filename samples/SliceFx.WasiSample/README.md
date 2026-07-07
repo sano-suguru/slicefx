@@ -72,6 +72,38 @@ curl -X POST https://<app>.fermyon.app/echo \
 
 Fermyon Cloud free tier: 5 apps, 100K requests/month, 100 MB component limit.
 
+### Capability demos: KV store and outbound HTTP
+
+Two feature groups show how a WASI feature uses the capability satellites. This sample registers
+the **in-memory doubles** (`InMemoryKeyValueStore`, `InMemoryWasiHttpClient`) — they are WIT-free,
+so they compile and run in the wasm component. On Fermyon Cloud / Spin / Cloudflare you replace
+these with WIT-bound implementations (`wasi:keyvalue/store@0.2.0-draft`,
+`wasi:http/outgoing-handler@0.2.0`); the [`slicefx-inbox`](https://github.com/sano-suguru/slicefx-inbox)
+app is the reference for that second layer.
+
+**Notes (`SliceFx.Wasi.KeyValue` / `IKeyValueStore`):**
+
+```bash
+curl -X PUT https://<app>/notes/hello \
+  -H "Content-Type: application/json" -d '{"title":"Hello","body":"world"}'    # 201 Created
+curl https://<app>/notes/hello        # 200 {"Id":"hello","Title":"Hello","Body":"world","UpdatedAt":"..."}
+curl https://<app>/notes              # 200 {"Notes":[ ... ]}
+curl -X DELETE https://<app>/notes/hello   # 204 No Content
+```
+
+**Fetch (`SliceFx.Wasi.HttpClient` / `IWasiHttpClient`):**
+
+```bash
+curl -X POST https://<app>/fetch \
+  -H "Content-Type: application/json" -d '{"url":"https://slicefx.example/hello"}'
+# 200 {"Url":"https://slicefx.example/hello","Status":200,"Title":"Hello from SliceFx"}
+```
+
+> The in-memory HTTP client only answers the demo URL `https://slicefx.example/hello` with canned
+> HTML — it never makes a real network call. It demonstrates the `IWasiHttpClient` feature shape
+> (inject the client, extract the `<title>`); real outbound HTTP is provided by the host's WIT
+> implementation. Any other URL returns an empty 200 (no title); an upstream non-2xx maps to 502.
+
 ## Deploy to Cloudflare Workers (Paid plan)
 
 > **Requires [Cloudflare Workers Paid plan](https://dash.cloudflare.com/sign-up/workers)** ($5/month).
@@ -130,9 +162,12 @@ These files intentionally live in the sample. `SliceFx.Wasi` owns the reusable r
 
 | File | Purpose |
 | --- | --- |
-| [`IncomingHandlerImpl.cs`](IncomingHandlerImpl.cs) | `wasi:http/incoming-handler` → `WasiApp.DispatchAsync` bridge (compiled only under `-r wasi-wasm`; depends on WIT-generated `ProxyWorld` types from the app's componentize-dotnet build) |
+| [`IncomingHandlerExportsImpl.cs`](IncomingHandlerExportsImpl.cs) | `wasi:http/incoming-handler` → `WasiApp.DispatchAsync` bridge (compiled only under `-r wasi-wasm`; depends on WIT-generated `ProxyWorld` types from the app's componentize-dotnet build) |
 | [`WasiJsonContext.cs`](WasiJsonContext.cs) | App-specific `[SliceJsonContext(SliceJsonTarget.Wasi)]` context for AOT/trim-safe serialization |
 | [`Features/`](Features/) | `[Feature]` classes — identical shape to ASP.NET features |
+| [`SampleWasiApp.cs`](SampleWasiApp.cs) | Shared app factory (`AddSlice` + in-memory KV/HttpClient/TimeProvider); compiled in all builds so the wasm entry point and the test project share one wiring definition |
+| [`Features/Notes/`](Features/Notes/) | `IKeyValueStore` demo — PUT/GET/GET-list/DELETE `/notes/{id}` |
+| [`Features/Fetch/`](Features/Fetch/) | `IWasiHttpClient` demo — POST `/fetch` (outbound GET + title extraction) |
 | [`spin.toml`](spin.toml) | Fermyon Cloud / Spin deployment manifest |
 | [`dist/shim.mjs`](dist/shim.mjs) | Cloudflare Workers fetch handler; bridges `fetch(Request)` → wasi:http |
 | [`dist/stubs/tcp.js`](dist/stubs/tcp.js) | Stub for `wasi:sockets/tcp` (ABI import, never called) |
