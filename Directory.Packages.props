@@ -16,7 +16,7 @@
     <!-- Analyzer-author rules (RS****) for SliceFx.SourceGenerator, build-time only.
          PrivateAssets="all", contributes no runtime API, so unlike the two
          CodeAnalysis entries below this is NOT part of the consumer Roslyn floor. -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
     <!-- Version-forcing pin, not a consumed dependency. Nothing here calls the Microsoft.OpenApi
          API; it arrives transitively via Microsoft.AspNetCore.OpenApi, which still asks for the
          vulnerable 2.0.0, and NuGet's nearest-wins resolution keeps it there. The lone direct
@@ -35,8 +35,8 @@
          analyzers/dotnet/cs, while the Workspaces assembly itself comes from the
          IDE host at runtime. Raise either only when intentionally dropping support
          for older SDKs. See .github/dependabot.yml ignore. -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
